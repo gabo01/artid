@@ -1,0 +1,11 @@
+[package]
+name = "backup-rs"
+version = "0.1.0"
+authors = ["Gabriel Dos Ramos Albo <dosramosgabriel@gmail.com>"]
+
+[dependencies]
+actix = "0.7"
+clap = {version = "~2.32.0", features = ["yaml"]}
+env_logger = "0.5.12"
+libc = "0.2.43"
+log = "0.4.3"
