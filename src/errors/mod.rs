@@ -9,31 +9,35 @@ use self::either::Either;
 
 #[derive(Clone, Debug, Fail, Eq, PartialEq)]
 pub enum AppErrorType {
-	NotDir(String),
-	PathUnexistant(String),
+    NotDir(String),
+    PathUnexistant(String),
+    Access(String),
+    JsonParse(String),
 }
 
 impl Display for AppErrorType {
-	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		match *self {
-			AppErrorType::NotDir(ref p) => print::not_a_dir(f, p),
-			AppErrorType::PathUnexistant(ref p) => print::path_unexistant(f, p),
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            AppErrorType::NotDir(ref p) => print::not_a_dir(f, p),
+            AppErrorType::PathUnexistant(ref p) => print::path_unexistant(f, p),
+            AppErrorType::Access(ref p) => print::access(f, p),
+            AppErrorType::JsonParse(ref p) => print::json_parse(f, p),
         }
     }
 }
 
 #[derive(Debug)]
 pub struct AppError {
-	inner: Either<Context<AppErrorType>, Context<&'static str>>
+    inner: Either<Context<AppErrorType>, Context<&'static str>>,
 }
 
 impl AppError {
-	pub fn kind(&self) -> Option<&AppErrorType> {
-		match (*self).inner {
-			Either::Enum(ref enumerate) => Some(enumerate.get_context()),
-			Either::Str(_) => None
-		}
-	}
+    pub fn kind(&self) -> Option<&AppErrorType> {
+        match (*self).inner {
+            Either::Enum(ref enumerate) => Some(enumerate.get_context()),
+            Either::Str(_) => None,
+        }
+    }
 }
 
 impl Fail for AppError {
@@ -55,23 +59,23 @@ impl Display for AppError {
 impl From<AppErrorType> for AppError {
     fn from(kind: AppErrorType) -> AppError {
         AppError {
-			inner: Either::Enum(Context::new(kind))
-		}
+            inner: Either::Enum(Context::new(kind)),
+        }
     }
 }
 
 impl From<Context<AppErrorType>> for AppError {
     fn from(inner: Context<AppErrorType>) -> AppError {
         AppError {
-			inner: Either::Enum(inner)
-		}
+            inner: Either::Enum(inner),
+        }
     }
 }
 
 impl From<Context<&'static str>> for AppError {
-	fn from(inner: Context<&'static str>) -> AppError {
-		AppError {
-			inner: Either::Str(inner)
-		}
-	}
+    fn from(inner: Context<&'static str>) -> AppError {
+        AppError {
+            inner: Either::Str(inner),
+        }
+    }
 }
