@@ -7,8 +7,8 @@ extern crate serde;
 use regex::{Captures, Regex};
 #[cfg(feature = "serde")]
 use serde::{
+    de::{Deserialize, Deserializer},
     ser::{Serialize, Serializer},
-    de::{Deserialize, Deserializer}
 };
 use std::env;
 use std::path::{Path, PathBuf};
@@ -16,7 +16,7 @@ use std::path::{Path, PathBuf};
 #[derive(Debug, PartialEq)]
 pub struct EnvPath {
     addr: String,
-    path: PathBuf
+    path: PathBuf,
 }
 
 impl EnvPath {
@@ -24,10 +24,7 @@ impl EnvPath {
         let addr = addr.into();
         let path = PathBuf::from(Self::regex(&addr));
 
-        Self {
-            addr,
-            path
-        }
+        Self { addr, path }
     }
 
     pub fn addr(&self) -> &str {
@@ -50,7 +47,7 @@ impl EnvPath {
 
             match env::var(&x[2]) {
                 Ok(s) => s,
-                Err(_) => String::from("")
+                Err(_) => String::from(""),
             }
         }).to_string()
     }
@@ -59,13 +56,13 @@ impl EnvPath {
 #[cfg(feature = "serde")]
 impl<'de> Serialize for EnvPath {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-		self.addr.serialize(serializer)
+        self.addr.serialize(serializer)
     }
 }
 
 #[cfg(feature = "serde")]
 impl<'de> Deserialize<'de> for EnvPath {
-	fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         let addr = <String as Deserialize<'de>>::deserialize(deserializer)?;
         Ok(Self::new(addr))
     }
@@ -73,9 +70,9 @@ impl<'de> Deserialize<'de> for EnvPath {
 
 #[cfg(test)]
 mod tests {
+    use super::EnvPath;
     use std::env;
     use std::path::PathBuf;
-    use super::EnvPath;
 
     #[test]
     fn interpolate_vars() {
@@ -88,6 +85,9 @@ mod tests {
     fn interpolate_join() {
         let home = env::var("HOME").unwrap();
         let env_path = EnvPath::new("$HOME/Templates");
-        assert_eq!(PathBuf::from(home).join("Templates").display().to_string(), env_path.path().display().to_string());
+        assert_eq!(
+            PathBuf::from(home).join("Templates").display().to_string(),
+            env_path.path().display().to_string()
+        );
     }
 }
