@@ -6,7 +6,7 @@ extern crate libc;
 extern crate log;
 
 use app::actions;
-use app::logger::term;
+use app::logger::term::{self, highlight};
 use app::Result;
 use clap::ArgMatches;
 use libc::EXIT_FAILURE;
@@ -42,7 +42,10 @@ impl<'a> App<'a> {
     pub fn run(mut self) -> Result<()> {
         if let Some(val) = self.matches.value_of("dir") {
             self.path.push(val);
-            debug!("Working directory set to {}", term::highlight(self.path.display()));
+            debug!(
+                "Working directory set to {}",
+                highlight(self.path.display())
+            );
         }
 
         if let Some(val) = self.matches.subcommand_name() {
