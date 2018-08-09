@@ -3,20 +3,17 @@ extern crate log;
 extern crate yansi;
 
 use self::env_logger::{Builder, Env, DEFAULT_FILTER_ENV};
-use self::log::LevelFilter;
 use self::yansi::{Color, Paint};
-
 use std::fmt::Display;
 use std::io::Write;
 
 pub fn init() -> Result<(), log::SetLoggerError> {
     let mut builder = Builder::from_env(Env::default().filter_or(DEFAULT_FILTER_ENV, "info"));
 
-    builder
-        .format(|buf, record| {
-            let log_level = record.level().to_string().to_lowercase();
-            writeln!(buf, "{}: {}", level(&log_level), record.args())
-        }).filter(None, LevelFilter::Info);
+    builder.format(|buf, record| {
+        let log_level = record.level().to_string().to_lowercase();
+        writeln!(buf, "{}: {}", level(&log_level), record.args())
+    });
 
     builder.try_init()
 }
