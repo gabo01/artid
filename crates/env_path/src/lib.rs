@@ -1,8 +1,15 @@
 extern crate regex;
 #[macro_use]
 extern crate lazy_static;
+#[cfg(feature = "serde")]
+extern crate serde;
 
 use regex::{Captures, Regex};
+#[cfg(feature = "serde")]
+use serde::{
+    ser::{Serialize, Serializer},
+    de::{Deserialize, Deserializer}
+};
 use std::env;
 use std::path::{Path, PathBuf};
 
@@ -45,6 +52,21 @@ impl EnvPath {
                 Err(_) => String::from("")
             }
         }).to_string()
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<'de> Serialize for EnvPath {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+		self.addr.serialize(serializer)
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<'de> Deserialize<'de> for EnvPath {
+	fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let addr = <String ad Deserialize<'de>>::deserialize(deserializer)?;
+        Ok(Self::new(addr))
     }
 }
 
