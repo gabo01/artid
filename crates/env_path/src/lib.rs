@@ -11,6 +11,7 @@ use serde::{
     ser::{Serialize, Serializer},
 };
 use std::env;
+use std::fmt::{self, Display, Formatter};
 use std::path::{Path, PathBuf};
 
 #[derive(Debug, PartialEq)]
@@ -68,6 +69,18 @@ impl<'de> Deserialize<'de> for EnvPath {
     }
 }
 
+impl AsRef<Path> for EnvPath {
+    fn as_ref(&self) -> &Path {
+        &self.path
+    }
+}
+
+impl Display for EnvPath {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(f, "{}", self.path.display())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::EnvPath;
@@ -89,5 +102,11 @@ mod tests {
             PathBuf::from(home).join("Templates").display().to_string(),
             env_path.path().display().to_string()
         );
+    }
+
+    #[test]
+    fn display() {
+        let path = EnvPath::new("/home/gabo01");
+        assert_eq!(path.to_string(), path.path.display().to_string());
     }
 }
