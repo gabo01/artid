@@ -13,6 +13,7 @@ use serde::{
 use std::env;
 use std::path::{Path, PathBuf};
 
+#[derive(Debug, PartialEq)]
 pub struct EnvPath {
     addr: String,
     path: PathBuf
@@ -65,7 +66,7 @@ impl<'de> Serialize for EnvPath {
 #[cfg(feature = "serde")]
 impl<'de> Deserialize<'de> for EnvPath {
 	fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        let addr = <String ad Deserialize<'de>>::deserialize(deserializer)?;
+        let addr = <String as Deserialize<'de>>::deserialize(deserializer)?;
         Ok(Self::new(addr))
     }
 }
