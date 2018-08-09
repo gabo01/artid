@@ -7,6 +7,7 @@ extern crate log;
 
 use app::actions;
 use app::logger::term;
+use app::Result;
 use clap::ArgMatches;
 use libc::EXIT_FAILURE;
 use std::path::PathBuf;
@@ -19,7 +20,10 @@ fn main() {
     }
 
     let yaml = load_yaml!("cli.yml");
-    App::new(clap::App::from(yaml).get_matches()).run();
+    if let Err(err) = App::new(clap::App::from(yaml).get_matches()).run() {
+        error!("{}", err);
+        exit(EXIT_FAILURE);
+    }
 }
 
 struct App<'a> {
@@ -35,7 +39,7 @@ impl<'a> App<'a> {
         }
     }
 
-    pub fn run(mut self) {
+    pub fn run(mut self) -> Result<()> {
         if let Some(val) = self.matches.value_of("dir") {
             self.path.push(val);
             debug!("Working directory set to {}", term::highlight(self.path.display()));
@@ -43,10 +47,12 @@ impl<'a> App<'a> {
 
         if let Some(val) = self.matches.subcommand_name() {
             match val {
-                "update" => Backup::new(&self).execute(),
+                "update" => Backup::new(&self).execute()?,
                 _ => unreachable!(),
             }
         }
+
+        Ok(())
     }
 }
 
@@ -62,8 +68,9 @@ impl<'a, 'b> Backup<'a, 'b> {
         Backup { app }
     }
 
-    pub fn execute(&self) {
+    pub fn execute(&self) -> Result<()> {
         info!("Starting backup on {}", self.app.path.display());
-        actions::backup::Backup::new(&self.app.path).execute();
+        actions::backup::Backup::new(&self.app.path).execute()?;
+        Ok(())
     }
 }
