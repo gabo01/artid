@@ -1,0 +1,14 @@
+name: backup
+version: "0.1.0"
+author: Gabriel Dos Ramos <dosramosgabriel@gmail.com>
+about: Light client to backup your data
+args:
+    - dir:
+        help: Sets the root backup dir
+        required: false
+        index: 1
+subcommands:
+    - update:
+        about: Updates the current backup or makes a new one if it does not exist
+        version: "0.1.0"
+        author: Gabriel Dos Ramos <dosramosgabriel@gmail.com>
