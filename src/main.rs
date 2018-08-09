@@ -1,11 +1,15 @@
-extern crate backup_rs; // app
+extern crate backup_rs as app; // app
 #[macro_use]
 extern crate clap;
 extern crate libc;
+#[macro_use]
+extern crate log;
 
-use backup_rs::logger::term;
+use app::actions;
+use app::logger::term;
 use clap::ArgMatches;
 use libc::EXIT_FAILURE;
+use std::path::PathBuf;
 use std::process::exit;
 
 fn main() {
@@ -19,13 +23,47 @@ fn main() {
 }
 
 struct App<'a> {
-    _matches: ArgMatches<'a>,
+    matches: ArgMatches<'a>,
+    path: PathBuf,
 }
 
 impl<'a> App<'a> {
-    pub fn new(_matches: ArgMatches<'a>) -> Self {
-        App { _matches }
+    pub fn new(matches: ArgMatches<'a>) -> Self {
+        App {
+            matches,
+            path: std::env::current_dir().expect("Unable to retrieve the current dir"),
+        }
     }
 
-    pub fn run(self) {}
+    pub fn run(mut self) {
+        if let Some(val) = self.matches.value_of("dir") {
+            self.path.push(val);
+            debug!("Working directory set to {}", term::highlight(self.path.display()));
+        }
+
+        if let Some(val) = self.matches.subcommand_name() {
+            match val {
+                "update" => Backup::new(&self).execute(),
+                _ => unreachable!(),
+            }
+        }
+    }
+}
+
+struct Backup<'a, 'b>
+where
+    'b: 'a,
+{
+    app: &'a App<'b>,
+}
+
+impl<'a, 'b> Backup<'a, 'b> {
+    pub fn new(app: &'a App<'b>) -> Self {
+        Backup { app }
+    }
+
+    pub fn execute(&self) {
+        info!("Starting backup on {}", self.app.path.display());
+        actions::backup::Backup::new(&self.app.path).execute();
+    }
 }
