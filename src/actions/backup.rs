@@ -1,4 +1,5 @@
 use std::path::Path;
+use super::{ConfigFile, Result};
 
 pub struct Backup<T: AsRef<Path>> {
     path: T
@@ -9,7 +10,8 @@ impl<T: AsRef<Path>> Backup<T> {
         Backup {path}
     }
 
-    pub fn execute(&self) {
-        
+    pub fn execute(&self) -> Result<()> {
+        let _file = ConfigFile::load(&self.path)?;
+        Ok(())
     }
 }
