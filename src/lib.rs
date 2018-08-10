@@ -71,6 +71,15 @@ impl ConfigFile {
     }
 }
 
+impl IntoIterator for ConfigFile {
+    type Item = Folder;
+    type IntoIter = ::std::vec::IntoIter<Folder>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.folders.into_iter()
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Folder {
     path: EnvPath,

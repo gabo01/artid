@@ -16,3 +16,7 @@ pub fn access(f: &mut fmt::Formatter, path: &String) -> fmt::Result {
 pub fn json_parse(f: &mut fmt::Formatter, path: &String) -> fmt::Result {
     write!(f, "impossible to parse {}", highlight(path))
 }
+
+pub fn update(f: &mut fmt::Formatter, path: &String) -> fmt::Result {
+    write!(f, "impossible to update {}", highlight(path))
+}

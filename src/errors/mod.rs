@@ -13,6 +13,7 @@ pub enum AppErrorType {
     PathUnexistant(String),
     Access(String),
     JsonParse(String),
+    UpdateFolder(String),
 }
 
 impl Display for AppErrorType {
@@ -22,6 +23,7 @@ impl Display for AppErrorType {
             AppErrorType::PathUnexistant(ref p) => print::path_unexistant(f, p),
             AppErrorType::Access(ref p) => print::access(f, p),
             AppErrorType::JsonParse(ref p) => print::json_parse(f, p),
+            AppErrorType::UpdateFolder(ref p) => print::update(f, p),
         }
     }
 }
