@@ -13,11 +13,11 @@ use std::path::PathBuf;
 use std::process::exit;
 
 use app::actions;
-use app::logger::term::{self, highlight};
+use app::logger::{self, highlight};
 use app::Result;
 
 fn main() {
-    if term::init().is_err() {
+    if logger::init("info").is_err() {
         println!("Unable to start the logging implementation");
         exit(EXIT_FAILURE);
     }

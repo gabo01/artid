@@ -3,6 +3,7 @@ extern crate env_logger;
 extern crate failure;
 #[macro_use]
 extern crate failure_derive;
+extern crate libc;
 #[macro_use]
 extern crate log;
 extern crate serde;
@@ -27,7 +28,7 @@ pub mod errors;
 pub mod logger;
 
 pub use errors::{AppError, AppErrorType};
-use logger::term::highlight;
+use logger::highlight;
 
 pub type Result<T> = ::std::result::Result<T, AppError>;
 
