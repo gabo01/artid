@@ -8,9 +8,11 @@ extern crate serde;
 #[macro_use]
 extern crate serde_derive;
 extern crate serde_json as json;
+extern crate env_path;
 
 use chrono::offset::Utc;
 use chrono::DateTime;
+use env_path::EnvPath;
 use failure::ResultExt;
 use std::fs::File;
 use std::path::{Path, PathBuf};
@@ -71,8 +73,8 @@ impl ConfigFile {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Folder {
-    path: String,
-    origin: String,
+    path: EnvPath,
+    origin: EnvPath,
     description: String,
     modified: Option<DateTime<Utc>>, // parses from an RFC3339 valid string
 }
