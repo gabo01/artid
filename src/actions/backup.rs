@@ -1,7 +1,13 @@
-use super::{highlight, AppError, AppErrorType, ConfigFile, Folder, Result, ResultExt};
+use failure::ResultExt;
+
 use std::fs;
 use std::path::{self, Path, PathBuf};
 use std::time::SystemTime;
+
+use highlight;
+use Result;
+use {AppError, AppErrorType};
+use {ConfigFile, Folder};
 
 const MIN_CAPACITY: usize = 15;
 
@@ -37,11 +43,11 @@ impl<T: AsRef<Path>> Backup<T> {
                     tree.branch(component.path(), component.file_name());
 
                     match FileSystemType::new(tree.src().unwrap()) {
-                        FileSystemType::File => if let Err(_) = backup(tree.link()) {
+                        FileSystemType::File => if backup(&tree.link()).is_err() {
                             warn!("Unable to copy {}", highlight(tree.display()));
                         },
 
-                        FileSystemType::Dir => if let Err(_) = Self::update(tree) {
+                        FileSystemType::Dir => if Self::update(tree).is_err() {
                             warn!("Unable to read {}", highlight(tree.display()));
                         },
 
@@ -74,7 +80,7 @@ impl DirTree {
         DirTree { root, links }
     }
 
-    pub fn src<'a>(&'a self) -> Option<&'a PathBuf> {
+    pub fn src(&self) -> Option<&'_ PathBuf> {
         self.links.last()
     }
 
@@ -92,7 +98,7 @@ impl DirTree {
         self.links.pop();
     }
 
-    pub fn link<'a>(&'a self) -> Link<'a> {
+    pub fn link(&self) -> Link<'_> {
         Link::new(self.links.last().unwrap(), &self.root)
     }
 
@@ -185,7 +191,7 @@ pub fn dest<T: AsRef<Path>>(path: &T, folder: &Folder) -> Result<PathBuf> {
     }
 }
 
-fn backup(link: Link) -> Result<()> {
+fn backup(link: &Link) -> Result<()> {
     if !link.same_points() {
         match link.copy() {
             Ok(()) => {

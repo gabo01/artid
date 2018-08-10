@@ -1,20 +1,23 @@
-extern crate backup_rs as app; // app
 #[macro_use]
 extern crate clap;
 extern crate libc;
 #[macro_use]
 extern crate log;
 
-use app::actions;
-use app::logger::term::{self, highlight};
-use app::Result;
+extern crate backup_rs as app;
+
 use clap::ArgMatches;
 use libc::EXIT_FAILURE;
+
 use std::path::PathBuf;
 use std::process::exit;
 
+use app::actions;
+use app::logger::term::{self, highlight};
+use app::Result;
+
 fn main() {
-    if let Err(_) = term::init() {
+    if term::init().is_err() {
         println!("Unable to start the logging implementation");
         exit(EXIT_FAILURE);
     }

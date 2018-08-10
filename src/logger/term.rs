@@ -1,9 +1,7 @@
-extern crate env_logger;
-extern crate log;
-extern crate yansi;
+use env_logger::{Builder, Env, DEFAULT_FILTER_ENV};
+use log;
+use yansi::{Color, Paint};
 
-use self::env_logger::{Builder, Env, DEFAULT_FILTER_ENV};
-use self::yansi::{Color, Paint};
 use std::fmt::Display;
 use std::io::Write;
 

@@ -1,6 +1,6 @@
 use failure::{Backtrace, Context, Fail};
-use std::fmt;
-use std::fmt::Display;
+
+use std::fmt::{self, Display};
 
 mod either;
 mod print;
