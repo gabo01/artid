@@ -23,7 +23,6 @@ use std::path::{Path, PathBuf};
 
 use env_path::EnvPath;
 
-mod actions;
 pub mod errors;
 mod fs;
 pub mod logger;
@@ -35,7 +34,7 @@ use logger::highlight;
 pub type Result<T> = ::std::result::Result<T, AppError>;
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct ConfigFile{
+pub struct ConfigFile {
     folders: Vec<Folder>,
 }
 

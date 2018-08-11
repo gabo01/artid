@@ -2,9 +2,9 @@ use failure::ResultExt;
 
 use std::path::PathBuf;
 
+use super::{Link, LinkPoints, LinkTree};
 use logger::highlight;
 use Result;
-use super::{Link, LinkPoints, LinkTree};
 
 enum FileSystemType {
     File,

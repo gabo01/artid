@@ -5,10 +5,8 @@ use std::fs::{self, ReadDir};
 use std::path::{self, Path, PathBuf};
 use std::time::SystemTime;
 
-use {AppError, AppErrorType};
-use Folder;
-use Result;
 use logger::highlight;
+use {Folder, Result};
 
 mod backup;
 
@@ -17,12 +15,12 @@ pub use self::backup::update as backup;
 #[derive(Copy, Clone)]
 pub enum LinkPoints { 
     Src,
-    Dest
+    Dest,
 }
 
 pub struct LinkTree {
     link: PathBuf,
-    dest: PathBuf
+    dest: PathBuf,
 }
 
 impl LinkTree {
@@ -56,25 +54,15 @@ impl LinkTree {
 
     pub fn create(&self, point: LinkPoints) -> std::io::Result<()> {
         match point {
-            LinkPoints::Src => {
-                fs::create_dir_all(&self.link)
-            },
-
-            LinkPoints::Dest => {
-                fs::create_dir_all(&self.dest)
+            LinkPoints::Src => fs::create_dir_all(&self.link),
+            LinkPoints::Dest => fs::create_dir_all(&self.dest),
             }
         }
-    }
 
     pub fn read(&self, point: LinkPoints) -> std::io::Result<ReadDir> {
         match point {
-            LinkPoints::Src => {
-                fs::read_dir(&self.link)
-            },
-
-            LinkPoints::Dest => {
-                fs::read_dir(&self.dest)
-            }
+            LinkPoints::Src => fs::read_dir(&self.link),
+            LinkPoints::Dest => fs::read_dir(&self.dest),
         }
     }
 
@@ -85,15 +73,12 @@ impl LinkTree {
 
 pub struct Link<'a> {
     pub link: &'a Path,
-    pub dest: &'a Path
+    pub dest: &'a Path,
 }
 
 impl<'a> Link<'a> {
     pub fn new(link: &'a Path, dest: &'a Path) -> Self {
-        Self {
-            link,
-            dest,
-        }
+        Self { link, dest }
     }
 
     pub fn copy(&self) -> Result<()> {
@@ -130,7 +115,10 @@ fn modified<T: AsRef<Path>>(file: T) -> Option<SystemTime> {
         },
 
         Err(_) => {
-            warn!("Unable to access {} metadata", highlight(file.as_ref().display()));
+            warn!(
+                "Unable to access {} metadata",
+                highlight(file.as_ref().display())
+            );
             None
         }
     }
