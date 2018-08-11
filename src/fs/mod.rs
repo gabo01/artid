@@ -13,7 +13,7 @@ mod backup;
 pub use self::backup::update as backup;
 
 #[derive(Copy, Clone)]
-pub enum LinkPoints { 
+pub enum LinkPoints {
     Src,
     Dest,
 }
@@ -30,8 +30,8 @@ impl LinkTree {
         let dest = PathBuf::from(folder.origin.as_ref());
 
         Self {
-                link,
-                dest,
+            link,
+            dest,
             nested_level: 0,
         }
     }
@@ -63,8 +63,8 @@ impl LinkTree {
         match point {
             LinkPoints::Src => fs::create_dir_all(&self.link),
             LinkPoints::Dest => fs::create_dir_all(&self.dest),
-            }
         }
+    }
 
     pub fn read(&self, point: LinkPoints) -> std::io::Result<ReadDir> {
         match point {
@@ -89,17 +89,17 @@ impl<'a> Link<'a> {
     }
 
     pub fn copy(&self) -> Result<()> {
-        fs::copy(self.link, self.dest).context("Unable to copy the file")?;
+        fs::copy(self.dest, self.link).context("Unable to copy the file")?;
         Ok(())
     }
 
     pub fn same_points(&self) -> bool {
-        if !self.dest.exists() {
+        if !self.link.exists() {
             return false;
         }
 
-        if let Some(time_src) = modified(self.link) {
-            if let Some(time_dest) = modified(self.dest) {
+        if let Some(time_src) = modified(self.dest) {
+            if let Some(time_dest) = modified(self.link) {
                 return time_dest >= time_src;
             }
         }
