@@ -23,17 +23,19 @@ use std::path::{Path, PathBuf};
 
 use env_path::EnvPath;
 
-pub mod actions;
+mod actions;
 pub mod errors;
+mod fs;
 pub mod logger;
 
 pub use errors::{AppError, AppErrorType};
+use fs::LinkTree;
 use logger::highlight;
 
 pub type Result<T> = ::std::result::Result<T, AppError>;
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct ConfigFile {
+pub struct ConfigFile{
     folders: Vec<Folder>,
 }
 
@@ -55,6 +57,18 @@ impl ConfigFile {
         debug!("{:?}", folders);
 
         Ok(ConfigFile { folders })
+    }
+
+    pub fn backup<T: AsRef<Path>>(self, root: T) -> Result<()> {
+        for folder in self {
+            let mut tree = LinkTree::new(&folder, &root)?;
+            fs::backup(&mut tree).context(AppErrorType::UpdateFolder(format!(
+                "{}",
+                root.as_ref().display()
+            )))?
+        }
+
+        Ok(())
     }
 
     fn filepath<T: AsRef<Path>>(path: T) -> Result<PathBuf> {
@@ -79,10 +93,19 @@ impl ConfigFile {
 
 impl IntoIterator for ConfigFile {
     type Item = Folder;
-    type IntoIter = ::std::vec::IntoIter<Folder>;
+    type IntoIter = std::vec::IntoIter<Folder>;
 
     fn into_iter(self) -> Self::IntoIter {
         self.folders.into_iter()
+    }
+}
+
+impl<'a> IntoIterator for &'a ConfigFile {
+    type Item = &'a Folder;
+    type IntoIter = std::slice::Iter<'a, Folder>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.folders.iter()
     }
 }
 

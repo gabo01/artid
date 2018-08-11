@@ -12,9 +12,8 @@ use libc::EXIT_FAILURE;
 use std::path::PathBuf;
 use std::process::exit;
 
-use app::actions;
 use app::logger::{self, highlight};
-use app::Result;
+use app::{ConfigFile, Result};
 
 fn main() {
     if logger::init("info").is_err() {
@@ -76,7 +75,6 @@ impl<'a, 'b> Backup<'a, 'b> {
 
     pub fn execute(&self) -> Result<()> {
         info!("Starting backup on {}", self.app.path.display());
-        actions::backup::Backup::new(&self.app.path).execute()?;
-        Ok(())
+        ConfigFile::load(&self.app.path)?.backup(&self.app.path)
     }
 }
