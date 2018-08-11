@@ -25,11 +25,17 @@ impl FileSystemType {
 }
 
 pub fn update(tree: &mut LinkTree) -> Result<()> {
-    tree.create(LinkPoints::Dest).context("Unable to create backup dir")?;
-    // fs::create_dir_all(tree.dest()).context("Unable to create backup dir")?;
+    debug!(
+        "Working on: {} - {}",
+        highlight(tree.link.display()),
+        highlight(tree.dest.display())
+    );
+    if !tree.linked() {
+        tree.create(LinkPoints::Src)
+            .context("Unable to create backup dir")?;
+    }
 
-    //for entry in fs::read_dir(tree.src().unwrap()).context("Unable to read dir")? {
-    for entry in tree.read(LinkPoints::Src).context("Unable to read dir")? {
+    for entry in tree.read(LinkPoints::Dest).context("Unable to read dir")? {
         match entry {
             Ok(component) => {
                 tree.branch(&component.file_name());

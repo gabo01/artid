@@ -60,7 +60,7 @@ impl ConfigFile {
 
     pub fn backup<T: AsRef<Path>>(self, root: T) -> Result<()> {
         for folder in self {
-            let mut tree = LinkTree::new(&folder, &root)?;
+            let mut tree = LinkTree::new(&folder, &root);
             fs::backup(&mut tree).context(AppErrorType::UpdateFolder(format!(
                 "{}",
                 root.as_ref().display()

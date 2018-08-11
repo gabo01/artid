@@ -21,31 +21,38 @@ pub enum LinkPoints {
 pub struct LinkTree {
     link: PathBuf,
     dest: PathBuf,
+    nested_level: u32,
 }
 
 impl LinkTree {
-    pub fn new<T: AsRef<Path>>(folder: &Folder, path: T) -> Result<Self> {
+    pub fn new<T: AsRef<Path>>(folder: &Folder, path: T) -> Self {
         let link = path.as_ref().join(folder.path.as_ref());
         let dest = PathBuf::from(folder.origin.as_ref());
 
-        if link.is_dir() && dest.is_dir() {
-            Ok (Self {
+        Self {
                 link,
                 dest,
-            })
-        } else {
-            Err(AppError::from(AppErrorType::NotDir("Link elements were not directories".to_string())))
+            nested_level: 0,
         }
+    }
+
+    pub fn linked(&self) -> bool {
+        self.link.is_dir() && self.dest.is_dir()
     }
 
     pub fn branch<T: AsRef<Path>>(&mut self, branch: &T) {
         self.link.push(&branch);
         self.dest.push(&branch);
+        self.nested_level += 1;
     }
 
     pub fn root(&mut self) {
+        if self.nested_level == 0 {
+            panic!("Can not get the root of the tree root");
+        }
         self.link.pop();
         self.dest.pop();
+        self.nested_level -= 1;
     }
 
     pub fn link(&self) -> Link<'_> {
