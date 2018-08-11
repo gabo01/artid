@@ -2,7 +2,7 @@ use failure::ResultExt;
 
 use std::path::PathBuf;
 
-use super::{Link, LinkPoints, LinkTree};
+use super::{LinkPiece, LinkedPoint, LinkTree};
 use logger::highlight;
 use Result;
 
@@ -27,15 +27,15 @@ impl FileSystemType {
 pub fn update(tree: &mut LinkTree) -> Result<()> {
     debug!(
         "Working on: {} - {}",
-        highlight(tree.link.display()),
+        highlight(tree.origin.display()),
         highlight(tree.dest.display())
     );
     if !tree.linked() {
-        tree.create(LinkPoints::Src)
+        tree.create(LinkPiece::Link)
             .context("Unable to create backup dir")?;
     }
 
-    for entry in tree.read(LinkPoints::Dest).context("Unable to read dir")? {
+    for entry in tree.read(LinkPiece::Linked).context("Unable to read dir")? {
         match entry {
             Ok(component) => {
                 tree.branch(&component.file_name());
@@ -64,13 +64,13 @@ pub fn update(tree: &mut LinkTree) -> Result<()> {
     Ok(())
 }
 
-fn backup(link: &Link) -> Result<()> {
-    if !link.same_points() {
-        match link.copy() {
+fn backup(link: &LinkedPoint) -> Result<()> {
+    if !link.linked() {
+        match link.link() {
             Ok(()) => {
                 info!(
                     "copied: {} -> {}",
-                    highlight(link.link.display()),
+                    highlight(link.origin.display()),
                     highlight(link.dest.display())
                 );
                 Ok(())
@@ -79,7 +79,7 @@ fn backup(link: &Link) -> Result<()> {
             Err(err) => Err(err),
         }
     } else {
-        info!("Copy not needed for: {}", highlight(link.link.display()));
+        info!("Copy not needed for: {}", highlight(link.dest.display()));
         Ok(())
     }
 }

@@ -13,63 +13,63 @@ mod backup;
 pub use self::backup::update as backup;
 
 #[derive(Copy, Clone)]
-pub enum LinkPoints {
-    Src,
-    Dest,
+pub enum LinkPiece {
+    Link,
+    Linked,
 }
 
 pub struct LinkTree {
-    link: PathBuf,
+    origin: PathBuf,
     dest: PathBuf,
-    nested_level: u32,
+    deepness: u32,
 }
 
 impl LinkTree {
-    pub fn new<T: AsRef<Path>>(folder: &Folder, path: T) -> Self {
-        let link = path.as_ref().join(folder.path.as_ref());
+    pub fn new<P: AsRef<Path>>(folder: &Folder, path: P) -> Self {
+        let origin = path.as_ref().join(folder.path.as_ref());
         let dest = PathBuf::from(folder.origin.as_ref());
 
         Self {
-            link,
+            origin,
             dest,
-            nested_level: 0,
+            deepness: 0,
         }
     }
 
     pub fn linked(&self) -> bool {
-        self.link.is_dir() && self.dest.is_dir()
+        self.origin.is_dir() && self.dest.is_dir()
     }
 
-    pub fn branch<T: AsRef<Path>>(&mut self, branch: &T) {
-        self.link.push(&branch);
+    pub fn branch<P: AsRef<Path>>(&mut self, branch: &P) {
+        self.origin.push(&branch);
         self.dest.push(&branch);
-        self.nested_level += 1;
+        self.deepness += 1;
     }
 
     pub fn root(&mut self) {
-        if self.nested_level == 0 {
+        if self.deepness == 0 {
             panic!("Can not get the root of the tree root");
         }
-        self.link.pop();
+        self.origin.pop();
         self.dest.pop();
-        self.nested_level -= 1;
+        self.deepness -= 1;
     }
 
-    pub fn link(&self) -> Link<'_> {
-        Link::new(&self.link, &self.dest)
+    pub fn link(&self) -> LinkedPoint<'_> {
+        LinkedPoint::new(&self.origin, &self.dest)
     }
 
-    pub fn create(&self, point: LinkPoints) -> std::io::Result<()> {
+    pub fn create(&self, point: LinkPiece) -> std::io::Result<()> {
         match point {
-            LinkPoints::Src => fs::create_dir_all(&self.link),
-            LinkPoints::Dest => fs::create_dir_all(&self.dest),
+            LinkPiece::Link => fs::create_dir_all(&self.origin),
+            LinkPiece::Linked => fs::create_dir_all(&self.dest),
         }
     }
 
-    pub fn read(&self, point: LinkPoints) -> std::io::Result<ReadDir> {
+    pub fn read(&self, point: LinkPiece) -> std::io::Result<ReadDir> {
         match point {
-            LinkPoints::Src => fs::read_dir(&self.link),
-            LinkPoints::Dest => fs::read_dir(&self.dest),
+            LinkPiece::Link => fs::read_dir(&self.origin),
+            LinkPiece::Linked => fs::read_dir(&self.dest),
         }
     }
 
@@ -78,29 +78,29 @@ impl LinkTree {
     }
 }
 
-pub struct Link<'a> {
-    pub link: &'a Path,
+pub struct LinkedPoint<'a> {
+    pub origin: &'a Path,
     pub dest: &'a Path,
 }
 
-impl<'a> Link<'a> {
-    pub fn new(link: &'a Path, dest: &'a Path) -> Self {
-        Self { link, dest }
+impl<'a> LinkedPoint<'a> {
+    pub fn new(origin: &'a Path, dest: &'a Path) -> Self {
+        Self { origin, dest }
     }
 
-    pub fn copy(&self) -> Result<()> {
-        fs::copy(self.dest, self.link).context("Unable to copy the file")?;
+    pub fn link(&self) -> Result<()> {
+        fs::copy(self.dest, self.origin).context("Unable to copy the file")?;
         Ok(())
     }
 
-    pub fn same_points(&self) -> bool {
-        if !self.link.exists() {
+    pub fn linked(&self) -> bool {
+        if !self.origin.exists() {
             return false;
         }
 
-        if let Some(time_src) = modified(self.dest) {
-            if let Some(time_dest) = modified(self.link) {
-                return time_dest >= time_src;
+        if let Some(linked) = get_last_modified(self.dest) {
+            if let Some(link) = get_last_modified(self.origin) {
+                return link >= linked;
             }
         }
 
@@ -108,7 +108,7 @@ impl<'a> Link<'a> {
     }
 }
 
-fn modified<T: AsRef<Path>>(file: T) -> Option<SystemTime> {
+fn get_last_modified<P: AsRef<Path>>(file: P) -> Option<SystemTime> {
     match file.as_ref().metadata() {
         Ok(data) => match data.modified() {
             Ok(time) => Some(time),

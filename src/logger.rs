@@ -7,24 +7,23 @@ use std::fmt::Display;
 use std::io::Write;
 
 pub fn init(filter_level: &str) -> Result<(), log::SetLoggerError> {
-    if !Output::is_ansi() {
+    if !OutputStream::is_ansi() {
         Paint::disable();
     }
-    let filter_level = if cfg!(debug_assertions) {
+    init_builder(if cfg!(debug_assertions) {
         "trace"
     } else {
         filter_level
-    };
-    init_builder(filter_level)
+    })
 }
 
-pub fn highlight<T: Display>(input: T) -> Paint<T> {
+pub fn highlight<M: Display>(input: M) -> Paint<M> {
     Color::Cyan.paint(input).bold()
 }
 
-struct Output;
+struct OutputStream;
 
-impl Output {
+impl OutputStream {
     pub fn is_ansi() -> bool {
         if cfg!(not(target_os = "linux")) {
             false
@@ -42,13 +41,11 @@ fn init_builder(filter_level: &str) -> Result<(), log::SetLoggerError> {
     let mut builder = Builder::from_env(Env::default().filter_or(DEFAULT_FILTER_ENV, filter_level));
 
     builder.format(|buf, record| writeln!(buf, "{}: {}", style_level(&record), record.args()));
-
     builder.try_init()
 }
 
 fn style_level(record: &log::Record<'_>) -> Paint<String> {
     let string = record.level().to_string().to_lowercase();
-
     match &*string {
         "trace" => Color::White.paint(string).bold(),
         "debug" => Color::Cyan.paint(string).bold(),

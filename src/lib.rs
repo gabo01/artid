@@ -41,7 +41,7 @@ pub struct ConfigFile {
 impl ConfigFile {
     const RESTORE: &'static str = ".backup/config.json";
 
-    pub fn load<T: AsRef<Path>>(path: T) -> Result<Self> {
+    pub fn load<P: AsRef<Path>>(path: P) -> Result<Self> {
         let file = Self::filepath(path)?;
         debug!("config file: {}", highlight(file.display()));
 
@@ -58,7 +58,7 @@ impl ConfigFile {
         Ok(ConfigFile { folders })
     }
 
-    pub fn backup<T: AsRef<Path>>(self, root: T) -> Result<()> {
+    pub fn backup<P: AsRef<Path>>(self, root: P) -> Result<()> {
         for folder in self {
             let mut tree = LinkTree::new(&folder, &root);
             fs::backup(&mut tree).context(AppErrorType::UpdateFolder(format!(
@@ -70,7 +70,7 @@ impl ConfigFile {
         Ok(())
     }
 
-    fn filepath<T: AsRef<Path>>(path: T) -> Result<PathBuf> {
+    fn filepath<P: AsRef<Path>>(path: P) -> Result<PathBuf> {
         let path = path.as_ref();
 
         if !path.is_dir() {
