@@ -1,5 +1,8 @@
+#![allow(deprecated)]
+
 #[macro_use]
 extern crate clap;
+extern crate failure;
 extern crate libc;
 #[macro_use]
 extern crate log;
@@ -7,6 +10,7 @@ extern crate log;
 extern crate backup_rs as app;
 
 use clap::ArgMatches;
+use failure::Fail;
 use libc::EXIT_FAILURE;
 
 use std::path::PathBuf;
@@ -23,7 +27,9 @@ fn main() {
 
     let yaml = load_yaml!("cli.yml");
     if let Err(err) = App::new(clap::App::from(yaml).get_matches()).run() {
-        error!("{}", err);
+        for cause in err.causes() {
+            error!("{}", cause);
+        }
         exit(EXIT_FAILURE);
     }
 }
