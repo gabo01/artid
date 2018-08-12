@@ -2,10 +2,10 @@ use failure::ResultExt;
 
 use std;
 use std::fs::{self, ReadDir};
-use std::path::{self, Path, PathBuf};
+use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
-use logger::highlight;
+use logger::{highlight, pathlight};
 use {Folder, Result};
 
 mod backup;
@@ -72,10 +72,6 @@ impl LinkTree {
             LinkPiece::Linked => fs::read_dir(&self.dest),
         }
     }
-
-    pub fn display(&self) -> path::Display {
-        self.dest.display()
-    }
 }
 
 pub struct LinkedPoint<'a> {
@@ -113,8 +109,8 @@ impl<'a> LinkedPoint<'a> {
                 Ok(()) => {
                     info!(
                         "copied: {} -> {}",
-                        highlight(self.origin.display()),
-                        highlight(self.dest.display())
+                        pathlight(self.origin),
+                        pathlight(self.dest)
                     );
                     Ok(())
                 }
@@ -122,7 +118,7 @@ impl<'a> LinkedPoint<'a> {
                 Err(err) => Err(err),
             }
         } else {
-            info!("Copy not needed for: {}", highlight(self.dest.display()));
+            info!("Copy not needed for: {}", pathlight(self.dest));
             Ok(())
         }
     }

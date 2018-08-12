@@ -1,3 +1,5 @@
+#![allow(deprecated)]
+
 extern crate chrono;
 extern crate env_logger;
 extern crate failure;
@@ -29,7 +31,13 @@ pub mod logger;
 
 pub use errors::{AppError, AppErrorType};
 use fs::LinkTree;
-use logger::highlight;
+use logger::pathlight;
+
+macro_rules! err {
+    ($x:expr) => {
+        return Err($x);
+    };
+}
 
 pub type Result<T> = ::std::result::Result<T, AppError>;
 
@@ -43,28 +51,24 @@ impl ConfigFile {
 
     pub fn load<P: AsRef<Path>>(path: P) -> Result<Self> {
         let file = Self::filepath(path)?;
-        debug!("config file: {}", highlight(file.display()));
 
-        let reader = File::open(&file).context(AppErrorType::Access(format!(
-            "Unable to open {}",
-            file.display()
-        )))?;
-        let folders = json::from_reader(reader).context(AppErrorType::JsonParse(format!(
-            "Unable to parse {}",
-            file.display()
-        )))?;
-        debug!("{:?}", folders);
+        let reader =
+            File::open(&file).context(AppErrorType::AccessFile(file.display().to_string()))?;
+        let folders = json::from_reader(reader)
+            .context(AppErrorType::JsonParse(file.display().to_string()))?;
+        trace!("{:?}", folders);
 
         Ok(ConfigFile { folders })
     }
 
     pub fn backup<P: AsRef<Path>>(self, root: P) -> Result<()> {
         for folder in self {
+            debug!("Starting backup of: {}", pathlight(folder.origin.path()));
+
             let mut tree = LinkTree::new(&folder, &root);
-            fs::backup(&mut tree).context(AppErrorType::UpdateFolder(format!(
-                "{}",
-                root.as_ref().display()
-            )))?
+            fs::backup(&mut tree).context(AppErrorType::UpdateFolder(
+                root.as_ref().display().to_string(),
+            ))?
         }
 
         Ok(())
@@ -74,18 +78,19 @@ impl ConfigFile {
         let path = path.as_ref();
 
         if !path.is_dir() {
-            return Err(AppError::from(AppErrorType::NotDir(
-                path.display().to_string(),
+            err!(AppError::from(AppErrorType::NotDir(
+                path.display().to_string()
             )));
         }
 
         let restore = path.join(Self::RESTORE);
         if !restore.is_file() {
-            return Err(AppError::from(AppErrorType::PathUnexistant(
-                restore.display().to_string(),
+            err!(AppError::from(AppErrorType::PathUnexistant(
+                restore.display().to_string()
             )));
         }
 
+        debug!("config file: {}", pathlight(path));
         Ok(restore)
     }
 }

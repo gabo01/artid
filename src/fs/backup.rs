@@ -1,9 +1,9 @@
-use failure::ResultExt;
+use failure::{Fail, ResultExt};
 
 use std::path::PathBuf;
 
 use super::{LinkPiece, LinkTree};
-use logger::highlight;
+use logger::pathlight;
 use Result;
 
 enum FileSystemType {
@@ -26,10 +26,11 @@ impl FileSystemType {
 
 pub fn update(tree: &mut LinkTree) -> Result<()> {
     debug!(
-        "Working on: {} - {}",
-        highlight(tree.origin.display()),
-        highlight(tree.dest.display())
+        "Backing {} into {}",
+        pathlight(&tree.dest),
+        pathlight(&tree.origin)
     );
+
     if !tree.linked() {
         tree.create(LinkPiece::Link)
             .context("Unable to create backup dir")?;
@@ -41,16 +42,26 @@ pub fn update(tree: &mut LinkTree) -> Result<()> {
                 tree.branch(&component.file_name());
 
                 match FileSystemType::new(&tree.dest) {
-                    FileSystemType::File => if tree.link().mirror().is_err() {
-                        warn!("Unable to copy {}", highlight(tree.display()));
+                    FileSystemType::File => if let Err(err) = tree.link().mirror() {
+                        warn!("Unable to copy {}", pathlight(&tree.dest));
+                        if cfg!(debug_assertions) {
+                            for cause in err.causes() {
+                                trace!("{}", cause);
+                            }
+                        }
                     },
 
-                    FileSystemType::Dir => if update(tree).is_err() {
-                        warn!("Unable to read {}", highlight(tree.display()));
+                    FileSystemType::Dir => if let Err(err) = update(tree) {
+                        warn!("Unable to read {}", pathlight(&tree.dest));
+                        if cfg!(debug_assertions) {
+                            for cause in err.causes() {
+                                trace!("{}", cause);
+                            }
+                        }
                     },
 
                     FileSystemType::Other => {
-                        warn!("Unable to process {}", highlight(tree.display()));
+                        warn!("Unable to process {}", pathlight(&tree.dest));
                     }
                 }
 

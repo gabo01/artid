@@ -7,6 +7,10 @@ args:
         help: Sets the root backup dir
         required: false
         index: 1
+    - backtrace:
+        help: Prints the complete error backtrace if an error if found
+        short: b
+        long: backtrace
 subcommands:
     - update:
         about: Updates the current backup or makes a new one if it does not exist

@@ -16,7 +16,7 @@ use libc::EXIT_FAILURE;
 use std::path::PathBuf;
 use std::process::exit;
 
-use app::logger::{self, highlight};
+use app::logger::{self, pathlight};
 use app::{ConfigFile, Result};
 
 fn main() {
@@ -26,10 +26,18 @@ fn main() {
     }
 
     let yaml = load_yaml!("cli.yml");
-    if let Err(err) = App::new(clap::App::from(yaml).get_matches()).run() {
-        for cause in err.causes() {
-            error!("{}", cause);
+    let app = App::new(clap::App::from(yaml).get_matches());
+    let backtrace = app.matches.is_present("backtrace");
+
+    if let Err(err) = app.run() {
+        if backtrace {
+            for cause in err.causes() {
+                error!("{}", cause);
+            }
+        } else {
+            error!("{}", err);
         }
+
         exit(EXIT_FAILURE);
     }
 }
@@ -52,7 +60,7 @@ impl<'a> App<'a> {
             self.path.push(val);
             debug!(
                 "Working directory set to {}",
-                highlight(self.path.display())
+                pathlight(&self.path)
             );
         }
 

@@ -5,6 +5,7 @@ use yansi::{Color, Paint};
 
 use std::fmt::Display;
 use std::io::Write;
+use std::path::Path;
 
 pub fn init(filter_level: &str) -> Result<(), log::SetLoggerError> {
     if !OutputStream::is_ansi() {
@@ -19,6 +20,10 @@ pub fn init(filter_level: &str) -> Result<(), log::SetLoggerError> {
 
 pub fn highlight<M: Display>(input: M) -> Paint<M> {
     Color::Cyan.paint(input).bold()
+}
+
+pub fn pathlight<P: AsRef<Path>>(path: P) -> Paint<String> {
+    highlight(path.as_ref().display().to_string())
 }
 
 struct OutputStream;

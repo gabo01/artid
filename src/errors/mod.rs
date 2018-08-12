@@ -2,8 +2,9 @@ use failure::{Backtrace, Context, Fail};
 
 use std::fmt::{self, Display};
 
+use logger::highlight;
+
 mod either;
-mod print;
 
 use self::either::Either;
 
@@ -11,7 +12,7 @@ use self::either::Either;
 pub enum AppErrorType {
     NotDir(String),
     PathUnexistant(String),
-    Access(String),
+    AccessFile(String),
     JsonParse(String),
     UpdateFolder(String),
 }
@@ -19,11 +20,23 @@ pub enum AppErrorType {
 impl Display for AppErrorType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            AppErrorType::NotDir(ref p) => print::not_a_dir(f, p),
-            AppErrorType::PathUnexistant(ref p) => print::path_unexistant(f, p),
-            AppErrorType::Access(ref p) => print::access(f, p),
-            AppErrorType::JsonParse(ref p) => print::json_parse(f, p),
-            AppErrorType::UpdateFolder(ref p) => print::update(f, p),
+            AppErrorType::NotDir(ref dir) => {
+                write!(f, "Given path {} is not a dir", highlight(dir))
+            }
+
+            AppErrorType::PathUnexistant(ref path) => {
+                write!(f, "Given path {} does not exist", highlight(path))
+            }
+
+            AppErrorType::AccessFile(ref file) => {
+                write!(f, "Given path {} does not exist", highlight(file))
+            }
+
+            AppErrorType::JsonParse(ref file) => write!(f, "Unable to parse {}", highlight(file)),
+
+            AppErrorType::UpdateFolder(ref folder) => {
+                write!(f, "Unable to sync {}", highlight(folder))
+            }
         }
     }
 }
