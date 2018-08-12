@@ -63,9 +63,9 @@ impl ConfigFile {
 
     pub fn backup<P: AsRef<Path>>(self, root: P) -> Result<()> {
         for folder in self {
-            debug!("Starting backup of: {}", pathlight(folder.origin.path()));
-
             let dirs = folder.resolve(&root);
+            debug!("Starting backup of: {}", pathlight(&dirs.abs));
+
             let mut tree = LinkTree::new(dirs.rel, dirs.abs);
             fs::backup(&mut tree).context(AppErrorType::UpdateFolder(
                 root.as_ref().display().to_string(),
@@ -77,9 +77,9 @@ impl ConfigFile {
 
     pub fn restore<P: AsRef<Path>>(self, root: P) -> Result<()> {
         for folder in self {
-            debug!("Starting restore of: {}", pathlight(folder.path.path()));
-
             let dirs = folder.resolve(&root);
+            debug!("Starting restore of: {}", pathlight(&dirs.rel));
+
             let mut tree = LinkTree::new(dirs.abs, dirs.rel);
             fs::backup(&mut tree).context(AppErrorType::RestoreFolder(
                 root.as_ref().display().to_string(),

@@ -26,7 +26,7 @@ impl FileSystemType {
 
 pub fn update(tree: &mut LinkTree) -> Result<()> {
     debug!(
-        "Backing {} into {}",
+        "Syncing {} with {}",
         pathlight(&tree.dest),
         pathlight(&tree.origin)
     );

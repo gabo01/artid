@@ -105,9 +105,9 @@ impl<'a> LinkedPoint<'a> {
             match self.link() {
                 Ok(()) => {
                     info!(
-                        "copied: {} -> {}",
-                        pathlight(self.origin),
-                        pathlight(self.dest)
+                        "synced: {} -> {}",
+                        pathlight(self.dest),
+                        pathlight(self.origin)
                     );
                     Ok(())
                 }
