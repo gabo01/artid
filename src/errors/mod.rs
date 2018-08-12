@@ -6,6 +6,8 @@ mod either;
 
 use self::either::Either;
 
+/// Internal representation of the type of error that happened in the application. This
+/// representation contains the kind of error that happened and the associated data.
 #[derive(Clone, Debug, Fail, Eq, PartialEq)]
 pub enum AppErrorType {
     NotDir(String),
@@ -44,6 +46,9 @@ impl Display for AppErrorType {
     }
 }
 
+/// Represents an error that happened in the application. It contains a backtrace, if relevant,
+/// telling step by step what went wrong in execution. By default it tries to highlight important
+/// details about the errors encountered.
 #[derive(Debug)]
 pub struct AppError {
     inner: Either<Context<AppErrorType>, Context<&'static str>>,
