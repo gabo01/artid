@@ -71,10 +71,10 @@ where
         write!(
             File::create(&path).context(AppErrorType::AccessFile(path.display().to_string()))?,
             "{}",
-            json::to_string_pretty(self.folders).expect("ConfigFile cannot fail serialization")
+            json::to_string_pretty(&self.folders).expect("ConfigFile cannot fail serialization")
         ).context(AppErrorType::AccessFile(path.display().to_string()))?;
 
-        info!("Config file saved on {}", pathlight(self.path.as_ref()));
+        info!("Config file saved on {}", pathlight(location.as_ref()));
         Ok(())
     }
 
@@ -146,7 +146,7 @@ where
             )));
         }
 
-        debug!("config file: {}", pathlight(path));
+        debug!("config file: {}", pathlight(&restore));
         Ok(restore)
     }
 }
