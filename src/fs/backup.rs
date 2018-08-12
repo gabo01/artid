@@ -2,7 +2,7 @@ use failure::ResultExt;
 
 use std::path::PathBuf;
 
-use super::{LinkPiece, LinkedPoint, LinkTree};
+use super::{LinkPiece, LinkTree};
 use logger::highlight;
 use Result;
 
@@ -41,7 +41,7 @@ pub fn update(tree: &mut LinkTree) -> Result<()> {
                 tree.branch(&component.file_name());
 
                 match FileSystemType::new(&tree.dest) {
-                    FileSystemType::File => if backup(&tree.link()).is_err() {
+                    FileSystemType::File => if tree.link().mirror().is_err() {
                         warn!("Unable to copy {}", highlight(tree.display()));
                     },
 
@@ -62,24 +62,4 @@ pub fn update(tree: &mut LinkTree) -> Result<()> {
     }
 
     Ok(())
-}
-
-fn backup(link: &LinkedPoint) -> Result<()> {
-    if !link.linked() {
-        match link.link() {
-            Ok(()) => {
-                info!(
-                    "copied: {} -> {}",
-                    highlight(link.origin.display()),
-                    highlight(link.dest.display())
-                );
-                Ok(())
-            }
-
-            Err(err) => Err(err),
-        }
-    } else {
-        info!("Copy not needed for: {}", highlight(link.dest.display()));
-        Ok(())
-    }
 }

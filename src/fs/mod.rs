@@ -106,6 +106,26 @@ impl<'a> LinkedPoint<'a> {
 
         false
     }
+
+    pub fn mirror(&self) -> Result<()> {
+        if !self.linked() {
+            match self.link() {
+                Ok(()) => {
+                    info!(
+                        "copied: {} -> {}",
+                        highlight(self.origin.display()),
+                        highlight(self.dest.display())
+                    );
+                    Ok(())
+                }
+
+                Err(err) => Err(err),
+            }
+        } else {
+            info!("Copy not needed for: {}", highlight(self.dest.display()));
+            Ok(())
+        }
+    }
 }
 
 fn get_last_modified<P: AsRef<Path>>(file: P) -> Option<SystemTime> {
