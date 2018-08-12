@@ -1,7 +1,5 @@
 use failure::{Backtrace, Fail};
-use std::fmt;
-use std::fmt::{Debug, Display};
-use std::marker::{Send, Sync};
+use std::fmt::{self, Debug, Display};
 
 #[derive(Debug)]
 pub enum Either<T, U>

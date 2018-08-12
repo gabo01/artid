@@ -18,12 +18,10 @@ extern crate env_path;
 
 use chrono::offset::Utc;
 use chrono::DateTime;
+use env_path::EnvPath;
 use failure::ResultExt;
-
 use std::fs::File;
 use std::path::{Path, PathBuf};
-
-use env_path::EnvPath;
 
 pub mod errors;
 mod fs;

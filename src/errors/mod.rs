@@ -1,8 +1,6 @@
 use failure::{Backtrace, Context, Fail};
-
-use std::fmt::{self, Display};
-
 use logger::highlight;
+use std::fmt::{self, Display};
 
 mod either;
 

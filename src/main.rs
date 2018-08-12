@@ -6,18 +6,15 @@ extern crate failure;
 extern crate libc;
 #[macro_use]
 extern crate log;
-
 extern crate backup_rs as app;
-
-use clap::ArgMatches;
-use failure::Fail;
-use libc::EXIT_FAILURE;
-
-use std::path::PathBuf;
-use std::process::exit;
 
 use app::logger::{self, pathlight};
 use app::{ConfigFile, Result};
+use clap::ArgMatches;
+use failure::Fail;
+use libc::EXIT_FAILURE;
+use std::path::PathBuf;
+use std::process::exit;
 
 fn main() {
     if logger::init("info").is_err() {

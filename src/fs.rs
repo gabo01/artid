@@ -1,11 +1,9 @@
 use failure::{Fail, ResultExt};
-
+use logger::{highlight, pathlight};
 use std;
 use std::fs::{self, ReadDir};
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
-
-use logger::{highlight, pathlight};
 use Result;
 
 #[derive(Copy, Clone)]

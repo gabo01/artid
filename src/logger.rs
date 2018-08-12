@@ -1,11 +1,10 @@
 use env_logger::{Builder, Env, DEFAULT_FILTER_ENV};
 use libc;
 use log;
-use yansi::{Color, Paint};
-
 use std::fmt::Display;
 use std::io::Write;
 use std::path::Path;
+use yansi::{Color, Paint};
 
 pub fn init(filter_level: &str) -> Result<(), log::SetLoggerError> {
     if !OutputStream::is_ansi() {
