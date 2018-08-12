@@ -1,4 +1,4 @@
-use failure::ResultExt;
+use failure::{Fail, ResultExt};
 
 use std;
 use std::fs::{self, ReadDir};
@@ -7,10 +7,6 @@ use std::time::SystemTime;
 
 use logger::{highlight, pathlight};
 use Result;
-
-mod backup;
-
-pub use self::backup::update as backup;
 
 #[derive(Copy, Clone)]
 pub enum LinkPiece {
@@ -68,6 +64,57 @@ impl LinkTree {
             LinkPiece::Link => fs::read_dir(&self.origin),
             LinkPiece::Linked => fs::read_dir(&self.dest),
         }
+    }
+
+    pub fn sync(&mut self) -> Result<()> {
+        debug!(
+            "Syncing {} with {}",
+            pathlight(&self.dest),
+            pathlight(&self.origin)
+        );
+
+        if !self.linked() {
+            self.create(LinkPiece::Link)
+                .context("Unable to create backup dir")?;
+        }
+
+        for entry in self.read(LinkPiece::Linked).context("Unable to read dir")? {
+            match entry {
+                Ok(component) => {
+                    self.branch(&component.file_name());
+
+                    match FileSystemType::new(&self.dest) {
+                        FileSystemType::File => if let Err(err) = self.link().mirror() {
+                            warn!("Unable to copy {}", pathlight(&self.dest));
+                            if cfg!(debug_assertions) {
+                                for cause in err.causes() {
+                                    trace!("{}", cause);
+                                }
+                            }
+                        },
+
+                        FileSystemType::Dir => if let Err(err) = self.sync() {
+                            warn!("Unable to read {}", pathlight(&self.dest));
+                            if cfg!(debug_assertions) {
+                                for cause in err.causes() {
+                                    trace!("{}", cause);
+                                }
+                            }
+                        },
+
+                        FileSystemType::Other => {
+                            warn!("Unable to process {}", pathlight(&self.dest));
+                        }
+                    }
+
+                    self.root();
+                }
+
+                Err(_) => warn!("Unable to read entry"),
+            }
+        }
+
+        Ok(())
     }
 }
 
@@ -140,6 +187,24 @@ fn get_last_modified<P: AsRef<Path>>(file: P) -> Option<SystemTime> {
                 highlight(file.as_ref().display())
             );
             None
+        }
+    }
+}
+
+enum FileSystemType {
+    File,
+    Dir,
+    Other,
+}
+
+impl FileSystemType {
+    fn new(obj: &PathBuf) -> FileSystemType {
+        if obj.is_file() {
+            FileSystemType::File
+        } else if obj.is_dir() {
+            FileSystemType::Dir
+        } else {
+            FileSystemType::Other
         }
     }
 }

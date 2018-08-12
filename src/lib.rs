@@ -66,10 +66,11 @@ impl ConfigFile {
             let dirs = folder.resolve(&root);
             debug!("Starting backup of: {}", pathlight(&dirs.abs));
 
-            let mut tree = LinkTree::new(dirs.rel, dirs.abs);
-            fs::backup(&mut tree).context(AppErrorType::UpdateFolder(
-                root.as_ref().display().to_string(),
-            ))?
+            LinkTree::new(dirs.rel, dirs.abs)
+                .sync()
+                .context(AppErrorType::UpdateFolder(
+                    root.as_ref().display().to_string(),
+                ))?;
         }
 
         Ok(())
@@ -80,10 +81,11 @@ impl ConfigFile {
             let dirs = folder.resolve(&root);
             debug!("Starting restore of: {}", pathlight(&dirs.rel));
 
-            let mut tree = LinkTree::new(dirs.abs, dirs.rel);
-            fs::backup(&mut tree).context(AppErrorType::RestoreFolder(
-                root.as_ref().display().to_string(),
-            ))?
+            LinkTree::new(dirs.abs, dirs.rel)
+                .sync()
+                .context(AppErrorType::RestoreFolder(
+                    root.as_ref().display().to_string(),
+                ))?;
         }
 
         Ok(())
