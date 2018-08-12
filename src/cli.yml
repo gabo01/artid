@@ -3,10 +3,6 @@ version: "0.1.0"
 author: Gabriel Dos Ramos <dosramosgabriel@gmail.com>
 about: Light client to backup your data
 args:
-    - dir:
-        help: Sets the root backup dir
-        required: false
-        index: 1
     - backtrace:
         help: Prints the complete error backtrace if an error if found
         short: b
@@ -16,7 +12,21 @@ subcommands:
         about: Updates the current backup or makes a new one if it does not exist
         version: "0.1.0"
         author: Gabriel Dos Ramos <dosramosgabriel@gmail.com>
+        args:
+            - path:
+                help: Sets the root folder where the backup will be made
+                short: d
+                long: dir
+                value_name: DIR
+                takes_value: true
     - restore:
         about: Restores all files of the backup to their original locations
         version: "0.1.0"
         author: Gabriel Dos Ramos <dosramosgabriel@gmail.com>
+        args:
+            - path:
+                help: Sets the root folder with the backed contents to restore
+                short: d
+                long: dir
+                value_name: DIR
+                takes_value: true

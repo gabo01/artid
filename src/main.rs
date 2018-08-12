@@ -13,7 +13,6 @@ use app::{ConfigFile, Result};
 use clap::ArgMatches;
 use failure::Fail;
 use libc::EXIT_FAILURE;
-use std::path::PathBuf;
 use std::process::exit;
 
 fn main() {
@@ -41,29 +40,18 @@ fn main() {
 
 struct App<'a> {
     matches: ArgMatches<'a>,
-    path: PathBuf,
 }
 
 impl<'a> App<'a> {
     pub fn new(matches: ArgMatches<'a>) -> Self {
-        App {
-            matches,
-            path: std::env::current_dir().expect("Unable to retrieve the current dir"),
-        }
+        App { matches }
     }
 
-    pub fn run(mut self) -> Result<()> {
-        if let Some(val) = self.matches.value_of("dir") {
-            self.path.push(val);
-            debug!("Working directory set to {}", pathlight(&self.path));
-        }
-
-        if let Some(val) = self.matches.subcommand_name() {
-            match val {
-                "update" => Backup::new(&self).execute()?,
-                "restore" => Restore::new(&self).execute()?,
-                _ => unreachable!(),
-            }
+    pub fn run(self) -> Result<()> {
+        match self.matches.subcommand() {
+            ("update", Some(matches)) => Backup::new(matches).execute()?,
+            ("restore", Some(matches)) => Restore::new(matches).execute()?,
+            _ => unreachable!(),
         }
 
         Ok(())
@@ -74,17 +62,24 @@ struct Backup<'a, 'b>
 where
     'b: 'a,
 {
-    app: &'a App<'b>,
+    matches: &'a ArgMatches<'b>,
 }
 
 impl<'a, 'b> Backup<'a, 'b> {
-    pub fn new(app: &'a App<'b>) -> Self {
-        Backup { app }
+    pub fn new(matches: &'a ArgMatches<'b>) -> Self {
+        Backup { matches }
     }
 
     pub fn execute(&self) -> Result<()> {
-        info!("Starting backup on {}", self.app.path.display());
-        ConfigFile::load(&self.app.path)?.backup(&self.app.path)
+        let mut path = std::env::current_dir().expect("Unable to retrieve current work directory");
+
+        if let Some(val) = self.matches.value_of("path") {
+            path.push(val);
+            debug!("Working directory set to {}", pathlight(&path));
+        }
+
+        info!("Starting backup on {}", path.display());
+        ConfigFile::load(&path)?.backup(&path)
     }
 }
 
@@ -92,16 +87,23 @@ struct Restore<'a, 'b>
 where
     'b: 'a,
 {
-    app: &'a App<'b>,
+    matches: &'a ArgMatches<'b>,
 }
 
 impl<'a, 'b> Restore<'a, 'b> {
-    pub fn new(app: &'a App<'b>) -> Self {
-        Restore { app }
+    pub fn new(matches: &'a ArgMatches<'b>) -> Self {
+        Restore { matches }
     }
 
     pub fn execute(&self) -> Result<()> {
-        info!("Starting restore of {}", self.app.path.display());
-        ConfigFile::load(&self.app.path)?.restore(&self.app.path)
+        let mut path = std::env::current_dir().expect("Unable to retrieve current work directory");
+
+        if let Some(val) = self.matches.value_of("path") {
+            path.push(val);
+            debug!("Working directory set to {}", pathlight(&path));
+        }
+
+        info!("Starting restore of {}", path.display());
+        ConfigFile::load(&path)?.restore(&path)
     }
 }
