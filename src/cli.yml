@@ -16,3 +16,7 @@ subcommands:
         about: Updates the current backup or makes a new one if it does not exist
         version: "0.1.0"
         author: Gabriel Dos Ramos <dosramosgabriel@gmail.com>
+    - restore:
+        about: Restores all files of the backup to their original locations
+        version: "0.1.0"
+        author: Gabriel Dos Ramos <dosramosgabriel@gmail.com>

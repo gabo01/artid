@@ -58,15 +58,13 @@ impl<'a> App<'a> {
     pub fn run(mut self) -> Result<()> {
         if let Some(val) = self.matches.value_of("dir") {
             self.path.push(val);
-            debug!(
-                "Working directory set to {}",
-                pathlight(&self.path)
-            );
+            debug!("Working directory set to {}", pathlight(&self.path));
         }
 
         if let Some(val) = self.matches.subcommand_name() {
             match val {
                 "update" => Backup::new(&self).execute()?,
+                "restore" => Restore::new(&self).execute()?,
                 _ => unreachable!(),
             }
         }
@@ -90,5 +88,23 @@ impl<'a, 'b> Backup<'a, 'b> {
     pub fn execute(&self) -> Result<()> {
         info!("Starting backup on {}", self.app.path.display());
         ConfigFile::load(&self.app.path)?.backup(&self.app.path)
+    }
+}
+
+struct Restore<'a, 'b>
+where
+    'b: 'a,
+{
+    app: &'a App<'b>,
+}
+
+impl<'a, 'b> Restore<'a, 'b> {
+    pub fn new(app: &'a App<'b>) -> Self {
+        Restore { app }
+    }
+
+    pub fn execute(&self) -> Result<()> {
+        info!("Starting restore of {}", self.app.path.display());
+        ConfigFile::load(&self.app.path)?.restore(&self.app.path)
     }
 }

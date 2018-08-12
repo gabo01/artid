@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
 use logger::{highlight, pathlight};
-use {Folder, Result};
+use Result;
 
 mod backup;
 
@@ -25,10 +25,7 @@ pub struct LinkTree {
 }
 
 impl LinkTree {
-    pub fn new<P: AsRef<Path>>(folder: &Folder, path: P) -> Self {
-        let origin = path.as_ref().join(folder.path.as_ref());
-        let dest = PathBuf::from(folder.origin.as_ref());
-
+    pub fn new(origin: PathBuf, dest: PathBuf) -> Self {
         Self {
             origin,
             dest,

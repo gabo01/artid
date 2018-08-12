@@ -15,6 +15,7 @@ pub enum AppErrorType {
     AccessFile(String),
     JsonParse(String),
     UpdateFolder(String),
+    RestoreFolder(String),
 }
 
 impl Display for AppErrorType {
@@ -35,6 +36,10 @@ impl Display for AppErrorType {
             AppErrorType::JsonParse(ref file) => write!(f, "Unable to parse {}", highlight(file)),
 
             AppErrorType::UpdateFolder(ref folder) => {
+                write!(f, "Unable to sync {}", highlight(folder))
+            }
+
+            AppErrorType::RestoreFolder(ref folder) => {
                 write!(f, "Unable to sync {}", highlight(folder))
             }
         }

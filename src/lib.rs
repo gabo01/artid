@@ -65,8 +65,23 @@ impl ConfigFile {
         for folder in self {
             debug!("Starting backup of: {}", pathlight(folder.origin.path()));
 
-            let mut tree = LinkTree::new(&folder, &root);
+            let dirs = folder.resolve(&root);
+            let mut tree = LinkTree::new(dirs.rel, dirs.abs);
             fs::backup(&mut tree).context(AppErrorType::UpdateFolder(
+                root.as_ref().display().to_string(),
+            ))?
+        }
+
+        Ok(())
+    }
+
+    pub fn restore<P: AsRef<Path>>(self, root: P) -> Result<()> {
+        for folder in self {
+            debug!("Starting restore of: {}", pathlight(folder.path.path()));
+
+            let dirs = folder.resolve(&root);
+            let mut tree = LinkTree::new(dirs.abs, dirs.rel);
+            fs::backup(&mut tree).context(AppErrorType::RestoreFolder(
                 root.as_ref().display().to_string(),
             ))?
         }
@@ -119,4 +134,18 @@ pub struct Folder {
     origin: EnvPath,
     description: String,
     modified: Option<DateTime<Utc>>, // parses from an RFC3339 valid string
+}
+
+struct Dirs {
+    rel: PathBuf,
+    abs: PathBuf,
+}
+
+impl Folder {
+    fn resolve<P: AsRef<Path>>(&self, root: P) -> Dirs {
+        Dirs {
+            rel: root.as_ref().join(self.path.as_ref()),
+            abs: PathBuf::from(self.origin.as_ref()),
+        }
+    }
 }
