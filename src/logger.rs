@@ -6,10 +6,10 @@ use std::io::Write;
 use std::path::Path;
 use yansi::{Color, Paint};
 
-/// Constructs the logger for your application. This is an instance of env_logger + a yansi 
+/// Constructs the logger for your application. This is an instance of env_logger + a yansi
 /// check to see if it should color important elements displayed in the log. Elements will
 /// only be colored if the error stream is an ansi tty.
-/// 
+///
 /// Calling this function more than one time or calling another function that sets a global
 /// logger will result in a panic.
 pub fn init(filter_level: &str) -> Result<(), log::SetLoggerError> {

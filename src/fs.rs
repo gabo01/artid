@@ -4,7 +4,7 @@ use std;
 use std::fs::{self, ReadDir};
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
-use Result;
+use {AppError, AppErrorType, Result};
 
 /// Represents the pieces that make a linked, the link itself and the place where it's pointing
 #[derive(Copy, Clone)]
@@ -16,10 +16,10 @@ pub enum LinkPiece {
 /// Represents two different linked directory trees. The origin path is seen as the 'link'
 /// and the dest path is seen as the 'linked place'. This means that syncing the link is making
 /// a copy of all files in dest to origin.
-/// 
+///
 /// The idea behind this type is to be able to walk the dest path and mimic it's structure on
 /// the origin path.
-/// 
+///
 /// Creation of this type won't fail even if the given path's aren't valid. You can check if the
 /// given path's are correct by calling .linked(). If the path's are not correct the sync function
 /// will fail and return an appropiate error.
@@ -52,7 +52,7 @@ impl LinkTree {
     }
 
     /// Returns to the root of the currently branch.
-    /// 
+    ///
     /// This function will panic if the tree is already at it's uppermost root
     pub fn root(&mut self) {
         if self.deepness == 0 {
@@ -87,11 +87,15 @@ impl LinkTree {
     /// Syncs the two trees. This function will fail if the two points aren't linked
     /// and it is unable to create the destination dir, the 'link' or if it is unable to
     /// read the contents of the origin, the 'linked', dir.
+    ///
+    /// If there is an error while processing a subcomponent the function will exit with an error
+    /// if warn = false and emit a warning if warn = true but will try to finish the work anyway. 
+    /// In debug mode, the function will print the trace of the warnings if finds.
     /// 
-    /// If there is an error while processing a subcomponent the function will emit a warning
-    /// but will try to finish the work anyway. In debug mode, the function will print the trace
-    /// of the warnings if finds
-    pub fn sync(&mut self) -> Result<()> {
+    /// If overwrite = false, the function will exit with an error if the location to be written on
+    /// already exists. If overwrite = true, the function will overwrite the location if it sees it
+    /// necessary.
+    pub fn sync(&mut self, warn: bool, overwrite: bool) -> Result<()> {
         debug!(
             "Syncing {} with {}",
             pathlight(&self.dest),
@@ -109,21 +113,29 @@ impl LinkTree {
                     self.branch(&component.file_name());
 
                     match FileSystemType::new(&self.dest) {
-                        FileSystemType::File => if let Err(err) = self.link().mirror() {
-                            warn!("Unable to copy {}", pathlight(&self.dest));
-                            if cfg!(debug_assertions) {
-                                for cause in err.causes() {
-                                    trace!("{}", cause);
+                        FileSystemType::File => if let Err(err) = self.link().mirror(overwrite) {
+                            if warn {
+                                warn!("Unable to copy {}", pathlight(&self.dest));
+                                if cfg!(debug_assertions) {
+                                    for cause in err.causes() {
+                                        trace!("{}", cause);
+                                    }
                                 }
+                            } else {
+                                err!(err.into());
                             }
                         },
 
-                        FileSystemType::Dir => if let Err(err) = self.sync() {
-                            warn!("Unable to read {}", pathlight(&self.dest));
-                            if cfg!(debug_assertions) {
-                                for cause in err.causes() {
-                                    trace!("{}", cause);
+                        FileSystemType::Dir => if let Err(err) = self.sync(warn, overwrite) {
+                            if warn {
+                                warn!("Unable to read {}", pathlight(&self.dest));
+                                if cfg!(debug_assertions) {
+                                    for cause in err.causes() {
+                                        trace!("{}", cause);
+                                    }
                                 }
+                            } else {
+                                err!(err.into())
                             }
                         },
 
@@ -143,7 +155,7 @@ impl LinkTree {
     }
 }
 
-/// Represents a link between two different paths points. The origin path is seen as the 
+/// Represents a link between two different paths points. The origin path is seen as the
 /// 'link's location while the dest path is seen as the link's pointed place.
 pub struct LinkedPoint<'a> {
     pub origin: &'a Path,
@@ -157,7 +169,7 @@ impl<'a> LinkedPoint<'a> {
     }
 
     /// Links the two points in the filesystem. This implies making a copy of the object in
-    /// dest to origin 
+    /// dest to origin
     pub fn link(&self) -> Result<()> {
         fs::copy(self.dest, self.origin).context("Unable to copy the file")?;
         Ok(())
@@ -182,8 +194,15 @@ impl<'a> LinkedPoint<'a> {
     /// Links the two points on the filesystem. This method will check first if the two
     /// objects aren't already linked before making a link. In order words, the .link()
     /// method will make a forced link of the two points while this method will link the
-    /// points only if necessary.chrono
-    pub fn mirror(&self) -> Result<()> {
+    /// points only if necessary. If overwrite = false, this function will exit with an
+    /// error if origin already exists
+    pub fn mirror(&self, overwrite: bool) -> Result<()> {
+        if self.origin.exists() && !overwrite {
+            err!(AppError::from(AppErrorType::ObjectExists(
+                self.origin.display().to_string()
+            )));
+        }
+
         if !self.linked() {
             match self.link() {
                 Ok(()) => {

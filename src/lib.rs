@@ -24,6 +24,12 @@ use std::fs::File;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
+macro_rules! err {
+    ($x:expr) => {
+        return Err($x);
+    };
+}
+
 pub mod errors;
 mod fs;
 pub mod logger;
@@ -31,12 +37,6 @@ pub mod logger;
 pub use errors::{AppError, AppErrorType};
 use fs::LinkTree;
 use logger::pathlight;
-
-macro_rules! err {
-    ($x:expr) => {
-        return Err($x);
-    };
-}
 
 /// Alias for the Result type
 pub type Result<T> = ::std::result::Result<T, AppError>;
@@ -46,9 +46,9 @@ pub type Result<T> = ::std::result::Result<T, AppError>;
 /// to be the backup directory. Even if it is technically possible to use single configuration
 /// file to manage multiple backup dirs, this is not wise since the modified date for the folders
 /// inside the config file will lose it's proper meaning.
-/// 
-/// This type is also the main point of entry for the library since it controls the 
-/// loading of the configuration and allows to do the ops related to the data inside, such 
+///
+/// This type is also the main point of entry for the library since it controls the
+/// loading of the configuration and allows to do the ops related to the data inside, such
 /// as the backup and restore of the files.
 pub struct ConfigFile<P>
 where
@@ -80,49 +80,40 @@ where
 
     /// Saves the changes made back to the config.json file. Currently used more in a private
     /// fashion to update the last date when the folders were synced.
-    /// 
+    ///
     /// Same as the load function. This function receives a directory and looks for the
     /// config.json file inside .backup/config.json.
-    pub fn save<T: AsRef<Path>>(&self, location: T) -> Result<()> {
-        let path = location.as_ref();
+    pub fn save(&self) -> Result<()> {
+        let path = Self::filepath(&self.path)?;
         write!(
             File::create(&path).context(AppErrorType::AccessFile(path.display().to_string()))?,
             "{}",
             json::to_string_pretty(&self.folders).expect("ConfigFile cannot fail serialization")
         ).context(AppErrorType::AccessFile(path.display().to_string()))?;
 
-        info!("Config file saved on {}", pathlight(location.as_ref()));
+        info!("Config file saved on {}", pathlight(path));
         Ok(())
     }
 
-    /// Saves the changes made into the same path where the config was originally loaded.
-    pub fn save_default(&self) -> Result<()> {
-        self.save(Self::filepath(&self.path)?)
-    }
-
     /// Performs the backup of the files in the different directories to the backup dir
-    /// specified as root. It is advisable to use the same root for both the loading of the
-    /// config file and the backup as it helps keep a per directory basis configuration.
-    /// 
+    /// where the config file was loaded. 
+    ///
     /// In case of failure to backup one of the main directories specified in the config file
     /// this function will store the changes made up to that point and exit with an error. If
-    /// the backup of one of the subelements fails the function will emit a warning and try
-    /// to finish the rest of the process.
-    /// 
+    /// the backup of one of the subelements fails the function will exit if warn = false or 
+    /// emit a warning and try to finish the rest of the process if warn = true.
+    ///
     /// This function will only copy the needed files, if a file has not been modified since the
     /// last time it was backed up it will not be copied.
-    pub fn backup<T: AsRef<Path>>(mut self, root: T) -> Result<()> {
+    pub fn backup(&mut self, warn: bool) -> Result<()> {
         let mut error = None;
         for folder in &mut self.folders {
-            let dirs = folder.resolve(&root);
+            let dirs = folder.resolve(&self.path);
             debug!("Starting backup of: {}", pathlight(&dirs.abs));
 
-            if let Err(err) =
-                LinkTree::new(dirs.rel, dirs.abs)
-                    .sync()
-                    .context(AppErrorType::UpdateFolder(
-                        root.as_ref().display().to_string(),
-                    )) {
+            if let Err(err) = LinkTree::new(dirs.rel, dirs.abs).sync(warn, true).context(
+                AppErrorType::UpdateFolder(self.path.as_ref().display().to_string()),
+            ) {
                 error = Some(err);
                 break;
             }
@@ -130,7 +121,7 @@ where
             folder.modified = Some(Utc::now());
         }
 
-        if let Err(err) = self.save_default() {
+        if let Err(err) = self.save() {
             warn!(
                 "Unable to save on {} because of {}",
                 pathlight(self.path.as_ref()),
@@ -139,32 +130,32 @@ where
         }
 
         match error {
-            Some(err) => err!(err.into()),
+            Some(err) => Err(err.into()),
             None => Ok(()),
         }
     }
 
-    /// Performs the restore of the backed files to their original locations on the specified
-    /// root. As with the load function, it is advisable to use the same root from where the
-    /// config file was loaded and uphold a per directory configuration.
-    /// 
-    /// The behaviour of this function is analogous to the backup function. If the restore of 
+    /// Performs the restore of the backed files on the dir where the config file was loaded to 
+    /// their original locations on the specified root.
+    ///
+    /// The behaviour of this function is analogous to the backup function. If the restore of
     /// one of the main directories fails. The function will exit with an error. If the restore
-    /// of one of the subelements fails the function will emit a warning and continue restoring
-    /// the other elements.
+    /// of one of the subelements fails the function will exit with an error if warn = false or
+    /// emit a warning and continue restoring the other elements if warn = true.
     /// 
-    /// This function will only restore files that are newer or equal to the ones present in the
-    /// original directory. This means that if you modify a file and has not been backed it will
-    /// not be overriden by this function.
-    pub fn restore<T: AsRef<Path>>(self, root: T) -> Result<()> {
+    /// If overwrite = false, the function will exit with an error if the file exists in the
+    /// original dir. If overwrite = true the function will only restore files that are newer or
+    /// equal to the ones present in the original directory. This means that if you modify a file 
+    /// and has not been backed it will not be overriden by this function.
+    pub fn restore(self, warn: bool, overwrite: bool) -> Result<()> {
         for folder in &self.folders {
-            let dirs = folder.resolve(&root);
+            let dirs = folder.resolve(&self.path);
             debug!("Starting restore of: {}", pathlight(&dirs.rel));
 
             LinkTree::new(dirs.abs, dirs.rel)
-                .sync()
+                .sync(warn, overwrite)
                 .context(AppErrorType::RestoreFolder(
-                    root.as_ref().display().to_string(),
+                    self.path.as_ref().display().to_string(),
                 ))?;
         }
 
@@ -193,11 +184,11 @@ where
 }
 
 /// Represents the structure of a folder in the config.json file.
-/// 
+///
 /// This structure consists in a link between an origin (absolute path) and a
 /// path relative to a specified root. The root will be typically the directory where
 /// the config.json file is located but this is not obligatory.
-/// 
+///
 /// Aside from the link, the modified field represents the last time the contents from
 /// the two folders where synced
 #[derive(Debug, Serialize, Deserialize)]

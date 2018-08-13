@@ -19,6 +19,9 @@ subcommands:
                 long: dir
                 value_name: DIR
                 takes_value: true
+            - warn:
+                help: Warns instead of exiting if an error is found in a subcomponent
+                long: warn
     - restore:
         about: Restores all files of the backup to their original locations
         version: "0.1.0"
@@ -30,3 +33,9 @@ subcommands:
                 long: dir
                 value_name: DIR
                 takes_value: true
+            - warn:
+                help: Warns instead of exiting if an error is found in a subcomponent
+                long: warn
+            - overwrite:
+                help: Allows overwriting files during restoration process
+                long: overwrite

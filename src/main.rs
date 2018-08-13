@@ -79,7 +79,7 @@ impl<'a, 'b> Backup<'a, 'b> {
         }
 
         info!("Starting backup on {}", path.display());
-        ConfigFile::load(&path)?.backup(&path)
+        ConfigFile::load(&path)?.backup(self.matches.is_present("warn"))
     }
 }
 
@@ -104,6 +104,9 @@ impl<'a, 'b> Restore<'a, 'b> {
         }
 
         info!("Starting restore of {}", path.display());
-        ConfigFile::load(&path)?.restore(&path)
+        ConfigFile::load(&path)?.restore(
+            self.matches.is_present("warn"),
+            self.matches.is_present("overwrite"),
+        )
     }
 }

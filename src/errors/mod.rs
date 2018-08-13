@@ -16,6 +16,7 @@ pub enum AppErrorType {
     JsonParse(String),
     UpdateFolder(String),
     RestoreFolder(String),
+    ObjectExists(String),
 }
 
 impl Display for AppErrorType {
@@ -41,6 +42,10 @@ impl Display for AppErrorType {
 
             AppErrorType::RestoreFolder(ref folder) => {
                 write!(f, "Unable to sync {}", highlight(folder))
+            }
+
+            AppErrorType::ObjectExists(ref place) => {
+                write!(f, "Unexpected place {} found", highlight(place))
             }
         }
     }
