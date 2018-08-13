@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 use {AppError, AppErrorType, Result};
 
-#[derive(PartialEq)]
+#[derive(Copy, Clone, PartialEq)]
 pub enum SyncType {
     Backup,
     Restore,
@@ -129,23 +129,25 @@ impl LinkTree {
                                         }
                                     }
                                 } else {
-                                    err!(err.into());
+                                    err!(err);
                                 }
                             }
                         }
 
-                        FileSystemType::Dir => if let Err(err) = self.sync(warn, overwrite) {
-                            if warn {
-                                warn!("Unable to read {}", pathlight(&self.dest));
-                                if cfg!(debug_assertions) {
-                                    for cause in err.causes() {
-                                        trace!("{}", cause);
+                        FileSystemType::Dir => {
+                            if let Err(err) = self.sync(class, warn, overwrite) {
+                                if warn {
+                                    warn!("Unable to read {}", pathlight(&self.dest));
+                                    if cfg!(debug_assertions) {
+                                        for cause in err.causes() {
+                                            trace!("{}", cause);
+                                        }
                                     }
+                                } else {
+                                    err!(err)
                                 }
-                            } else {
-                                err!(err.into())
                             }
-                        },
+                        }
 
                         FileSystemType::Other => {
                             warn!("Unable to process {}", pathlight(&self.dest));
