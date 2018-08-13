@@ -6,6 +6,12 @@ use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 use {AppError, AppErrorType, Result};
 
+#[derive(PartialEq)]
+pub enum SyncType {
+    Backup,
+    Restore,
+}
+
 /// Represents the pieces that make a linked, the link itself and the place where it's pointing
 #[derive(Copy, Clone)]
 pub enum LinkPiece {
@@ -89,13 +95,13 @@ impl LinkTree {
     /// read the contents of the origin, the 'linked', dir.
     ///
     /// If there is an error while processing a subcomponent the function will exit with an error
-    /// if warn = false and emit a warning if warn = true but will try to finish the work anyway. 
+    /// if warn = false and emit a warning if warn = true but will try to finish the work anyway.
     /// In debug mode, the function will print the trace of the warnings if finds.
-    /// 
+    ///
     /// If overwrite = false, the function will exit with an error if the location to be written on
     /// already exists. If overwrite = true, the function will overwrite the location if it sees it
     /// necessary.
-    pub fn sync(&mut self, warn: bool, overwrite: bool) -> Result<()> {
+    pub fn sync(&mut self, class: SyncType, warn: bool, overwrite: bool) -> Result<()> {
         debug!(
             "Syncing {} with {}",
             pathlight(&self.dest),
@@ -113,18 +119,20 @@ impl LinkTree {
                     self.branch(&component.file_name());
 
                     match FileSystemType::new(&self.dest) {
-                        FileSystemType::File => if let Err(err) = self.link().mirror(overwrite) {
-                            if warn {
-                                warn!("Unable to copy {}", pathlight(&self.dest));
-                                if cfg!(debug_assertions) {
-                                    for cause in err.causes() {
-                                        trace!("{}", cause);
+                        FileSystemType::File => {
+                            if let Err(err) = self.link().mirror(class, overwrite) {
+                                if warn {
+                                    warn!("Unable to copy {}", pathlight(&self.dest));
+                                    if cfg!(debug_assertions) {
+                                        for cause in err.causes() {
+                                            trace!("{}", cause);
+                                        }
                                     }
+                                } else {
+                                    err!(err.into());
                                 }
-                            } else {
-                                err!(err.into());
                             }
-                        },
+                        }
 
                         FileSystemType::Dir => if let Err(err) = self.sync(warn, overwrite) {
                             if warn {
@@ -178,7 +186,7 @@ impl<'a> LinkedPoint<'a> {
     /// Checks if the two points are already linked in the filesystem. Two points are linked
     /// if they both exist and the modification date of origin is equal or newer than dest
     pub fn linked(&self) -> bool {
-        if !self.origin.exists() {
+        if !self.origin.exists() || !self.dest.exists() {
             return false;
         }
 
@@ -196,14 +204,14 @@ impl<'a> LinkedPoint<'a> {
     /// method will make a forced link of the two points while this method will link the
     /// points only if necessary. If overwrite = false, this function will exit with an
     /// error if origin already exists
-    pub fn mirror(&self, overwrite: bool) -> Result<()> {
+    pub fn mirror(&self, class: SyncType, overwrite: bool) -> Result<()> {
         if self.origin.exists() && !overwrite {
             err!(AppError::from(AppErrorType::ObjectExists(
                 self.origin.display().to_string()
             )));
         }
 
-        if !self.linked() {
+        if class == SyncType::Restore || !self.linked() {
             match self.link() {
                 Ok(()) => {
                     info!(

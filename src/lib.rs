@@ -35,7 +35,7 @@ mod fs;
 pub mod logger;
 
 pub use errors::{AppError, AppErrorType};
-use fs::LinkTree;
+use fs::{LinkTree, SyncType};
 use logger::pathlight;
 
 /// Alias for the Result type
@@ -96,11 +96,11 @@ where
     }
 
     /// Performs the backup of the files in the different directories to the backup dir
-    /// where the config file was loaded. 
+    /// where the config file was loaded.
     ///
     /// In case of failure to backup one of the main directories specified in the config file
     /// this function will store the changes made up to that point and exit with an error. If
-    /// the backup of one of the subelements fails the function will exit if warn = false or 
+    /// the backup of one of the subelements fails the function will exit if warn = false or
     /// emit a warning and try to finish the rest of the process if warn = true.
     ///
     /// This function will only copy the needed files, if a file has not been modified since the
@@ -111,9 +111,11 @@ where
             let dirs = folder.resolve(&self.path);
             debug!("Starting backup of: {}", pathlight(&dirs.abs));
 
-            if let Err(err) = LinkTree::new(dirs.rel, dirs.abs).sync(warn, true).context(
-                AppErrorType::UpdateFolder(self.path.as_ref().display().to_string()),
-            ) {
+            if let Err(err) = LinkTree::new(dirs.rel, dirs.abs)
+                .sync(SyncType::Backup, warn, true)
+                .context(AppErrorType::UpdateFolder(
+                    self.path.as_ref().display().to_string(),
+                )) {
                 error = Some(err);
                 break;
             }
@@ -135,17 +137,17 @@ where
         }
     }
 
-    /// Performs the restore of the backed files on the dir where the config file was loaded to 
+    /// Performs the restore of the backed files on the dir where the config file was loaded to
     /// their original locations on the specified root.
     ///
     /// The behaviour of this function is analogous to the backup function. If the restore of
     /// one of the main directories fails. The function will exit with an error. If the restore
     /// of one of the subelements fails the function will exit with an error if warn = false or
     /// emit a warning and continue restoring the other elements if warn = true.
-    /// 
+    ///
     /// If overwrite = false, the function will exit with an error if the file exists in the
     /// original dir. If overwrite = true the function will only restore files that are newer or
-    /// equal to the ones present in the original directory. This means that if you modify a file 
+    /// equal to the ones present in the original directory. This means that if you modify a file
     /// and has not been backed it will not be overriden by this function.
     pub fn restore(self, warn: bool, overwrite: bool) -> Result<()> {
         for folder in &self.folders {
@@ -153,7 +155,7 @@ where
             debug!("Starting restore of: {}", pathlight(&dirs.rel));
 
             LinkTree::new(dirs.abs, dirs.rel)
-                .sync(warn, overwrite)
+                .sync(SyncType::Restore, warn, overwrite)
                 .context(AppErrorType::RestoreFolder(
                     self.path.as_ref().display().to_string(),
                 ))?;
