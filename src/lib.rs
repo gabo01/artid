@@ -20,6 +20,7 @@ use chrono::offset::Utc;
 use chrono::DateTime;
 use env_path::EnvPath;
 use failure::ResultExt;
+use std::fmt::Debug;
 use std::fs::File;
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -49,7 +50,7 @@ pub type Result<T> = ::std::result::Result<T, AppError>;
 
 /// Modifier options for the backup action on ConfigFile. Check the properties to see which
 /// behaviour they control
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct BackupOptions {
     /// Enables/Disables warnings on the backup process. If an error is raises while processing
     /// the backup: a folder can't be read from (excluding the main folders), the user does not
@@ -75,7 +76,7 @@ impl From<BackupOptions> for SyncOptions {
 
 /// Modified options for the restore action on ConfigFile. Check the properties to see which
 /// behaviour they control
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct RestoreOptions {
     /// Enables/Disables warnings on the restore process. If an error is raised while processing
     /// the restore: a folder can't be read from (excluding the main folders), the user does not
@@ -124,9 +125,10 @@ impl From<RestoreOptions> for SyncOptions {
 /// This type is also the main point of entry for the library since it controls the
 /// loading of the configuration and allows to do the ops related to the data inside, such
 /// as the backup and restore of the files.
+#[derive(Debug)]
 pub struct ConfigFile<P>
 where
-    P: AsRef<Path>,
+    P: AsRef<Path> + Debug,
 {
     path: P,
     folders: Vec<Folder>,
@@ -134,7 +136,7 @@ where
 
 impl<P> ConfigFile<P>
 where
-    P: AsRef<Path>,
+    P: AsRef<Path> + Debug,
 {
     const RESTORE: &'static str = ".backup/config.json";
 
@@ -272,6 +274,7 @@ struct Folder {
 
 /// Represents the two dirs connected in a folder object once a root is given. Created
 /// when a folder link gets 'resolved' by adding a root to the 'path' or 'link'
+#[derive(Debug)]
 struct Dirs {
     rel: PathBuf,
     abs: PathBuf,

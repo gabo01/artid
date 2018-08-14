@@ -7,7 +7,7 @@ use {AppError, AppErrorType, Result};
 
 /// Modifier options for the sync process in a LinkTree. Check the properties to see which
 /// behaviour they control.
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct SyncOptions {
     /// Enables/Disables warnings on the sync process. If an error is raises while processing
     /// the sync: a folder can't be read from (excluding the main folders), the user does not
@@ -30,7 +30,7 @@ impl SyncOptions {
 
 /// Sets the mode for handling the case in which a file would be overwritten by the sync
 /// operation.
-#[derive(Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub enum OverwriteMode {
     /// The function will raise an error if the location where it tries to write already
     /// exists.
@@ -54,6 +54,7 @@ pub enum OverwriteMode {
 /// Creation of this type won't fail even if the given path's aren't valid. You can check if the
 /// given path's are correct by calling .linked(). If the path's are not correct the sync function
 /// will fail and return an appropiate error.
+#[derive(Debug)]
 pub struct LinkTree {
     origin: PathBuf,
     dest: PathBuf,
@@ -173,6 +174,7 @@ impl LinkTree {
 
 /// Represents a link between two different paths points. The origin path is seen as the
 /// 'link's location while the dest path is seen as the link's pointed place.
+#[derive(Debug)]
 pub struct LinkedPoint<'a> {
     pub origin: &'a Path,
     pub dest: &'a Path,
@@ -241,6 +243,7 @@ fn modified<P: AsRef<Path>>(file: P) -> Option<SystemTime> {
 
 /// Represents the different types a path can take on the file system. It is just a convenience
 /// enum for using a match instead of an if-else tree
+#[derive(Debug)]
 enum FileSystemType {
     File,
     Dir,
