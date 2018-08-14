@@ -14,6 +14,9 @@ use std::env;
 use std::fmt::{self, Display, Formatter};
 use std::path::{Path, PathBuf};
 
+/// Represents an enviroment path. An enviroment path is represented as a standard string
+/// that may have interpolated enviroment variables, refered to as addr, and a path that is
+/// pointed by the addr.
 #[derive(Debug, PartialEq)]
 pub struct EnvPath {
     addr: String,
@@ -21,6 +24,9 @@ pub struct EnvPath {
 }
 
 impl EnvPath {
+    /// Creates a new EnvPath from a given addr. Notice that the translation of the addr
+    /// into the path will occur in these step. This means that setting the enviroment variable
+    /// later will have no effect on the registered path.
     pub fn new<T: Into<String>>(addr: T) -> Self {
         let addr = addr.into();
         let path = PathBuf::from(Self::regex(&addr));
