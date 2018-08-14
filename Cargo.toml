@@ -1,3 +1,8 @@
+[workspace]
+members = [
+    "crates/env_path"
+]
+
 [package]
 name = "backup-rs"
 version = "0.1.0"
