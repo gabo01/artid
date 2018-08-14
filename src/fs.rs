@@ -58,17 +58,12 @@ pub enum OverwriteMode {
 pub struct LinkTree {
     origin: PathBuf,
     dest: PathBuf,
-    deepness: u32,
 }
 
 impl LinkTree {
     /// Creates a new link representation for two different trees
     pub fn new(origin: PathBuf, dest: PathBuf) -> Self {
-        Self {
-            origin,
-            dest,
-            deepness: 0,
-        }
+        Self { origin, dest }
     }
 
     /// Checks if the tree is valid. The tree is valid if the two points are directories.
@@ -77,26 +72,21 @@ impl LinkTree {
     }
 
     /// Creates an internal representation of the branch of the tree
-    pub fn branch<P: AsRef<Path>>(&mut self, branch: &P) {
+    fn branch<P: AsRef<Path>>(&mut self, branch: &P) {
         self.origin.push(&branch);
         self.dest.push(&branch);
-        self.deepness += 1;
     }
 
     /// Returns to the root of the currently branch.
     ///
     /// This function will panic if the tree is already at it's uppermost root
-    pub fn root(&mut self) {
-        if self.deepness == 0 {
-            panic!("Can not get the root of the tree root");
-        }
+    fn root(&mut self) {
         self.origin.pop();
         self.dest.pop();
-        self.deepness -= 1;
     }
 
     /// Creates a link object between the current points in the tree
-    pub fn link(&self) -> LinkedPoint<'_> {
+    fn link(&self) -> LinkedPoint<'_> {
         LinkedPoint::new(&self.origin, &self.dest)
     }
 
@@ -175,20 +165,20 @@ impl LinkTree {
 /// Represents a link between two different paths points. The origin path is seen as the
 /// 'link's location while the dest path is seen as the link's pointed place.
 #[derive(Debug)]
-pub struct LinkedPoint<'a> {
-    pub origin: &'a Path,
-    pub dest: &'a Path,
+struct LinkedPoint<'a> {
+    origin: &'a Path,
+    dest: &'a Path,
 }
 
 impl<'a> LinkedPoint<'a> {
     /// Creates a link representation of two different locations
-    pub fn new(origin: &'a Path, dest: &'a Path) -> Self {
+    pub(self) fn new(origin: &'a Path, dest: &'a Path) -> Self {
         Self { origin, dest }
     }
 
     /// Checks if the two points are already linked in the filesystem. Two points are linked
     /// if they both exist and the modification date of origin is equal or newer than dest
-    pub fn synced(&self) -> bool {
+    pub(self) fn synced(&self) -> bool {
         if self.origin.exists() && self.dest.exists() {
             if let Some(linked) = modified(self.dest) {
                 if let Some(link) = modified(self.origin) {
@@ -205,7 +195,7 @@ impl<'a> LinkedPoint<'a> {
     /// method will make a forced link of the two points while this method will link the
     /// points only if necessary. If overwrite = false, this function will exit with an
     /// error if origin already exists
-    pub fn mirror(&self, overwrite: OverwriteMode) -> Result<()> {
+    pub(self) fn mirror(&self, overwrite: OverwriteMode) -> Result<()> {
         if overwrite == OverwriteMode::Disallow && self.origin.exists() {
             err!(AppErrorType::ObjectExists(
                 self.origin.display().to_string()
