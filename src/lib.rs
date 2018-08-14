@@ -24,9 +24,15 @@ use std::fs::File;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
-macro_rules! err {
+macro_rules! fail {
     ($x:expr) => {
         return Err($x);
+    };
+}
+
+macro_rules! err {
+    ($x:expr) => {
+        fail!(AppError::from($x))
     };
 }
 
@@ -35,11 +41,79 @@ mod fs;
 pub mod logger;
 
 pub use errors::{AppError, AppErrorType};
-use fs::{LinkTree, SyncType};
+use fs::{LinkTree, OverwriteMode, SyncOptions};
 use logger::pathlight;
 
 /// Alias for the Result type
 pub type Result<T> = ::std::result::Result<T, AppError>;
+
+/// Modifier options for the backup action on ConfigFile. Check the properties to see which
+/// behaviour they control
+#[derive(Copy, Clone)]
+pub struct BackupOptions {
+    /// Enables/Disables warnings on the backup process. If an error is raises while processing
+    /// the backup: a folder can't be read from (excluding the main folders), the user does not
+    /// have permissions for accessing a file, the function will emit a warning instead of
+    /// exiting with an error.
+    ///
+    /// In short words: (warn == true) => function will warn about errors instead of failing the
+    /// backup operation
+    pub warn: bool,
+}
+
+impl BackupOptions {
+    pub fn new(warn: bool) -> Self {
+        Self { warn }
+    }
+}
+
+impl From<BackupOptions> for SyncOptions {
+    fn from(options: BackupOptions) -> Self {
+        SyncOptions::new(options.warn, OverwriteMode::Allow)
+    }
+}
+
+/// Modified options for the restore action on ConfigFile. Check the properties to see which
+/// behaviour they control
+#[derive(Copy, Clone)]
+pub struct RestoreOptions {
+    /// Enables/Disables warnings on the restore process. If an error is raised while processing
+    /// the restore: a folder can't be read from (excluding the main folders), the user does not
+    /// have permissions for accessing a file, the function will emit a warning instead of
+    /// exiting with an error.
+    ///
+    /// In short words: (warn == true) => function will warn about errors instead of failing the
+    /// backup operation.
+    warn: bool,
+    /// Enables/Disables overwrite on the original locations during the restore. If the original
+    /// location of the file backed up already exists this function will overwrite the location
+    /// with the file backed up instead of exiting with an error.
+    ///
+    /// In short words: (overwrite == true) => function wil overwrite files on the original
+    /// locations.
+    ///
+    /// Setting (warn == true) will turn the error into a warning if (overwrite == false).
+    overwrite: bool,
+}
+
+impl RestoreOptions {
+    pub fn new(warn: bool, overwrite: bool) -> Self {
+        Self { warn, overwrite }
+    }
+}
+
+impl From<RestoreOptions> for SyncOptions {
+    fn from(options: RestoreOptions) -> Self {
+        SyncOptions::new(
+            options.warn,
+            if options.overwrite {
+                OverwriteMode::Force
+            } else {
+                OverwriteMode::Disallow
+            },
+        )
+    }
+}
 
 /// Represents a configuration file stored in config.json. A valid config.json file is composed
 /// by an array of folder structs. Usually this file will be stored in the directory intended
@@ -98,24 +172,23 @@ where
     /// Performs the backup of the files in the different directories to the backup dir
     /// where the config file was loaded.
     ///
-    /// In case of failure to backup one of the main directories specified in the config file
-    /// this function will store the changes made up to that point and exit with an error. If
-    /// the backup of one of the subelements fails the function will exit if warn = false or
-    /// emit a warning and try to finish the rest of the process if warn = true.
+    /// Behaviour of this function can be customized through the options provided. Check
+    /// BackupOptions to see what things can be modified.
     ///
     /// This function will only copy the needed files, if a file has not been modified since the
     /// last time it was backed up it will not be copied.
-    pub fn backup(&mut self, warn: bool) -> Result<()> {
+    pub fn backup(&mut self, options: BackupOptions) -> Result<()> {
         let mut error = None;
         for folder in &mut self.folders {
             let dirs = folder.resolve(&self.path);
             debug!("Starting backup of: {}", pathlight(&dirs.abs));
 
-            if let Err(err) = LinkTree::new(dirs.rel, dirs.abs)
-                .sync(SyncType::Backup, warn, true)
-                .context(AppErrorType::UpdateFolder(
-                    self.path.as_ref().display().to_string(),
-                )) {
+            if let Err(err) =
+                LinkTree::new(dirs.rel, dirs.abs)
+                    .sync(options)
+                    .context(AppErrorType::UpdateFolder(
+                        self.path.as_ref().display().to_string(),
+                    )) {
                 error = Some(err);
                 break;
             }
@@ -149,16 +222,14 @@ where
     /// original dir. If overwrite = true the function will only restore files that are newer or
     /// equal to the ones present in the original directory. This means that if you modify a file
     /// and has not been backed it will not be overriden by this function.
-    pub fn restore(self, warn: bool, overwrite: bool) -> Result<()> {
+    pub fn restore(self, options: RestoreOptions) -> Result<()> {
         for folder in &self.folders {
             let dirs = folder.resolve(&self.path);
             debug!("Starting restore of: {}", pathlight(&dirs.rel));
 
-            LinkTree::new(dirs.abs, dirs.rel)
-                .sync(SyncType::Restore, warn, overwrite)
-                .context(AppErrorType::RestoreFolder(
-                    self.path.as_ref().display().to_string(),
-                ))?;
+            LinkTree::new(dirs.abs, dirs.rel).sync(options).context(
+                AppErrorType::RestoreFolder(self.path.as_ref().display().to_string()),
+            )?;
         }
 
         Ok(())
@@ -168,16 +239,12 @@ where
         let path = path.as_ref();
 
         if !path.is_dir() {
-            err!(AppError::from(AppErrorType::NotDir(
-                path.display().to_string()
-            )));
+            err!(AppErrorType::NotDir(path.display().to_string()));
         }
 
         let restore = path.join(Self::RESTORE);
         if !restore.is_file() {
-            err!(AppError::from(AppErrorType::PathUnexistant(
-                restore.display().to_string()
-            )));
+            err!(AppErrorType::PathUnexistant(restore.display().to_string()));
         }
 
         debug!("config file: {}", pathlight(&restore));
@@ -194,7 +261,7 @@ where
 /// Aside from the link, the modified field represents the last time the contents from
 /// the two folders where synced
 #[derive(Debug, Serialize, Deserialize)]
-pub struct Folder {
+struct Folder {
     /// Link path. If thinked as a link, this is where the symbolic link is
     path: EnvPath,
     /// Path of origin. If thinked as a link, this is the place the link points to

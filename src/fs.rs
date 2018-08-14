@@ -1,22 +1,47 @@
 use failure::{Fail, ResultExt};
 use logger::{highlight, pathlight};
-use std;
-use std::fs::{self, ReadDir};
+use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 use {AppError, AppErrorType, Result};
 
-#[derive(Copy, Clone, PartialEq)]
-pub enum SyncType {
-    Backup,
-    Restore,
+/// Modifier options for the sync process in a LinkTree. Check the properties to see which
+/// behaviour they control.
+#[derive(Copy, Clone)]
+pub struct SyncOptions {
+    /// Enables/Disables warnings on the sync process. If an error is raises while processing
+    /// the sync: a folder can't be read from (excluding the main folders), the user does not
+    /// have permissions for accessing a file, the function will emit a warning instead of
+    /// exiting with an error.
+    ///
+    /// In short words: (warn == true) => function will warn about errors instead of failing the
+    /// backup operation.
+    pub warn: bool,
+    /// Controls how to handle if a location to be written on already exists. See OverwriteMode
+    /// docs for more info on how this setting behaves.
+    pub overwrite: OverwriteMode,
 }
 
-/// Represents the pieces that make a linked, the link itself and the place where it's pointing
-#[derive(Copy, Clone)]
-pub enum LinkPiece {
-    Link,
-    Linked,
+impl SyncOptions {
+    pub fn new(warn: bool, overwrite: OverwriteMode) -> Self {
+        Self { warn, overwrite }
+    }
+}
+
+/// Sets the mode for handling the case in which a file would be overwritten by the sync
+/// operation.
+#[derive(Copy, Clone, PartialEq)]
+pub enum OverwriteMode {
+    /// The function will raise an error if the location where it tries to write already
+    /// exists.
+    Disallow,
+    /// The function will compare both locations last modification date. If the location
+    /// to be written on is older than the location whose contents will be copied the
+    /// location will be overwritten.
+    Allow,
+    /// The fuction will always overwrite the destination location regardless of the last
+    /// modification date or any other parameter.
+    Force,
 }
 
 /// Represents two different linked directory trees. The origin path is seen as the 'link'
@@ -36,7 +61,7 @@ pub struct LinkTree {
 }
 
 impl LinkTree {
-    /// Creates a new link representation of two different trees
+    /// Creates a new link representation for two different trees
     pub fn new(origin: PathBuf, dest: PathBuf) -> Self {
         Self {
             origin,
@@ -45,8 +70,8 @@ impl LinkTree {
         }
     }
 
-    /// Checks if the two points are linked. Two points are linked if they are both directories
-    pub fn linked(&self) -> bool {
+    /// Checks if the tree is valid. The tree is valid if the two points are directories.
+    pub fn valid(&self) -> bool {
         self.origin.is_dir() && self.dest.is_dir()
     }
 
@@ -74,54 +99,35 @@ impl LinkTree {
         LinkedPoint::new(&self.origin, &self.dest)
     }
 
-    /// Creates the link piece specified by point
-    pub fn create(&self, point: LinkPiece) -> std::io::Result<()> {
-        match point {
-            LinkPiece::Link => fs::create_dir_all(&self.origin),
-            LinkPiece::Linked => fs::create_dir_all(&self.dest),
-        }
-    }
-
-    /// Reads the link piece specified by point
-    pub fn read(&self, point: LinkPiece) -> std::io::Result<ReadDir> {
-        match point {
-            LinkPiece::Link => fs::read_dir(&self.origin),
-            LinkPiece::Linked => fs::read_dir(&self.dest),
-        }
-    }
-
     /// Syncs the two trees. This function will fail if the two points aren't linked
     /// and it is unable to create the destination dir, the 'link' or if it is unable to
     /// read the contents of the origin, the 'linked', dir.
-    ///
-    /// If there is an error while processing a subcomponent the function will exit with an error
-    /// if warn = false and emit a warning if warn = true but will try to finish the work anyway.
-    /// In debug mode, the function will print the trace of the warnings if finds.
-    ///
-    /// If overwrite = false, the function will exit with an error if the location to be written on
-    /// already exists. If overwrite = true, the function will overwrite the location if it sees it
-    /// necessary.
-    pub fn sync(&mut self, class: SyncType, warn: bool, overwrite: bool) -> Result<()> {
+    /// 
+    /// Behaviour of these function can be controlled through the options sent for things such
+    /// as file clashes, errors while processing a file or a subdirectory and other things. See
+    /// SyncOptions docs for more info on these topic.
+    pub fn sync<T: Into<SyncOptions>>(&mut self, options: T) -> Result<()> {
+        let options = options.into();
+
         debug!(
             "Syncing {} with {}",
             pathlight(&self.dest),
             pathlight(&self.origin)
         );
 
-        if !self.linked() {
-            self.create(LinkPiece::Link)
-                .context("Unable to create backup dir")?;
+        if !self.valid() {
+            fs::create_dir_all(&self.origin).context("Unable to create backup dir")?;
         }
 
-        for entry in self.read(LinkPiece::Linked).context("Unable to read dir")? {
+        for entry in fs::read_dir(&self.dest).context("Unable to read dir")? {
             match entry {
                 Ok(component) => {
                     self.branch(&component.file_name());
 
-                    match FileSystemType::new(&self.dest) {
+                    match FileSystemType::from(&self.dest) {
                         FileSystemType::File => {
-                            if let Err(err) = self.link().mirror(class, overwrite) {
-                                if warn {
+                            if let Err(err) = self.link().mirror(options.overwrite) {
+                                if options.warn {
                                     warn!("Unable to copy {}", pathlight(&self.dest));
                                     if cfg!(debug_assertions) {
                                         for cause in err.causes() {
@@ -129,14 +135,14 @@ impl LinkTree {
                                         }
                                     }
                                 } else {
-                                    err!(err);
+                                    fail!(err);
                                 }
                             }
                         }
 
                         FileSystemType::Dir => {
-                            if let Err(err) = self.sync(class, warn, overwrite) {
-                                if warn {
+                            if let Err(err) = self.sync(options) {
+                                if options.warn {
                                     warn!("Unable to read {}", pathlight(&self.dest));
                                     if cfg!(debug_assertions) {
                                         for cause in err.causes() {
@@ -144,7 +150,7 @@ impl LinkTree {
                                         }
                                     }
                                 } else {
-                                    err!(err)
+                                    fail!(err)
                                 }
                             }
                         }
@@ -178,27 +184,20 @@ impl<'a> LinkedPoint<'a> {
         Self { origin, dest }
     }
 
-    /// Links the two points in the filesystem. This implies making a copy of the object in
-    /// dest to origin
-    pub fn link(&self) -> Result<()> {
-        fs::copy(self.dest, self.origin).context("Unable to copy the file")?;
-        Ok(())
-    }
-
     /// Checks if the two points are already linked in the filesystem. Two points are linked
     /// if they both exist and the modification date of origin is equal or newer than dest
-    pub fn linked(&self) -> bool {
-        if !self.origin.exists() || !self.dest.exists() {
-            return false;
-        }
-
-        if let Some(linked) = get_last_modified(self.dest) {
-            if let Some(link) = get_last_modified(self.origin) {
-                return link >= linked;
+    pub fn synced(&self) -> bool {
+        if self.origin.exists() && self.dest.exists() {
+            if let Some(linked) = get_last_modified(self.dest) {
+                if let Some(link) = get_last_modified(self.origin) {
+                    return link >= linked;
+                }
             }
-        }
 
-        false
+            false
+        } else {
+            false
+        }
     }
 
     /// Links the two points on the filesystem. This method will check first if the two
@@ -206,26 +205,23 @@ impl<'a> LinkedPoint<'a> {
     /// method will make a forced link of the two points while this method will link the
     /// points only if necessary. If overwrite = false, this function will exit with an
     /// error if origin already exists
-    pub fn mirror(&self, class: SyncType, overwrite: bool) -> Result<()> {
-        if self.origin.exists() && !overwrite {
-            err!(AppError::from(AppErrorType::ObjectExists(
+    pub fn mirror(&self, overwrite: OverwriteMode) -> Result<()> {
+        if overwrite == OverwriteMode::Disallow && self.origin.exists() {
+            err!(AppErrorType::ObjectExists(
                 self.origin.display().to_string()
-            )));
+            ));
         }
 
-        if class == SyncType::Restore || !self.linked() {
-            match self.link() {
-                Ok(()) => {
-                    info!(
-                        "synced: {} -> {}",
-                        pathlight(self.dest),
-                        pathlight(self.origin)
-                    );
-                    Ok(())
-                }
+        if overwrite == OverwriteMode::Force || overwrite == OverwriteMode::Allow && !self.synced()
+        {
+            fs::copy(self.dest, self.origin).context("Unable to copy the file")?;
+            info!(
+                "synced: {} -> {}",
+                pathlight(self.dest),
+                pathlight(self.origin)
+            );
 
-                Err(err) => Err(err),
-            }
+            Ok(())
         } else {
             info!("Copy not needed for: {}", pathlight(self.dest));
             Ok(())
@@ -260,18 +256,20 @@ fn get_last_modified<P: AsRef<Path>>(file: P) -> Option<SystemTime> {
     }
 }
 
-/// Represents the different types a path can take on the file system
+/// Represents the different types a path can take on the file system. It is just a convenience
+/// enum for using a match instead of an if-else tree
 enum FileSystemType {
     File,
     Dir,
     Other,
 }
 
-impl FileSystemType {
-    fn new(obj: &PathBuf) -> FileSystemType {
-        if obj.is_file() {
+impl<P: AsRef<Path>> From<P> for FileSystemType {
+    fn from(path: P) -> Self {
+        let path = path.as_ref();
+        if path.is_file() {
             FileSystemType::File
-        } else if obj.is_dir() {
+        } else if path.is_dir() {
             FileSystemType::Dir
         } else {
             FileSystemType::Other
