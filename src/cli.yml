@@ -1,4 +1,4 @@
-name: backup
+name: backup-rs
 version: "0.1.0"
 author: Gabriel Dos Ramos <dosramosgabriel@gmail.com>
 about: Light client to backup your data
