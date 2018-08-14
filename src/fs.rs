@@ -1,5 +1,5 @@
 use failure::{Fail, ResultExt};
-use logger::{highlight, pathlight};
+use logger::pathlight;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
@@ -102,7 +102,7 @@ impl LinkTree {
     /// Syncs the two trees. This function will fail if the two points aren't linked
     /// and it is unable to create the destination dir, the 'link' or if it is unable to
     /// read the contents of the origin, the 'linked', dir.
-    /// 
+    ///
     /// Behaviour of these function can be controlled through the options sent for things such
     /// as file clashes, errors while processing a file or a subdirectory and other things. See
     /// SyncOptions docs for more info on these topic.
@@ -188,16 +188,14 @@ impl<'a> LinkedPoint<'a> {
     /// if they both exist and the modification date of origin is equal or newer than dest
     pub fn synced(&self) -> bool {
         if self.origin.exists() && self.dest.exists() {
-            if let Some(linked) = get_last_modified(self.dest) {
-                if let Some(link) = get_last_modified(self.origin) {
+            if let Some(linked) = modified(self.dest) {
+                if let Some(link) = modified(self.origin) {
                     return link >= linked;
                 }
             }
-
-            false
-        } else {
-            false
         }
+
+        false
     }
 
     /// Links the two points on the filesystem. This method will check first if the two
@@ -220,12 +218,9 @@ impl<'a> LinkedPoint<'a> {
                 pathlight(self.dest),
                 pathlight(self.origin)
             );
-
-            Ok(())
-        } else {
-            info!("Copy not needed for: {}", pathlight(self.dest));
-            Ok(())
         }
+
+        Ok(())
     }
 }
 
@@ -233,27 +228,15 @@ impl<'a> LinkedPoint<'a> {
 /// by the system. Since this is a measurement made by the system, the time returned by this
 /// function can be wrong in some cases: the user changed the date in it's system, an operation
 /// was queued and performed at a later time and some other cases.
-fn get_last_modified<P: AsRef<Path>>(file: P) -> Option<SystemTime> {
-    match file.as_ref().metadata() {
-        Ok(data) => match data.modified() {
-            Ok(time) => Some(time),
-            Err(_) => {
-                warn!(
-                    "Unable to access modified attribute of {}",
-                    highlight(file.as_ref().display())
-                );
-                None
-            }
-        },
-
-        Err(_) => {
-            warn!(
-                "Unable to access {} metadata",
-                highlight(file.as_ref().display())
-            );
-            None
+fn modified<P: AsRef<Path>>(file: P) -> Option<SystemTime> {
+    if let Ok(data) = file.as_ref().metadata() {
+        if let Ok(time) = data.modified() {
+            return Some(time);
         }
     }
+
+    warn!("Unable to access metadata for {}", pathlight(file.as_ref()));
+    None
 }
 
 /// Represents the different types a path can take on the file system. It is just a convenience
