@@ -5,6 +5,22 @@ use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 use {AppError, AppErrorType, Result};
 
+/// Used to handle errors in the sync process.
+macro_rules! handle {
+    ($warn:expr, $err:expr, $($msg:tt)*) => {
+        if $warn {
+            warn!($($msg)*);
+            if cfg!(debug_assertions) {
+                for cause in $err.causes() {
+                    trace!("{}", cause);
+                }
+            }
+        } else {
+            fail!($err);
+        }
+    };
+}
+
 /// Modifier options for the sync process in a LinkTree. Check the properties to see which
 /// behaviour they control.
 #[derive(Debug, Copy, Clone)]
@@ -116,31 +132,23 @@ impl LinkTree {
                     match FileSystemType::from(&self.dest) {
                         FileSystemType::File => {
                             if let Err(err) = self.link().mirror(options.overwrite) {
-                                if options.warn {
-                                    warn!("Unable to copy {}", pathlight(&self.dest));
-                                    if cfg!(debug_assertions) {
-                                        for cause in err.causes() {
-                                            trace!("{}", cause);
-                                        }
-                                    }
-                                } else {
-                                    fail!(err);
-                                }
+                                handle!(
+                                    options.warn,
+                                    err,
+                                    "Unable to copy {}",
+                                    pathlight(&self.dest)
+                                );
                             }
                         }
 
                         FileSystemType::Dir => {
                             if let Err(err) = self.sync(options) {
-                                if options.warn {
-                                    warn!("Unable to read {}", pathlight(&self.dest));
-                                    if cfg!(debug_assertions) {
-                                        for cause in err.causes() {
-                                            trace!("{}", cause);
-                                        }
-                                    }
-                                } else {
-                                    fail!(err)
-                                }
+                                handle!(
+                                    options.warn,
+                                    err,
+                                    "Unable to read {}",
+                                    pathlight(&self.dest)
+                                );
                             }
                         }
 
