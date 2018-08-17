@@ -1,5 +1,5 @@
+use atty::{self, Stream};
 use env_logger::{Builder, Env, DEFAULT_FILTER_ENV};
-use libc;
 use log;
 use std::fmt::Display;
 use std::io::Write;
@@ -13,9 +13,10 @@ use yansi::{Color, Paint};
 /// Calling this function more than one time or calling another function that sets a global
 /// logger will result in a panic.
 pub fn init(filter_level: &str) -> Result<(), log::SetLoggerError> {
-    if !OutputStream::is_ansi() {
+    if !atty::is(Stream::Stderr) || cfg!(windows) && !Paint::enable_windows_ascii() {
         Paint::disable();
     }
+
     init_builder(if cfg!(debug_assertions) {
         "trace"
     } else {
@@ -33,25 +34,6 @@ pub fn highlight<M: Display>(input: M) -> Paint<M> {
 /// work with paths
 pub fn pathlight<P: AsRef<Path>>(path: P) -> Paint<String> {
     highlight(path.as_ref().display().to_string())
-}
-
-/// Represents the standard ouput for the program logs (STDERR).
-struct OutputStream;
-
-impl OutputStream {
-    /// Determines if the standard output is a valid ansi tty
-    pub fn is_ansi() -> bool {
-        if cfg!(not(target_os = "linux")) {
-            false
-        } else {
-            Self::is_output_term()
-        }
-    }
-
-    /// Determines if the logs standard output (STDERR) is a tty
-    fn is_output_term() -> bool {
-        (unsafe { libc::isatty(libc::STDERR_FILENO as i32) } != 0)
-    }
 }
 
 /// Constructs the logger for the application.

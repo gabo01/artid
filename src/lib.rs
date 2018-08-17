@@ -1,5 +1,6 @@
 #![allow(deprecated)]
 
+extern crate atty;
 extern crate chrono;
 extern crate env_logger;
 extern crate failure;
