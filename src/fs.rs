@@ -61,7 +61,7 @@ pub struct LinkTree {
 }
 
 impl LinkTree {
-    /// Creates a new link representation for two different trees
+    /// Creates a new link representation for two different trees.
     pub fn new(origin: PathBuf, dest: PathBuf) -> Self {
         Self { origin, dest }
     }
@@ -71,21 +71,19 @@ impl LinkTree {
         self.origin.is_dir() && self.dest.is_dir()
     }
 
-    /// Creates an internal representation of the branch of the tree
+    /// Creates an internal representation of the branch of the tree.
     fn branch<P: AsRef<Path>>(&mut self, branch: &P) {
         self.origin.push(&branch);
         self.dest.push(&branch);
     }
 
     /// Returns to the root of the currently branch.
-    ///
-    /// This function will panic if the tree is already at it's uppermost root
     fn root(&mut self) {
         self.origin.pop();
         self.dest.pop();
     }
 
-    /// Creates a link object between the current points in the tree
+    /// Creates a link object between the current points in the tree.
     fn link(&self) -> LinkedPoint<'_> {
         LinkedPoint::new(&self.origin, &self.dest)
     }
@@ -171,13 +169,13 @@ struct LinkedPoint<'a> {
 }
 
 impl<'a> LinkedPoint<'a> {
-    /// Creates a link representation of two different locations
+    /// Creates a link representation of two different locations.
     pub(self) fn new(origin: &'a Path, dest: &'a Path) -> Self {
         Self { origin, dest }
     }
 
     /// Checks if the two points are already linked in the filesystem. Two points are linked
-    /// if they both exist and the modification date of origin is equal or newer than dest
+    /// if they both exist and the modification date of origin is equal or newer than dest.
     pub(self) fn synced(&self) -> bool {
         if self.origin.exists() && self.dest.exists() {
             if let Some(linked) = modified(self.dest) {
@@ -190,11 +188,9 @@ impl<'a> LinkedPoint<'a> {
         false
     }
 
-    /// Links the two points on the filesystem. This method will check first if the two
-    /// objects aren't already linked before making a link. In order words, the .link()
-    /// method will make a forced link of the two points while this method will link the
-    /// points only if necessary. If overwrite = false, this function will exit with an
-    /// error if origin already exists
+    /// Syncs (or Links) the two points on the filesystem. The behaviour of this function
+    /// for making the sync is controlled by the overwrite option. See the docs for OverwriteMode
+    /// to get more info.
     pub(self) fn mirror(&self, overwrite: OverwriteMode) -> Result<()> {
         if overwrite == OverwriteMode::Disallow && self.origin.exists() {
             err!(AppErrorType::ObjectExists(
@@ -232,7 +228,7 @@ fn modified<P: AsRef<Path>>(file: P) -> Option<SystemTime> {
 }
 
 /// Represents the different types a path can take on the file system. It is just a convenience
-/// enum for using a match instead of an if-else tree
+/// enum for using a match instead of an if-else tree.
 #[derive(Debug)]
 enum FileSystemType {
     File,
