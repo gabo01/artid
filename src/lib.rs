@@ -74,7 +74,7 @@ impl BackupOptions {
 
 impl From<BackupOptions> for SyncOptions {
     fn from(options: BackupOptions) -> Self {
-        SyncOptions::new(options.warn, OverwriteMode::Allow)
+        SyncOptions::new(options.warn, true, OverwriteMode::Allow)
     }
 }
 
@@ -112,6 +112,7 @@ impl From<RestoreOptions> for SyncOptions {
     fn from(options: RestoreOptions) -> Self {
         SyncOptions::new(
             options.warn,
+            false,
             if options.overwrite {
                 OverwriteMode::Force
             } else {

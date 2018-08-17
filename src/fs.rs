@@ -33,6 +33,10 @@ pub struct SyncOptions {
     /// In short words: (warn == true) => function will warn about errors instead of failing the
     /// backup operation.
     pub warn: bool,
+    /// Enables/Disables cleanup of files. If a file is present on the location to be written
+    /// on but does not exist in it's supposed original location, the file will be deleted from
+    /// the backup. This avoids generating garbage files on a backup dir.
+    pub clean: bool,
     /// Controls how to handle if a location to be written on already exists. See OverwriteMode
     /// docs for more info on how this setting behaves.
     pub overwrite: OverwriteMode,
@@ -40,8 +44,12 @@ pub struct SyncOptions {
 
 impl SyncOptions {
     /// Creates a new set of options for the sync process.
-    pub fn new(warn: bool, overwrite: OverwriteMode) -> Self {
-        Self { warn, overwrite }
+    pub fn new(warn: bool, clean: bool, overwrite: OverwriteMode) -> Self {
+        Self {
+            warn,
+            clean,
+            overwrite,
+        }
     }
 }
 
@@ -113,7 +121,7 @@ impl LinkTree {
     /// as file clashes, errors while processing a file or a subdirectory and other things. See
     /// SyncOptions docs for more info on these topic.
     pub fn sync<T: Into<SyncOptions>>(&mut self, options: T) -> Result<()> {
-        let options = options.into();
+        let mut options = options.into();
 
         debug!(
             "Syncing {} with {}",
@@ -123,6 +131,7 @@ impl LinkTree {
 
         if !self.valid() {
             fs::create_dir_all(&self.origin).context("Unable to create backup dir")?;
+            options.clean = false; // no need to perform the clean check if the dir is empty
         }
 
         for entry in fs::read_dir(&self.dest).context("Unable to read dir")? {
@@ -165,7 +174,60 @@ impl LinkTree {
             }
         }
 
+        if options.clean {
+            self.clean_backup();
+        }
+
         Ok(())
+    }
+
+    /// Cleans garbage files in a backup directory. A file is seen as garbage if it was
+    /// removed from the original location.
+    fn clean_backup(&mut self) {
+        if let Ok(val) = fs::read_dir(&self.origin) {
+            for entry in val {
+                match entry {
+                    Ok(component) => {
+                        self.branch(&component.file_name());
+
+                        if !self.dest.exists() {
+                            debug!(
+                                "Unnexistant {}, removing {}",
+                                pathlight(&self.dest),
+                                pathlight(&self.origin)
+                            );
+
+                            if self.origin.is_dir() {
+                                if let Err(err) = fs::remove_dir_all(&self.origin) {
+                                    error!("{}", err);
+                                    warn!(
+                                        "Unable to remove garbage location {}",
+                                        pathlight(&self.origin)
+                                    );
+                                }
+                            } else {
+                                if let Err(err) = fs::remove_file(&self.origin) {
+                                    error!("{}", err);
+                                    warn!(
+                                        "Unable to remove garbage location {}",
+                                        pathlight(&self.origin)
+                                    );
+                                }
+                            }
+                        }
+
+                        if let FileSystemType::Dir = FileSystemType::from(&self.origin) {
+                            self.clean_backup();
+                        }
+
+                        self.root();
+                    }
+
+                    // FIXME: improve the handle of this case
+                    Err(_) => warn!("Unable to read entry 2"),
+                }
+            }
+        }
     }
 }
 
