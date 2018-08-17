@@ -60,6 +60,7 @@ pub struct AppError {
 }
 
 impl AppError {
+    /// Determines the kind of build used to get the app error.
     pub fn kind(&self) -> Option<&AppErrorType> {
         match (*self).inner {
             Either::Enum(ref enumerate) => Some(enumerate.get_context()),

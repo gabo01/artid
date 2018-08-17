@@ -1,6 +1,7 @@
 use failure::{Backtrace, Fail};
 use std::fmt::{self, Debug, Display};
 
+/// Allows to build a failure error in two different ways.
 #[derive(Debug)]
 pub enum Either<T, U>
 where

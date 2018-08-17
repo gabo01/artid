@@ -25,12 +25,15 @@ use std::fs::File;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
+/// Represents a failure in the execution of a function.
 macro_rules! fail {
     ($x:expr) => {
         return Err($x);
     };
 }
 
+/// Used to build an error and then fail the current function execution with the builded
+/// error.
 macro_rules! err {
     ($x:expr) => {
         fail!(AppError::from($x))
@@ -63,6 +66,7 @@ pub struct BackupOptions {
 }
 
 impl BackupOptions {
+    /// Creates a new set of options for the backup operation.
     pub fn new(warn: bool) -> Self {
         Self { warn }
     }
@@ -98,6 +102,7 @@ pub struct RestoreOptions {
 }
 
 impl RestoreOptions {
+    /// Creates a new set of options for the restore operation.
     pub fn new(warn: bool, overwrite: bool) -> Self {
         Self { warn, overwrite }
     }
@@ -138,6 +143,7 @@ impl<P> ConfigFile<P>
 where
     P: AsRef<Path> + Debug,
 {
+    /// Represents the relative path to the configuration file from a given root directory
     const RESTORE: &'static str = ".backup/config.json";
 
     /// Loads the data present in the configuration file. Currently this function receives
@@ -237,6 +243,8 @@ where
         Ok(())
     }
 
+    /// Constructs the path to the configuration file from a given directory. This path
+    /// depends on the RESTORE constant.
     fn filepath<T: AsRef<Path>>(path: T) -> Result<PathBuf> {
         let path = path.as_ref();
 

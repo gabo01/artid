@@ -34,14 +34,17 @@ impl EnvPath {
         Self { addr, path }
     }
 
+    /// Returns the addr used to build the EnvPath.
     pub fn addr(&self) -> &str {
         &self.addr
     }
 
+    /// Returns the path resolved during the building of the EnvPath.
     pub fn path(&self) -> &Path {
         &self.path
     }
 
+    /// Process the enviroment vars present on the addr and resolves them.
     fn regex(path: &str) -> String {
         lazy_static! {
             static ref RE: Regex = Regex::new(r"(\\?)\$([A-Z]+)").unwrap();

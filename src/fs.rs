@@ -39,6 +39,7 @@ pub struct SyncOptions {
 }
 
 impl SyncOptions {
+    /// Creates a new set of options for the sync process.
     pub fn new(warn: bool, overwrite: OverwriteMode) -> Self {
         Self { warn, overwrite }
     }

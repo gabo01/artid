@@ -35,9 +35,11 @@ pub fn pathlight<P: AsRef<Path>>(path: P) -> Paint<String> {
     highlight(path.as_ref().display().to_string())
 }
 
+/// Represents the standard ouput for the program logs (STDERR).
 struct OutputStream;
 
 impl OutputStream {
+    /// Determines if the standard output is a valid ansi tty
     pub fn is_ansi() -> bool {
         if cfg!(not(target_os = "linux")) {
             false
@@ -46,11 +48,13 @@ impl OutputStream {
         }
     }
 
+    /// Determines if the logs standard output (STDERR) is a tty
     fn is_output_term() -> bool {
         (unsafe { libc::isatty(libc::STDERR_FILENO as i32) } != 0)
     }
 }
 
+/// Constructs the logger for the application.
 fn init_builder(filter_level: &str) -> Result<(), log::SetLoggerError> {
     let mut builder = Builder::from_env(Env::default().filter_or(DEFAULT_FILTER_ENV, filter_level));
 
@@ -58,6 +62,7 @@ fn init_builder(filter_level: &str) -> Result<(), log::SetLoggerError> {
     builder.try_init()
 }
 
+/// Sets the colored output for a given record level.
 fn style_level(record: &log::Record<'_>) -> Paint<String> {
     let string = record.level().to_string().to_lowercase();
     match &*string {
