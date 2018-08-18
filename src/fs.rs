@@ -39,12 +39,12 @@ trait Branchable<'a, T: 'a, P> {
 }
 
 /// Used to give an object the ability to represent a link between two locations.
-trait Linkable<T> {
-    type Link;
+trait Linkable<'a, T> {
+    type Link: 'a;
 
     fn valid(&self) -> bool;
     fn to_ref(&self) -> Ref<T>;
-    fn link(&self) -> Self::Link;
+    fn link(&'a self) -> Self::Link;
 }
 
 /// Internal recursive function used to sync two trees by using branches. See the docs of
@@ -53,7 +53,7 @@ fn sync<'a, T, O>(tree: &'a T, options: O) -> Result<()>
 where
     T: 'a
         + for<'b> Branchable<'a, DirBranch<'a>, &'b OsString>
-        + Linkable<DirRoot, Link = LinkedPoint>,
+        + for<'b> Linkable<'b, DirRoot, Link = LinkedPoint<'b>>,
     O: Into<SyncOptions>,
 {
     let mut options = options.into();
@@ -69,8 +69,8 @@ where
         options.clean = false; // no need to perform the clean check if the dir is empty
     }
 
-    let dest = tree.to_ref().dest.clone();
-    for entry in fs::read_dir(dest).context("Unable to read dir")? {
+    let iter = fs::read_dir(&tree.to_ref().dest).context("Unable to read dir")?;
+    for entry in iter {
         match entry {
             Ok(component) => {
                 let branch = tree.branch(&component.file_name());
@@ -119,11 +119,11 @@ fn clean<'a, T>(tree: &'a T)
 where
     T: 'a
         + for<'b> Branchable<'a, DirBranch<'a>, &'b OsString>
-        + Linkable<DirRoot, Link = LinkedPoint>,
+        + for<'b> Linkable<'b, DirRoot, Link = LinkedPoint<'b>>,
 {
-    let origin = tree.to_ref().origin.clone();
-    if let Ok(val) = fs::read_dir(origin) {
-        for entry in val {
+    let val = fs::read_dir(&tree.to_ref().origin);
+    if let Ok(iter) = val {
+        for entry in iter {
             match entry {
                 Ok(component) => {
                     let branch = tree.branch(&component.file_name());
@@ -260,8 +260,8 @@ impl<'a, 'b> Branchable<'a, DirBranch<'a>, &'b OsString> for DirTree {
     }
 }
 
-impl Linkable<DirRoot> for DirTree {
-    type Link = LinkedPoint;
+impl<'a> Linkable<'a, DirRoot> for DirTree {
+    type Link = LinkedPoint<'a>;
 
     fn valid(&self) -> bool {
         self.root.borrow().valid()
@@ -271,9 +271,8 @@ impl Linkable<DirRoot> for DirTree {
         self.root.borrow()
     }
 
-    fn link(&self) -> Self::Link {
-        let root = self.root.borrow();
-        LinkedPoint::new(&root.origin, &root.dest)
+    fn link(&'a self) -> Self::Link {
+        LinkedPoint::new(self.root.borrow())
     }
 }
 
@@ -348,8 +347,8 @@ impl<'a> Drop for DirBranch<'a> {
     }
 }
 
-impl<'a> Linkable<DirRoot> for DirBranch<'a> {
-    type Link = LinkedPoint;
+impl<'a, 'b> Linkable<'b, DirRoot> for DirBranch<'a> {
+    type Link = LinkedPoint<'b>;
 
     fn valid(&self) -> bool {
         self.tree.valid()
@@ -359,7 +358,7 @@ impl<'a> Linkable<DirRoot> for DirBranch<'a> {
         self.tree.to_ref()
     }
 
-    fn link(&self) -> Self::Link {
+    fn link(&'b self) -> Self::Link {
         self.tree.link()
     }
 }
@@ -367,26 +366,22 @@ impl<'a> Linkable<DirRoot> for DirBranch<'a> {
 /// Represents a link between two different paths points. The origin path is seen as the
 /// 'link's location while the dest path is seen as the link's pointed place.
 #[derive(Debug)]
-struct LinkedPoint {
-    origin: PathBuf,
-    dest: PathBuf,
+struct LinkedPoint<'a> {
+    pointer: Ref<'a, DirRoot>,
 }
 
-impl LinkedPoint {
+impl<'a> LinkedPoint<'a> {
     /// Creates a link representation of two different locations.
-    pub(self) fn new(origin: &Path, dest: &Path) -> Self {
-        Self {
-            origin: origin.into(),
-            dest: dest.into(),
-        }
+    pub(self) fn new(pointer: Ref<'a, DirRoot>) -> Self {
+        Self { pointer }
     }
 
     /// Checks if the two points are already linked in the filesystem. Two points are linked
     /// if they both exist and the modification date of origin is equal or newer than dest.
     pub(self) fn synced(&self) -> bool {
-        if self.origin.exists() && self.dest.exists() {
-            if let Some(linked) = modified(&self.dest) {
-                if let Some(link) = modified(&self.origin) {
+        if self.pointer.origin.exists() && self.pointer.dest.exists() {
+            if let Some(linked) = modified(&self.pointer.dest) {
+                if let Some(link) = modified(&self.pointer.origin) {
                     return link >= linked;
                 }
             }
@@ -399,19 +394,20 @@ impl LinkedPoint {
     /// for making the sync is controlled by the overwrite option. See the docs for OverwriteMode
     /// to get more info.
     pub(self) fn mirror(&self, overwrite: OverwriteMode) -> Result<()> {
-        if overwrite == OverwriteMode::Disallow && self.origin.exists() {
+        if overwrite == OverwriteMode::Disallow && self.pointer.origin.exists() {
             err!(AppErrorType::ObjectExists(
-                self.origin.display().to_string()
+                self.pointer.origin.display().to_string()
             ));
         }
 
         if overwrite == OverwriteMode::Force || overwrite == OverwriteMode::Allow && !self.synced()
         {
-            fs::copy(&self.dest, &self.origin).context("Unable to copy the file")?;
+            fs::copy(&self.pointer.dest, &self.pointer.origin)
+                .context("Unable to copy the file")?;
             info!(
                 "synced: {} -> {}",
-                pathlight(&self.dest),
-                pathlight(&self.origin)
+                pathlight(&self.pointer.dest),
+                pathlight(&self.pointer.origin)
             );
         }
 
