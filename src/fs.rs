@@ -25,11 +25,20 @@ macro_rules! handle {
     };
 }
 
+/// Used to give an object the ability to generate a 'branch' of itself. The generic type
+/// T represents the type of branch that the object will generate. P represents the data needed
+/// to generate the branch of the object.
+/// 
+/// This trait does two things:
+///  - Generate a branch of the object through .branch()
+///  - Return to the root point using the root method. This method should be called in the drop
+///    implementation of T instead of calling it directly
 trait Branchable<'a, T: 'a, P> {
     fn branch(&'a self, branch: P) -> T;
     fn root(&self);
 }
 
+/// Used to give an object the ability to represent a link between two locations.
 trait Linkable<T> {
     type Link;
 
@@ -38,6 +47,8 @@ trait Linkable<T> {
     fn link(&self) -> Self::Link;
 }
 
+/// Internal recursive function used to sync two trees by using branches. See the docs of
+/// DirTree::sync to understand how this function works on a general level.
 fn sync<'a, T, O>(tree: &'a T, options: O) -> Result<()>
 where
     T: 'a + for<'b> Branchable<'a, DirBranch<'a>, &'b OsString> + Linkable<DirRoot, Link=LinkedPoint>,
@@ -101,6 +112,7 @@ where
     Ok(())
 }
 
+/// Internal recursive function used to clean the backup directory of garbage files.
 fn clean<'a, T>(tree: &'a T) 
 where
     T: 'a + for<'b> Branchable<'a, DirBranch<'a>, &'b OsString> + Linkable<DirRoot, Link=LinkedPoint>
@@ -360,15 +372,33 @@ impl LinkTree {
     }
 }
 
+/// Represents two different linked directory trees. The origin path is seen as the 'link'
+/// and the dest path is seen as the 'linked place'. This means that syncing the link is making
+/// a copy of all files in dest to origin.
+///
+/// The idea behind this type is to be able to walk the dest path and mimic it's structure on
+/// the origin path.
+///
+/// Creation of this type won't fail even if the given path's aren't valid. You can check if the
+/// given path's are correct by calling .valid(). If the path's are not correct the sync function
+/// will fail and return an appropiate error.
 pub struct DirTree {
     root: RefCell<DirRoot>
 }
 
 impl DirTree {
+    /// Creates a new link representation for two different trees.
     pub fn new(origin: PathBuf, dest: PathBuf) -> Self {
         Self {root: RefCell::new(DirRoot::new(origin, dest))}
     }
 
+    /// Syncs the two trees. This function will fail if the two points aren't linked
+    /// and it is unable to create the destination dir, the 'link' or if it is unable to
+    /// read the contents of the origin, the 'linked', dir.
+    ///
+    /// Behaviour of these function can be controlled through the options sent for things such
+    /// as file clashes, errors while processing a file or a subdirectory and other things. See
+    /// SyncOptions docs for more info on these topic.
     pub fn sync<T: Into<SyncOptions>>(&self, options: T) -> Result<()> {
         sync(self, options)
     }
@@ -404,32 +434,46 @@ impl Linkable<DirRoot> for DirTree {
     }
 }
 
+/// Represents both roots of the directory trees designed to be linked. In order to make
+/// branches be able to hold a mutable instance of this object. This object is put inside
+/// a RefCell and handled from there. See DirTree related code for more specific details.
 struct DirRoot {
     origin: PathBuf,
     dest: PathBuf
 }
 
 impl DirRoot {
+    /// Creates a new DirRoot given the roots of both trees.
     pub(self) fn new(origin: PathBuf, dest: PathBuf) -> Self {
         Self {origin, dest}
     }
 
+    /// Switches to a branch of the trees. This operation is to be called only when
+    /// generating a new DirBranch object.
     pub(self) fn branch<P: AsRef<Path>>(&mut self, branch: P) {
         let branch = branch.as_ref();
         self.origin.push(branch);
         self.dest.push(branch);
     }
 
+    /// Returns to the root of the current branch. Calling this function while being already
+    /// at the root of the trees will cause it to malfunction. This should be called only
+    /// by a drop implementation of the branch object.
     pub(self) fn root(&mut self) {
         self.origin.pop();
         self.dest.pop();
     }
 
+    /// Confirms the validity of the link. A DirRoot link is valid only if both points are
+    /// directories.
     pub(self) fn valid(&self) -> bool {
         self.origin.is_dir() && self.dest.is_dir()
     }
 }
 
+/// Represents a branch of the directory tree being iterated over. It is fundamentally a 
+/// reference to the DirTree that works as an stack during iteration. In order to access
+/// mutability uses the RefCell inside the DirTree.
 struct DirBranch<'a> {
     tree: &'a DirTree
 }
