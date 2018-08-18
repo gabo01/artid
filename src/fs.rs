@@ -74,7 +74,8 @@ where
         match entry {
             Ok(component) => {
                 let branch = tree.branch(&component.file_name());
-                match FileSystemType::from(&branch.to_ref().dest) {
+                let class = FileSystemType::from(&branch.to_ref().dest);
+                match class {
                     FileSystemType::File => {
                         if let Err(err) = branch.link().mirror(options.overwrite) {
                             handle!(
@@ -154,7 +155,8 @@ where
                         }
                     }
 
-                    if let FileSystemType::Dir = FileSystemType::from(&branch.to_ref().origin) {
+                    let class = FileSystemType::from(&branch.to_ref().origin);
+                    if let FileSystemType::Dir = class {
                         clean(&branch);
                     };
                 }
@@ -224,9 +226,14 @@ pub enum OverwriteMode {
 /// Creation of this type won't fail even if the given path's aren't valid. You can check if the
 /// given path's are correct by calling .valid(). If the path's are not correct the sync function
 /// will fail and return an appropiate error.
-#[derive(Debug)]
 pub struct DirTree {
     root: RefCell<DirRoot>,
+}
+
+impl ::std::fmt::Debug for DirTree {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
+        write!(f, "aa")
+    }
 }
 
 impl DirTree {
@@ -365,9 +372,14 @@ impl<'a, 'b> Linkable<'b, DirRoot> for DirBranch<'a> {
 
 /// Represents a link between two different paths points. The origin path is seen as the
 /// 'link's location while the dest path is seen as the link's pointed place.
-#[derive(Debug)]
 struct LinkedPoint<'a> {
     pointer: Ref<'a, DirRoot>,
+}
+
+impl<'a> ::std::fmt::Debug for LinkedPoint<'a> {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
+        write!(f, "bb")
+    }
 }
 
 impl<'a> LinkedPoint<'a> {
