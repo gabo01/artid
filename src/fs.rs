@@ -154,11 +154,6 @@ where
                             }
                         }
                     }
-
-                    let class = FileSystemType::from(&branch.to_ref().origin);
-                    if let FileSystemType::Dir = class {
-                        clean(&branch);
-                    };
                 }
 
                 // FIXME: improve the handle of this case
