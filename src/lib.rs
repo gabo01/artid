@@ -46,7 +46,7 @@ mod fs;
 pub mod logger;
 
 pub use errors::{AppError, AppErrorType};
-use fs::{LinkTree, OverwriteMode, SyncOptions};
+use fs::{DirTree, OverwriteMode, SyncOptions};
 use logger::pathlight;
 
 /// Alias for the Result type
@@ -194,7 +194,7 @@ where
             debug!("Starting backup of: {}", pathlight(&dirs.abs));
 
             if let Err(err) =
-                LinkTree::new(dirs.rel, dirs.abs)
+                DirTree::new(dirs.rel, dirs.abs)
                     .sync(options)
                     .context(AppErrorType::UpdateFolder(
                         self.path.as_ref().display().to_string(),
@@ -237,7 +237,7 @@ where
             let dirs = folder.resolve(&self.path);
             debug!("Starting restore of: {}", pathlight(&dirs.rel));
 
-            LinkTree::new(dirs.abs, dirs.rel).sync(options).context(
+            DirTree::new(dirs.abs, dirs.rel).sync(options).context(
                 AppErrorType::RestoreFolder(self.path.as_ref().display().to_string()),
             )?;
         }

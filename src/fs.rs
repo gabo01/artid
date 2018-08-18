@@ -1,9 +1,13 @@
+#![allow(dead_code)]
+
 use failure::{Fail, ResultExt};
 use logger::pathlight;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 use {AppError, AppErrorType, Result};
+use std::ffi::OsString;
+use std::cell::{Ref, RefCell};
 
 /// Used to handle errors in the sync process.
 macro_rules! handle {
@@ -19,6 +23,131 @@ macro_rules! handle {
             fail!($err);
         }
     };
+}
+
+trait Branchable<'a, T: 'a, P> {
+    fn branch(&'a self, branch: P) -> T;
+    fn root(&self);
+}
+
+trait Linkable<T> {
+    type Link;
+
+    fn valid(&self) -> bool;
+    fn to_ref(&self) -> Ref<T>;
+    fn link(&self) -> Self::Link;
+}
+
+fn sync<'a, T, O>(tree: &'a T, options: O) -> Result<()>
+where
+    T: 'a + for<'b> Branchable<'a, DirBranch<'a>, &'b OsString> + Linkable<DirRoot, Link=LinkedPoint>,
+    O: Into<SyncOptions>
+{
+    let mut options = options.into();
+
+    debug!(
+        "Syncing {} with {}",
+        pathlight(&tree.to_ref().dest),
+        pathlight(&tree.to_ref().origin)
+    );
+
+    if !tree.valid() {
+        fs::create_dir_all(&tree.to_ref().origin).context("Unable to create backup dir")?;
+        options.clean = false; // no need to perform the clean check if the dir is empty
+    }
+
+    let dest = tree.to_ref().dest.clone();
+    for entry in fs::read_dir(dest).context("Unable to read dir")? {
+        match entry {
+            Ok(component) => {
+                let branch = tree.branch(&component.file_name());
+                match FileSystemType::from(&branch.to_ref().dest) {
+                    FileSystemType::File => {
+                        if let Err(err) = branch.link().mirror(options.overwrite) {
+                            handle!(
+                                options.warn,
+                                err,
+                                "Unable to copy {}",
+                                pathlight(&branch.to_ref().dest)
+                            );
+                        }
+                    }
+
+                    FileSystemType::Dir => {
+                        if let Err(err) = sync(&branch, options) {
+                            handle!(
+                                options.warn,
+                                err,
+                                "Unable to read {}",
+                                pathlight(&branch.to_ref().dest)
+                            );
+                        }
+                    }
+
+                    FileSystemType::Other => {
+                        warn!("Unable to process {}", pathlight(&branch.to_ref().dest));
+                    }
+                };
+            }
+
+            Err(_) => warn!("Unable to read entry"),
+        }
+    }
+
+    if options.clean {
+        clean(tree);
+    }
+    
+    Ok(())
+}
+
+fn clean<'a, T>(tree: &'a T) 
+where
+    T: 'a + for<'b> Branchable<'a, DirBranch<'a>, &'b OsString> + Linkable<DirRoot, Link=LinkedPoint>
+{
+    let origin = tree.to_ref().origin.clone();
+    if let Ok(val) = fs::read_dir(origin) {
+        for entry in val {
+            match entry {
+                Ok(component) => {
+                    let branch = tree.branch(&component.file_name());
+
+                    if !branch.to_ref().dest.exists() {
+                        debug!(
+                            "Unnexistant {}, removing {}",
+                            pathlight(&branch.to_ref().dest),
+                            pathlight(&branch.to_ref().origin)
+                        );
+
+                        if branch.to_ref().origin.is_dir() {
+                            if let Err(err) = fs::remove_dir_all(&branch.to_ref().origin) {
+                                error!("{}", err);
+                                warn!(
+                                    "Unable to remove garbage location {}",
+                                    pathlight(&branch.to_ref().origin)
+                                );
+                            }
+                        } else {
+                            if let Err(err) = fs::remove_file(&branch.to_ref().origin) {
+                                error!("{}", err);
+                                warn!(
+                                    "Unable to remove garbage location {}",
+                                    pathlight(&branch.to_ref().origin)
+                                );
+                            }
+                        }
+                    }
+
+                    if let FileSystemType::Dir = FileSystemType::from(&branch.to_ref().origin) {
+                        clean(&branch);
+                    };
+                }
+
+                // FIXME: improve the handle of this case
+                Err(_) => warn!("Unable to read entry 2"),
+            }
+        }
+    }
 }
 
 /// Modifier options for the sync process in a LinkTree. Check the properties to see which
@@ -109,7 +238,7 @@ impl LinkTree {
     }
 
     /// Creates a link object between the current points in the tree.
-    fn link(&self) -> LinkedPoint<'_> {
+    fn link(&self) -> LinkedPoint {
         LinkedPoint::new(&self.origin, &self.dest)
     }
 
@@ -231,26 +360,132 @@ impl LinkTree {
     }
 }
 
+pub struct DirTree {
+    root: RefCell<DirRoot>
+}
+
+impl DirTree {
+    pub fn new(origin: PathBuf, dest: PathBuf) -> Self {
+        Self {root: RefCell::new(DirRoot::new(origin, dest))}
+    }
+
+    pub fn sync<T: Into<SyncOptions>>(&self, options: T) -> Result<()> {
+        sync(self, options)
+    }
+}
+
+impl<'a, 'b> Branchable<'a, DirBranch<'a>, &'b OsString> for DirTree {
+    fn branch(&'a self, branch: &'b OsString) -> DirBranch<'a> {
+        let mut a = self.root.borrow_mut();
+        a.branch(branch);
+        ::std::mem::drop(a);
+        DirBranch {tree: self}
+    }
+
+    fn root(&self) {
+        self.root.borrow_mut().root();
+    }
+}
+
+impl Linkable<DirRoot> for DirTree {
+    type Link = LinkedPoint;
+
+    fn valid(&self) -> bool {
+        self.root.borrow().valid()
+    }
+
+    fn to_ref(&self) -> Ref<DirRoot> {
+        self.root.borrow()
+    }
+
+    fn link(&self) -> Self::Link {
+        let root = self.root.borrow();
+        LinkedPoint::new(&root.origin, &root.dest)
+    }
+}
+
+struct DirRoot {
+    origin: PathBuf,
+    dest: PathBuf
+}
+
+impl DirRoot {
+    pub(self) fn new(origin: PathBuf, dest: PathBuf) -> Self {
+        Self {origin, dest}
+    }
+
+    pub(self) fn branch<P: AsRef<Path>>(&mut self, branch: P) {
+        let branch = branch.as_ref();
+        self.origin.push(branch);
+        self.dest.push(branch);
+    }
+
+    pub(self) fn root(&mut self) {
+        self.origin.pop();
+        self.dest.pop();
+    }
+
+    pub(self) fn valid(&self) -> bool {
+        self.origin.is_dir() && self.dest.is_dir()
+    }
+}
+
+struct DirBranch<'a> {
+    tree: &'a DirTree
+}
+
+impl<'a, 'b> Branchable<'a, DirBranch<'a>, &'b OsString> for DirBranch<'a> {
+    fn branch(&'a self, branch: &'b OsString) -> DirBranch<'a> {
+        self.tree.branch(branch)
+    }
+
+    fn root(&self) {
+        self.tree.root()
+    }
+}
+
+impl<'a> Drop for DirBranch<'a> {
+    fn drop(&mut self) {
+        self.root();
+    }
+}
+
+impl<'a> Linkable<DirRoot> for DirBranch<'a> {
+    type Link = LinkedPoint;
+
+    fn valid(&self) -> bool {
+        self.tree.valid()
+    }
+
+    fn to_ref(&self) -> Ref<DirRoot> {
+        self.tree.to_ref()
+    }
+
+    fn link(&self) -> Self::Link {
+        self.tree.link()
+    }
+}
+
 /// Represents a link between two different paths points. The origin path is seen as the
 /// 'link's location while the dest path is seen as the link's pointed place.
 #[derive(Debug)]
-struct LinkedPoint<'a> {
-    origin: &'a Path,
-    dest: &'a Path,
+struct LinkedPoint {
+    origin: PathBuf,
+    dest: PathBuf,
 }
 
-impl<'a> LinkedPoint<'a> {
+impl LinkedPoint {
     /// Creates a link representation of two different locations.
-    pub(self) fn new(origin: &'a Path, dest: &'a Path) -> Self {
-        Self { origin, dest }
+    pub(self) fn new(origin: &Path, dest: &Path) -> Self {
+        Self { origin: origin.into(), dest: dest.into() }
     }
 
     /// Checks if the two points are already linked in the filesystem. Two points are linked
     /// if they both exist and the modification date of origin is equal or newer than dest.
     pub(self) fn synced(&self) -> bool {
         if self.origin.exists() && self.dest.exists() {
-            if let Some(linked) = modified(self.dest) {
-                if let Some(link) = modified(self.origin) {
+            if let Some(linked) = modified(&self.dest) {
+                if let Some(link) = modified(&self.origin) {
                     return link >= linked;
                 }
             }
@@ -271,11 +506,11 @@ impl<'a> LinkedPoint<'a> {
 
         if overwrite == OverwriteMode::Force || overwrite == OverwriteMode::Allow && !self.synced()
         {
-            fs::copy(self.dest, self.origin).context("Unable to copy the file")?;
+            fs::copy(&self.dest, &self.origin).context("Unable to copy the file")?;
             info!(
                 "synced: {} -> {}",
-                pathlight(self.dest),
-                pathlight(self.origin)
+                pathlight(&self.dest),
+                pathlight(&self.origin)
             );
         }
 
