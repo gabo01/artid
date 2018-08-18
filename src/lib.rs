@@ -237,9 +237,11 @@ where
             let dirs = folder.resolve(&self.path);
             debug!("Starting restore of: {}", pathlight(&dirs.rel));
 
-            DirTree::new(dirs.abs, dirs.rel).sync(options).context(
-                AppErrorType::RestoreFolder(self.path.as_ref().display().to_string()),
-            )?;
+            DirTree::new(dirs.abs, dirs.rel)
+                .sync(options)
+                .context(AppErrorType::RestoreFolder(
+                    self.path.as_ref().display().to_string(),
+                ))?;
         }
 
         Ok(())

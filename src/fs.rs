@@ -2,12 +2,12 @@
 
 use failure::{Fail, ResultExt};
 use logger::pathlight;
+use std::cell::{Ref, RefCell};
+use std::ffi::OsString;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 use {AppError, AppErrorType, Result};
-use std::ffi::OsString;
-use std::cell::{Ref, RefCell};
 
 /// Used to handle errors in the sync process.
 macro_rules! handle {
@@ -28,7 +28,7 @@ macro_rules! handle {
 /// Used to give an object the ability to generate a 'branch' of itself. The generic type
 /// T represents the type of branch that the object will generate. P represents the data needed
 /// to generate the branch of the object.
-/// 
+///
 /// This trait does two things:
 ///  - Generate a branch of the object through .branch()
 ///  - Return to the root point using the root method. This method should be called in the drop
@@ -51,8 +51,10 @@ trait Linkable<T> {
 /// DirTree::sync to understand how this function works on a general level.
 fn sync<'a, T, O>(tree: &'a T, options: O) -> Result<()>
 where
-    T: 'a + for<'b> Branchable<'a, DirBranch<'a>, &'b OsString> + Linkable<DirRoot, Link=LinkedPoint>,
-    O: Into<SyncOptions>
+    T: 'a
+        + for<'b> Branchable<'a, DirBranch<'a>, &'b OsString>
+        + Linkable<DirRoot, Link = LinkedPoint>,
+    O: Into<SyncOptions>,
 {
     let mut options = options.into();
 
@@ -108,14 +110,16 @@ where
     if options.clean {
         clean(tree);
     }
-    
+
     Ok(())
 }
 
 /// Internal recursive function used to clean the backup directory of garbage files.
-fn clean<'a, T>(tree: &'a T) 
+fn clean<'a, T>(tree: &'a T)
 where
-    T: 'a + for<'b> Branchable<'a, DirBranch<'a>, &'b OsString> + Linkable<DirRoot, Link=LinkedPoint>
+    T: 'a
+        + for<'b> Branchable<'a, DirBranch<'a>, &'b OsString>
+        + Linkable<DirRoot, Link = LinkedPoint>,
 {
     let origin = tree.to_ref().origin.clone();
     if let Ok(val) = fs::read_dir(origin) {
@@ -383,13 +387,15 @@ impl LinkTree {
 /// given path's are correct by calling .valid(). If the path's are not correct the sync function
 /// will fail and return an appropiate error.
 pub struct DirTree {
-    root: RefCell<DirRoot>
+    root: RefCell<DirRoot>,
 }
 
 impl DirTree {
     /// Creates a new link representation for two different trees.
     pub fn new(origin: PathBuf, dest: PathBuf) -> Self {
-        Self {root: RefCell::new(DirRoot::new(origin, dest))}
+        Self {
+            root: RefCell::new(DirRoot::new(origin, dest)),
+        }
     }
 
     /// Syncs the two trees. This function will fail if the two points aren't linked
@@ -406,10 +412,8 @@ impl DirTree {
 
 impl<'a, 'b> Branchable<'a, DirBranch<'a>, &'b OsString> for DirTree {
     fn branch(&'a self, branch: &'b OsString) -> DirBranch<'a> {
-        let mut a = self.root.borrow_mut();
-        a.branch(branch);
-        ::std::mem::drop(a);
-        DirBranch {tree: self}
+        self.root.borrow_mut().branch(branch);
+        DirBranch::new(self)
     }
 
     fn root(&self) {
@@ -439,13 +443,13 @@ impl Linkable<DirRoot> for DirTree {
 /// a RefCell and handled from there. See DirTree related code for more specific details.
 struct DirRoot {
     origin: PathBuf,
-    dest: PathBuf
+    dest: PathBuf,
 }
 
 impl DirRoot {
     /// Creates a new DirRoot given the roots of both trees.
     pub(self) fn new(origin: PathBuf, dest: PathBuf) -> Self {
-        Self {origin, dest}
+        Self { origin, dest }
     }
 
     /// Switches to a branch of the trees. This operation is to be called only when
@@ -471,11 +475,20 @@ impl DirRoot {
     }
 }
 
-/// Represents a branch of the directory tree being iterated over. It is fundamentally a 
+/// Represents a branch of the directory tree being iterated over. It is fundamentally a
 /// reference to the DirTree that works as an stack during iteration. In order to access
 /// mutability uses the RefCell inside the DirTree.
 struct DirBranch<'a> {
-    tree: &'a DirTree
+    tree: &'a DirTree,
+}
+
+impl<'a> DirBranch<'a> {
+    /// Creates a new branch from a tree reference. This should be called only from the
+    /// branch method of DirTree or another DirBranch in order to do the other needed
+    /// operations to create a branch.
+    pub(self) fn new(tree: &'a DirTree) -> Self {
+        Self { tree }
+    }
 }
 
 impl<'a, 'b> Branchable<'a, DirBranch<'a>, &'b OsString> for DirBranch<'a> {
@@ -521,7 +534,10 @@ struct LinkedPoint {
 impl LinkedPoint {
     /// Creates a link representation of two different locations.
     pub(self) fn new(origin: &Path, dest: &Path) -> Self {
-        Self { origin: origin.into(), dest: dest.into() }
+        Self {
+            origin: origin.into(),
+            dest: dest.into(),
+        }
     }
 
     /// Checks if the two points are already linked in the filesystem. Two points are linked
