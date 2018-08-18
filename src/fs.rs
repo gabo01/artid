@@ -224,6 +224,7 @@ pub enum OverwriteMode {
 /// Creation of this type won't fail even if the given path's aren't valid. You can check if the
 /// given path's are correct by calling .valid(). If the path's are not correct the sync function
 /// will fail and return an appropiate error.
+#[derive(Debug)]
 pub struct DirTree {
     root: RefCell<DirRoot>,
 }
@@ -279,6 +280,7 @@ impl Linkable<DirRoot> for DirTree {
 /// Represents both roots of the directory trees designed to be linked. In order to make
 /// branches be able to hold a mutable instance of this object. This object is put inside
 /// a RefCell and handled from there. See DirTree related code for more specific details.
+#[derive(Debug)]
 struct DirRoot {
     origin: PathBuf,
     dest: PathBuf,
@@ -316,6 +318,7 @@ impl DirRoot {
 /// Represents a branch of the directory tree being iterated over. It is fundamentally a
 /// reference to the DirTree that works as an stack during iteration. In order to access
 /// mutability uses the RefCell inside the DirTree.
+#[derive(Debug)]
 struct DirBranch<'a> {
     tree: &'a DirTree,
 }
