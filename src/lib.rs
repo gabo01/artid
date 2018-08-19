@@ -313,3 +313,134 @@ impl Folder {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    extern crate tempfile;
+
+    use env_path::EnvPath;
+    use std::env;
+    use std::fs;
+    use std::io::Write;
+    use std::path::PathBuf;
+    use sync::{OverwriteMode, SyncOptions};
+    use {BackupOptions, ConfigFile, Folder, RestoreOptions};
+
+    #[test]
+    fn test_backup_sync_options() {
+        let backup = BackupOptions::new(true);
+        let sync: SyncOptions = backup.clone().into();
+
+        assert_eq!(sync.warn, backup.warn);
+        assert_eq!(sync.clean, true);
+        assert_eq!(sync.overwrite, OverwriteMode::Allow);
+    }
+
+    #[test]
+    fn test_restore_sync_options() {
+        let restore = RestoreOptions::new(true, true);
+        let sync: SyncOptions = restore.clone().into();
+
+        assert_eq!(sync.warn, restore.warn);
+        assert_eq!(sync.clean, false);
+        assert_eq!(sync.overwrite, OverwriteMode::Force);
+
+        let restore = RestoreOptions::new(true, false);
+        let sync: SyncOptions = restore.clone().into();
+
+        assert_eq!(sync.overwrite, OverwriteMode::Disallow);
+    }
+
+    #[test]
+    fn test_config_file_load_valid() {
+        let dir = tempfile::tempdir().expect("Creation of temp dir failed");
+        let mut tmpfile = fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .open(dir.path().join("config.json"))
+            .expect("Unable to create tmp file");
+
+        write!(
+            tmpfile,
+            "[{{\"path\": \"asd\", \"origin\": \"$HOME\", \"modified\": null}}]"
+        ).expect("Unable to write on tmp file");
+
+        assert!(
+            ConfigFile::load_from(dir, "config.json").is_ok(),
+            "Unable to load configuration"
+        );
+    }
+
+    #[test]
+    fn test_config_file_load_invalid() {
+        let dir = tempfile::tempdir().expect("Creation of temp dir failed");
+        let mut tmpfile = fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .open(dir.path().join("config.json"))
+            .expect("Unable to create tmp file");
+
+        write!(
+            tmpfile,
+            "[{{\"path\": \"asd, \"origin\": \"$HOME\", \"modified\": null}}]"
+        ).expect("Unable to write on tmp file");
+
+        assert!(
+            ConfigFile::load_from(dir, "config.json").is_err(),
+            "Unable to load configuration"
+        );
+    }
+
+    #[test]
+    fn test_config_file_save_exists() {
+        let dir = tempfile::tempdir().expect("Creation of temp dir failed");
+        let _tmpfile = fs::OpenOptions::new()
+            .write(true)
+            .create(true)
+            .open(dir.path().join("config.json"))
+            .expect("Unable to create tmp file");
+
+        assert!(
+            dir.path().join("config.json").exists(),
+            "Save file was not created"
+        );
+
+        let config = ConfigFile {
+            dir: dir.path(),
+            folders: vec![],
+        };
+
+        assert!(
+            config.save_to("config.json").is_ok(),
+            "Unable to save into location"
+        );
+    }
+
+    #[test]
+    fn test_folder_resolve() {
+        let folder = Folder {
+            path: EnvPath::new("config"),
+            origin: EnvPath::new(env::var("HOME").unwrap()),
+            modified: None,
+        };
+
+        let dirs = folder.resolve(env::var("USER").unwrap());
+
+        assert_eq!(
+            dirs.rel.display().to_string(),
+            PathBuf::from(env::var("USER").unwrap())
+                .join("config")
+                .display()
+                .to_string()
+        );
+
+        assert_eq!(
+            dirs.abs.display().to_string(),
+            PathBuf::from(env::var("HOME").unwrap())
+                .display()
+                .to_string()
+        );
+    }
+}
