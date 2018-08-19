@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use failure::{Fail, ResultExt};
 use logger::pathlight;
 use std::cell::{Ref, RefCell};
@@ -221,14 +219,9 @@ pub enum OverwriteMode {
 /// Creation of this type won't fail even if the given path's aren't valid. You can check if the
 /// given path's are correct by calling .valid(). If the path's are not correct the sync function
 /// will fail and return an appropiate error.
+#[derive(Debug)]
 pub struct DirTree {
     root: RefCell<DirRoot>,
-}
-
-impl ::std::fmt::Debug for DirTree {
-    fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        write!(f, "aa")
-    }
 }
 
 impl DirTree {
@@ -367,14 +360,9 @@ impl<'a, 'b> Linkable<'b, DirRoot> for DirBranch<'a> {
 
 /// Represents a link between two different paths points. The origin path is seen as the
 /// 'link's location while the dest path is seen as the link's pointed place.
+#[derive(Debug)]
 struct LinkedPoint<'a> {
     pointer: Ref<'a, DirRoot>,
-}
-
-impl<'a> ::std::fmt::Debug for LinkedPoint<'a> {
-    fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        write!(f, "bb")
-    }
 }
 
 impl<'a> LinkedPoint<'a> {
