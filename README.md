@@ -21,6 +21,22 @@ or just
 cargo run -- [ARGS]
 ```
 
+### Debugging
+
+The debug folder + the .vscode folder contain a basic configuration for debugging the
+the program using vscode built-in debugger. In order to set the debugger for rust code
+use the following links:
+
+[Setting a rust developing env](https://hoverbear.org/2017/03/03/setting-up-a-rust-devenv/)
+
+During the debug process the debug folder contents will change, this changes are not to be
+submitted to the repo. To avoid tracking this changes on your local copy run the following
+command on your local repo:
+
+```
+git update-index --assume-unchanged debug/**/
+```
+
 ## Features
 
 - [x] Command line client

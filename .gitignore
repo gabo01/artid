@@ -1,2 +1,6 @@
+# Rust cargo
 **/target
 **/*.rs.bk
+
+# Debug enviroment
+debug/**/

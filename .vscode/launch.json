@@ -1,0 +1,16 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug update",
+            "cwd": "${workspaceRoot}",
+            "env": {"PWD": "${workspaceRoot}"},
+            "args": ["--backtrace", "update", "--dir", "${workspaceRoot}/debug/backup"],
+            "preLaunchTask": "cargo",
+            "sourceLanguages": ["rust"],
+            "program": "${workspaceRoot}/target/debug/backup-rs"
+        }
+    ]
+}
