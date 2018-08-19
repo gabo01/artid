@@ -42,12 +42,12 @@ macro_rules! err {
 }
 
 pub mod errors;
-mod fs;
 pub mod logger;
+mod sync;
 
 pub use errors::{AppError, AppErrorType};
-use fs::{DirTree, OverwriteMode, SyncOptions};
 use logger::pathlight;
+use sync::{DirTree, OverwriteMode, SyncOptions};
 
 /// Alias for the Result type
 pub type Result<T> = ::std::result::Result<T, AppError>;
