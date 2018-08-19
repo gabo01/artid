@@ -137,7 +137,7 @@ pub struct ConfigFile<P>
 where
     P: AsRef<Path> + Debug,
 {
-    path: P,
+    dir: P,
     folders: Vec<Folder>,
 }
 
@@ -150,8 +150,12 @@ where
 
     /// Loads the data present in the configuration file. Currently this function receives
     /// a directory and looks for the config file in the subpath .backup/config.json.
-    pub fn load(path: P) -> Result<Self> {
-        let file = Self::filepath(&path)?;
+    pub fn load(dir: P) -> Result<Self> {
+        Self::load_from(dir, Self::RESTORE)
+    }
+
+    pub fn load_from<T: AsRef<Path>>(dir: P, path: T) -> Result<Self> {
+        let file = Self::filepath(&dir, &path)?;
 
         let reader =
             File::open(&file).context(AppErrorType::AccessFile(file.display().to_string()))?;
@@ -159,16 +163,23 @@ where
             .context(AppErrorType::JsonParse(file.display().to_string()))?;
         trace!("{:?}", folders);
 
-        Ok(ConfigFile { path, folders })
+        Ok(ConfigFile { dir, folders })
     }
 
     /// Saves the changes made back to the config.json file. Currently used more in a private
     /// fashion to update the last date when the folders were synced.
     ///
-    /// Same as the load function. This function receives a directory and looks for the
+    /// This function uses the directory saved on the ConfigFile and looks for the
     /// config.json file inside .backup/config.json.
     pub fn save(&self) -> Result<()> {
-        let path = Self::filepath(&self.path)?;
+        self.save_to(Self::RESTORE)
+    }
+
+    /// Saves the changes made to the path specified in 'to'. The 'to' path is relative to
+    /// the master directory of ConfigFile. All the parent components of 'to' must exist
+    /// in order for this function to suceed.
+    pub fn save_to<T: AsRef<Path>>(&self, to: T) -> Result<()> {
+        let path = Self::filepath(&self.dir, to)?;
         write!(
             File::create(&path).context(AppErrorType::AccessFile(path.display().to_string()))?,
             "{}",
@@ -190,14 +201,14 @@ where
     pub fn backup(&mut self, options: BackupOptions) -> Result<()> {
         let mut error = None;
         for folder in &mut self.folders {
-            let dirs = folder.resolve(&self.path);
+            let dirs = folder.resolve(&self.dir);
             debug!("Starting backup of: {}", pathlight(&dirs.abs));
 
             if let Err(err) =
                 DirTree::new(dirs.rel, dirs.abs)
                     .sync(options)
                     .context(AppErrorType::UpdateFolder(
-                        self.path.as_ref().display().to_string(),
+                        self.dir.as_ref().display().to_string(),
                     )) {
                 error = Some(err);
                 break;
@@ -209,7 +220,7 @@ where
         if let Err(err) = self.save() {
             warn!(
                 "Unable to save on {} because of {}",
-                pathlight(self.path.as_ref()),
+                pathlight(self.dir.as_ref()),
                 err
             );
         }
@@ -234,29 +245,29 @@ where
     /// and has not been backed it will not be overriden by this function.
     pub fn restore(self, options: RestoreOptions) -> Result<()> {
         for folder in &self.folders {
-            let dirs = folder.resolve(&self.path);
+            let dirs = folder.resolve(&self.dir);
             debug!("Starting restore of: {}", pathlight(&dirs.rel));
 
             DirTree::new(dirs.abs, dirs.rel)
                 .sync(options)
                 .context(AppErrorType::RestoreFolder(
-                    self.path.as_ref().display().to_string(),
+                    self.dir.as_ref().display().to_string(),
                 ))?;
         }
 
         Ok(())
     }
 
-    /// Constructs the path to the configuration file from a given directory. This path
-    /// depends on the RESTORE constant.
-    fn filepath<T: AsRef<Path>>(path: T) -> Result<PathBuf> {
-        let path = path.as_ref();
+    /// Constructs the path to the configuration file from a given directory 'dir'. The
+    /// path to add is the 'ext' path.
+    fn filepath<T: AsRef<Path>, U: AsRef<Path>>(dir: T, ext: U) -> Result<PathBuf> {
+        let path = dir.as_ref();
 
         if !path.is_dir() {
             err!(AppErrorType::NotDir(path.display().to_string()));
         }
 
-        let restore = path.join(Self::RESTORE);
+        let restore = path.join(ext);
         if !restore.is_file() {
             err!(AppErrorType::PathUnexistant(restore.display().to_string()));
         }
