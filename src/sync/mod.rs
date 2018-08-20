@@ -10,7 +10,7 @@ use {AppError, AppErrorType, Result};
 mod helpers;
 use self::helpers::{sync, Branchable, Linkable};
 
-/// Modifier options for the sync process in a LinkTree. Check the properties to see which
+/// Modifier options for the sync process in a DirTree. Check the properties to see which
 /// behaviour they control.
 #[derive(Debug, Copy, Clone)]
 pub struct SyncOptions {
