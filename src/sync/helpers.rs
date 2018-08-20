@@ -59,21 +59,21 @@ where
 
     debug!(
         "Syncing {} with {}",
-        pathlight(&tree.to_ref().dest),
-        pathlight(&tree.to_ref().origin)
+        pathlight(&tree.to_ref().dst),
+        pathlight(&tree.to_ref().src)
     );
 
     if !tree.valid() {
-        fs::create_dir_all(&tree.to_ref().origin).context("Unable to create backup dir")?;
+        fs::create_dir_all(&tree.to_ref().dst).context("Unable to create backup dir")?;
         options.clean = false; // no need to perform the clean check if the dir is empty
     }
 
-    let iter = fs::read_dir(&tree.to_ref().dest).context("Unable to read dir")?;
+    let iter = fs::read_dir(&tree.to_ref().src).context("Unable to read dir")?;
     for entry in iter {
         match entry {
             Ok(component) => {
                 let branch = tree.branch(&component.file_name());
-                let class = FileSystemType::from(&branch.to_ref().dest);
+                let class = FileSystemType::from(&branch.to_ref().src);
                 match class {
                     FileSystemType::File => {
                         if let Err(err) = branch.link().mirror(options.overwrite) {
@@ -81,7 +81,7 @@ where
                                 options.warn,
                                 err,
                                 "Unable to copy {}",
-                                pathlight(&branch.to_ref().dest)
+                                pathlight(&branch.to_ref().src)
                             );
                         }
                     }
@@ -92,13 +92,13 @@ where
                                 options.warn,
                                 err,
                                 "Unable to read {}",
-                                pathlight(&branch.to_ref().dest)
+                                pathlight(&branch.to_ref().src)
                             );
                         }
                     }
 
                     FileSystemType::Other => {
-                        warn!("Unable to process {}", pathlight(&branch.to_ref().dest));
+                        warn!("Unable to process {}", pathlight(&branch.to_ref().src));
                     }
                 };
             }
@@ -121,34 +121,34 @@ where
         + for<'b> Branchable<'a, DirBranch<'a>, &'b OsString>
         + for<'b> Linkable<'b, DirRoot, Link = LinkedPoint<'b>>,
 {
-    let val = fs::read_dir(&tree.to_ref().origin);
+    let val = fs::read_dir(&tree.to_ref().dst);
     if let Ok(iter) = val {
         for entry in iter {
             match entry {
                 Ok(component) => {
                     let branch = tree.branch(&component.file_name());
 
-                    if !branch.to_ref().dest.exists() {
+                    if !branch.to_ref().src.exists() {
                         debug!(
                             "Unnexistant {}, removing {}",
-                            pathlight(&branch.to_ref().dest),
-                            pathlight(&branch.to_ref().origin)
+                            pathlight(&branch.to_ref().src),
+                            pathlight(&branch.to_ref().dst)
                         );
 
-                        if branch.to_ref().origin.is_dir() {
-                            if let Err(err) = fs::remove_dir_all(&branch.to_ref().origin) {
+                        if branch.to_ref().dst.is_dir() {
+                            if let Err(err) = fs::remove_dir_all(&branch.to_ref().dst) {
                                 error!("{}", err);
                                 warn!(
                                     "Unable to remove garbage location {}",
-                                    pathlight(&branch.to_ref().origin)
+                                    pathlight(&branch.to_ref().dst)
                                 );
                             }
                         } else {
-                            if let Err(err) = fs::remove_file(&branch.to_ref().origin) {
+                            if let Err(err) = fs::remove_file(&branch.to_ref().dst) {
                                 error!("{}", err);
                                 warn!(
                                     "Unable to remove garbage location {}",
-                                    pathlight(&branch.to_ref().origin)
+                                    pathlight(&branch.to_ref().dst)
                                 );
                             }
                         }

@@ -205,7 +205,7 @@ where
             debug!("Starting backup of: {}", pathlight(&dirs.abs));
 
             if let Err(err) =
-                DirTree::new(dirs.rel, dirs.abs)
+                DirTree::new(dirs.abs, dirs.rel)
                     .sync(options)
                     .context(AppErrorType::UpdateFolder(
                         self.dir.as_ref().display().to_string(),
@@ -248,7 +248,7 @@ where
             let dirs = folder.resolve(&self.dir);
             debug!("Starting restore of: {}", pathlight(&dirs.rel));
 
-            DirTree::new(dirs.abs, dirs.rel)
+            DirTree::new(dirs.rel, dirs.abs)
                 .sync(options)
                 .context(AppErrorType::RestoreFolder(
                     self.dir.as_ref().display().to_string(),
@@ -260,7 +260,7 @@ where
 
     /// Constructs the path to the configuration file from a given directory 'dir'. The
     /// path to add is the 'ext' path.
-    /// 
+    ///
     /// If allow is set to true, the function will allow the restore path to be unexistant.
     /// Note that the dir argument must still be a valid directory.
     fn filepath<T: AsRef<Path>, U: AsRef<Path>>(dir: T, ext: U, allow: bool) -> Result<PathBuf> {
