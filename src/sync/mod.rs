@@ -368,7 +368,7 @@ mod tests {
 
         let file1 = File::create(dir.path().join("a.txt")).unwrap();
         ::std::mem::drop(file1);
-        thread::sleep(time::Duration::from_millis(500));
+        thread::sleep(time::Duration::from_millis(2000));
 
         let mut file2 = File::create(dir.path().join("b.txt")).unwrap();
         write!(file2, "Hello, world").unwrap();
@@ -398,7 +398,7 @@ mod tests {
         let mut file1 = File::create(dir.path().join("a.txt")).unwrap();
         write!(file1, "Hello, world").unwrap();
         ::std::mem::drop(file1);
-        thread::sleep(time::Duration::from_millis(500));
+        thread::sleep(time::Duration::from_millis(2000));
 
         let file2 = File::create(dir.path().join("b.txt")).unwrap();
         ::std::mem::drop(file2);
@@ -427,7 +427,7 @@ mod tests {
         let mut file1 = File::create(dir.path().join("a.txt")).unwrap();
         write!(file1, "Hello, world").unwrap();
         ::std::mem::drop(file1);
-        thread::sleep(time::Duration::from_millis(500));
+        thread::sleep(time::Duration::from_millis(2000));
 
         let file2 = File::create(dir.path().join("b.txt")).unwrap();
         ::std::mem::drop(file2);
@@ -455,7 +455,7 @@ mod tests {
 
         let file1 = File::create(dir.path().join("a.txt")).unwrap();
         ::std::mem::drop(file1);
-        thread::sleep(time::Duration::from_millis(500));
+        thread::sleep(time::Duration::from_millis(2000));
 
         let mut file2 = File::create(dir.path().join("b.txt")).unwrap();
         write!(file2, "Hello, world").unwrap();
