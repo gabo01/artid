@@ -273,3 +273,208 @@ fn modified<P: AsRef<Path>>(file: P) -> Option<SystemTime> {
     warn!("Unable to access metadata for {}", pathlight(file.as_ref()));
     None
 }
+
+#[cfg(test)]
+mod tests {
+    extern crate tempfile;
+
+    use super::{modified, Branchable, DirTree, Linkable, LinkedPoint, OverwriteMode};
+    use std::ffi::OsString;
+    use std::fs::File;
+    use std::io::{Read, Write};
+    use std::{thread, time};
+
+    #[test]
+    fn test_tree_valid() {
+        let origin = tempfile::tempdir().unwrap();
+        let dest = tempfile::tempdir().unwrap();
+
+        let tree = DirTree::new(origin.path().into(), dest.path().into());
+        assert!(tree.valid());
+    }
+
+    #[test]
+    fn test_tree_invalid() {
+        let dir = tempfile::tempdir().unwrap();
+        let _file1 = File::create(dir.path().join("a.txt")).unwrap();
+        let _file2 = File::create(dir.path().join("b.txt")).unwrap();
+        let tree = DirTree::new(dir.path().join("b.txt"), dir.path().join("a.txt"));
+        assert!(!tree.valid());
+    }
+
+    #[test]
+    fn test_branching() {
+        let origin = tempfile::tempdir().unwrap();
+        let dest = tempfile::tempdir().unwrap();
+
+        let tree = DirTree::new(origin.path().into(), dest.path().into());
+        {
+            let string = OsString::from("codes");
+            let _branch = tree.branch(&string);
+
+            assert_eq!(
+                tree.root.borrow().origin.display().to_string(),
+                origin.path().join(&string).display().to_string()
+            );
+
+            assert_eq!(
+                tree.root.borrow().dest.display().to_string(),
+                dest.path().join(&string).display().to_string()
+            );
+        }
+
+        assert_eq!(
+            tree.root.borrow().origin.display().to_string(),
+            origin.path().display().to_string()
+        );
+
+        assert_eq!(
+            tree.root.borrow().dest.display().to_string(),
+            dest.path().display().to_string()
+        );
+    }
+
+    #[test]
+    fn test_linked() {
+        let dir = tempfile::tempdir().unwrap();
+        let _file1 = File::create(dir.path().join("a.txt")).unwrap();
+        let _file2 = File::create(dir.path().join("b.txt")).unwrap();
+        let tree = DirTree::new(dir.path().join("b.txt"), dir.path().join("a.txt"));
+        let link = LinkedPoint::new(tree.root.borrow());
+        assert!(link.synced());
+    }
+
+    #[test]
+    fn test_link_generation_linked() {
+        let dir = tempfile::tempdir().unwrap();
+        let _file1 = File::create(dir.path().join("a.txt")).unwrap();
+        let _file2 = File::create(dir.path().join("b.txt")).unwrap();
+        let tree = DirTree::new(dir.path().join("b.txt"), dir.path().join("a.txt"));
+        assert!(tree.link().synced());
+    }
+
+    #[test]
+    fn test_mirror_disallowed() {
+        let dir = tempfile::tempdir().unwrap();
+        let _file1 = File::create(dir.path().join("a.txt")).unwrap();
+        let _file2 = File::create(dir.path().join("b.txt")).unwrap();
+        let tree = DirTree::new(dir.path().join("b.txt"), dir.path().join("a.txt"));
+        assert!(tree.link().mirror(OverwriteMode::Disallow).is_err());
+    }
+
+    #[test]
+    fn test_mirror_allow_copy() {
+        let dir = tempfile::tempdir().unwrap();
+
+        let file1 = File::create(dir.path().join("a.txt")).unwrap();
+        ::std::mem::drop(file1);
+        thread::sleep(time::Duration::from_millis(500));
+
+        let mut file2 = File::create(dir.path().join("b.txt")).unwrap();
+        write!(file2, "Hello, world").unwrap();
+        ::std::mem::drop(file2);
+
+        assert!(
+            modified(dir.path().join("b.txt")).unwrap()
+                > modified(dir.path().join("a.txt")).unwrap()
+        );
+
+        let tree = DirTree::new(dir.path().join("a.txt"), dir.path().join("b.txt"));
+        assert!(
+            tree.link().mirror(OverwriteMode::Allow).is_ok(),
+            "Mirror was not successful"
+        );
+
+        let mut file1 = File::open(dir.path().join("a.txt")).unwrap();
+        let mut string = String::new();
+        file1.read_to_string(&mut string).unwrap();
+        assert_eq!(string, String::from("Hello, world"));
+    }
+
+    #[test]
+    fn test_mirror_allow_not_copy() {
+        let dir = tempfile::tempdir().unwrap();
+
+        let mut file1 = File::create(dir.path().join("a.txt")).unwrap();
+        write!(file1, "Hello, world").unwrap();
+        ::std::mem::drop(file1);
+        thread::sleep(time::Duration::from_millis(500));
+
+        let file2 = File::create(dir.path().join("b.txt")).unwrap();
+        ::std::mem::drop(file2);
+
+        assert!(
+            modified(dir.path().join("b.txt")).unwrap()
+                > modified(dir.path().join("a.txt")).unwrap()
+        );
+
+        let tree = DirTree::new(dir.path().join("b.txt"), dir.path().join("a.txt"));
+        assert!(
+            tree.link().mirror(OverwriteMode::Allow).is_ok(),
+            "Mirror was not successful"
+        );
+
+        let mut file2 = File::open(dir.path().join("b.txt")).unwrap();
+        let mut string = String::new();
+        file2.read_to_string(&mut string).unwrap();
+        assert_ne!(string, String::from("Hello, world"));
+    }
+
+    #[test]
+    fn test_mirror_force() {
+        let dir = tempfile::tempdir().unwrap();
+
+        let mut file1 = File::create(dir.path().join("a.txt")).unwrap();
+        write!(file1, "Hello, world").unwrap();
+        ::std::mem::drop(file1);
+        thread::sleep(time::Duration::from_millis(500));
+
+        let file2 = File::create(dir.path().join("b.txt")).unwrap();
+        ::std::mem::drop(file2);
+
+        assert!(
+            modified(dir.path().join("b.txt")).unwrap()
+                > modified(dir.path().join("a.txt")).unwrap()
+        );
+
+        let tree = DirTree::new(dir.path().join("b.txt"), dir.path().join("a.txt"));
+        assert!(
+            tree.link().mirror(OverwriteMode::Force).is_ok(),
+            "Mirror was not successful"
+        );
+
+        let mut file2 = File::open(dir.path().join("b.txt")).unwrap();
+        let mut string = String::new();
+        file2.read_to_string(&mut string).unwrap();
+        assert_eq!(string, String::from("Hello, world"));
+    }
+
+    #[test]
+    fn test_mirror_force_allow() {
+        let dir = tempfile::tempdir().unwrap();
+
+        let file1 = File::create(dir.path().join("a.txt")).unwrap();
+        ::std::mem::drop(file1);
+        thread::sleep(time::Duration::from_millis(500));
+
+        let mut file2 = File::create(dir.path().join("b.txt")).unwrap();
+        write!(file2, "Hello, world").unwrap();
+        ::std::mem::drop(file2);
+
+        assert!(
+            modified(dir.path().join("b.txt")).unwrap()
+                > modified(dir.path().join("a.txt")).unwrap()
+        );
+
+        let tree = DirTree::new(dir.path().join("a.txt"), dir.path().join("b.txt"));
+        assert!(
+            tree.link().mirror(OverwriteMode::Force).is_ok(),
+            "Mirror was not successful"
+        );
+
+        let mut file1 = File::open(dir.path().join("a.txt")).unwrap();
+        let mut string = String::new();
+        file1.read_to_string(&mut string).unwrap();
+        assert_eq!(string, String::from("Hello, world"));
+    }
+}
