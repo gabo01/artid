@@ -1,10 +1,10 @@
-use std::fs;
+use failure::{Fail, ResultExt};
+use logger::pathlight;
 use std::cell::Ref;
 use std::ffi::OsString;
-use logger::pathlight;
+use std::fs;
 use std::path::Path;
 use Result;
-use failure::{Fail, ResultExt};
 
 use super::{DirBranch, DirRoot, LinkedPoint, SyncOptions};
 
@@ -164,7 +164,7 @@ where
 
 /// Represents the different types a path can take on the file system. It is just a convenience
 /// enum for using a match instead of an if-else tree.
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 enum FileSystemType {
     File,
     Dir,
@@ -182,4 +182,26 @@ impl<P: AsRef<Path>> From<P> for FileSystemType {
             FileSystemType::Other
         }
     }
+}
+
+#[cfg(test)]
+mod tests {
+    extern crate tempfile;
+
+    use std::fs::File;
+    use super::{FileSystemType};
+
+    #[test]
+    fn test_system_dir() {
+        let dir = tempfile::tempdir().unwrap();
+        assert_eq!(FileSystemType::from(dir.path()), FileSystemType::Dir);
+    }
+
+    #[test]
+    fn test_system_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let _file = File::create(dir.path().join("a.txt"));
+        assert_eq!(FileSystemType::from(dir.path().join("a.txt")), FileSystemType::File);
+    }
+    
 }
