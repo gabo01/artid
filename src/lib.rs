@@ -123,11 +123,9 @@ impl From<RestoreOptions> for SyncOptions {
     }
 }
 
-/// Represents a configuration file stored in config.json. A valid config.json file is composed
-/// by an array of folder structs. Usually this file will be stored in the directory intended
-/// to be the backup directory. Even if it is technically possible to use single configuration
-/// file to manage multiple backup dirs, this is not wise since the modified date for the folders
-/// inside the config file will lose it's proper meaning.
+/// Represents a configuration file in json format. A valid json config file is composed
+/// by an array of folder structs. The config file has to be stored in a subpath of the
+/// directory being used.
 ///
 /// This type is also the main point of entry for the library since it controls the
 /// loading of the configuration and allows to do the ops related to the data inside, such
@@ -234,15 +232,8 @@ where
     /// Performs the restore of the backed files on the dir where the config file was loaded to
     /// their original locations on the specified root.
     ///
-    /// The behaviour of this function is analogous to the backup function. If the restore of
-    /// one of the main directories fails. The function will exit with an error. If the restore
-    /// of one of the subelements fails the function will exit with an error if warn = false or
-    /// emit a warning and continue restoring the other elements if warn = true.
-    ///
-    /// If overwrite = false, the function will exit with an error if the file exists in the
-    /// original dir. If overwrite = true the function will only restore files that are newer or
-    /// equal to the ones present in the original directory. This means that if you modify a file
-    /// and has not been backed it will not be overriden by this function.
+    /// The behaviour of this function can be customized through the options provided. Check
+    /// RestoreOptions to see what things can be modified.
     pub fn restore(self, options: RestoreOptions) -> Result<()> {
         for folder in &self.folders {
             let dirs = folder.resolve(&self.dir);
