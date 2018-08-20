@@ -58,9 +58,9 @@ pub enum OverwriteMode {
     Force,
 }
 
-/// Represents two different linked directory trees. The origin path is seen as the 'link'
-/// and the dest path is seen as the 'linked place'. This means that syncing the link is making
-/// a copy of all files in dest to origin.
+/// Represents two different linked directory trees. The dst path is seen as the 'link'
+/// and the src path is seen as the 'linked place'. This means that syncing the link is making
+/// a copy of all files in src to dst.
 ///
 /// The idea behind this type is to be able to walk the dest path and mimic it's structure on
 /// the origin path.
@@ -82,8 +82,8 @@ impl DirTree {
     }
 
     /// Syncs the two trees. This function will fail if the two points aren't linked
-    /// and it is unable to create the destination dir, the 'link' or if it is unable to
-    /// read the contents of the origin, the 'linked', dir.
+    /// and it is unable to create the dst dir, the 'link' or if it is unable to
+    /// read the contents of the src, the 'linked', dir.
     ///
     /// Behaviour of these function can be controlled through the options sent for things such
     /// as file clashes, errors while processing a file or a subdirectory and other things. See
@@ -207,8 +207,8 @@ impl<'a, 'b> Linkable<'b, DirRoot> for DirBranch<'a> {
     }
 }
 
-/// Represents a link between two different paths points. The origin path is seen as the
-/// 'link's location while the dest path is seen as the link's pointed place.
+/// Represents a link between two different paths points. The dst path is seen as the
+/// 'link's location while the src path is seen as the link's pointed place.
 #[derive(Debug)]
 struct LinkedPoint<'a> {
     pointer: Ref<'a, DirRoot>,
