@@ -155,7 +155,7 @@ where
     }
 
     pub fn load_from<T: AsRef<Path>>(dir: P, path: T) -> Result<Self> {
-        let file = Self::filepath(&dir, &path)?;
+        let file = Self::filepath(&dir, &path, false)?;
 
         let reader =
             File::open(&file).context(AppErrorType::AccessFile(file.display().to_string()))?;
@@ -179,7 +179,7 @@ where
     /// the master directory of ConfigFile. All the parent components of 'to' must exist
     /// in order for this function to suceed.
     pub fn save_to<T: AsRef<Path>>(&self, to: T) -> Result<()> {
-        let path = Self::filepath(&self.dir, to)?;
+        let path = Self::filepath(&self.dir, to, true)?;
         write!(
             File::create(&path).context(AppErrorType::AccessFile(path.display().to_string()))?,
             "{}",
@@ -260,7 +260,10 @@ where
 
     /// Constructs the path to the configuration file from a given directory 'dir'. The
     /// path to add is the 'ext' path.
-    fn filepath<T: AsRef<Path>, U: AsRef<Path>>(dir: T, ext: U) -> Result<PathBuf> {
+    /// 
+    /// If allow is set to true, the function will allow the restore path to be unexistant.
+    /// Note that the dir argument must still be a valid directory.
+    fn filepath<T: AsRef<Path>, U: AsRef<Path>>(dir: T, ext: U, allow: bool) -> Result<PathBuf> {
         let path = dir.as_ref();
 
         if !path.is_dir() {
@@ -268,7 +271,7 @@ where
         }
 
         let restore = path.join(ext);
-        if !restore.is_file() {
+        if !restore.is_file() && !allow {
             err!(AppErrorType::PathUnexistant(restore.display().to_string()));
         }
 
@@ -406,6 +409,21 @@ mod tests {
             dir.path().join("config.json").exists(),
             "Save file was not created"
         );
+
+        let config = ConfigFile {
+            dir: dir.path(),
+            folders: vec![],
+        };
+
+        assert!(
+            config.save_to("config.json").is_ok(),
+            "Unable to save into location"
+        );
+    }
+
+    #[test]
+    fn test_config_file_save_unexistant() {
+        let dir = tempfile::tempdir().expect("Creation of temp dir failed");
 
         let config = ConfigFile {
             dir: dir.path(),
