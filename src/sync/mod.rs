@@ -152,15 +152,18 @@ impl DirRoot {
     }
 
     /// Confirms the validity of the link. A DirRoot link is valid only if both points are
-    /// directories.
+    /// directories. This function will return false in some points during tree visiting.
+    /// Specifically, during the visiting of file nodes. This is not an issue since validity
+    /// will only be verified before running a directory iterator and in that point it will
+    /// return true if both directories exist.
     pub(self) fn valid(&self) -> bool {
         self.src.is_dir() && self.dst.is_dir()
     }
 }
 
 /// Represents a branch of the directory tree being iterated over. It is fundamentally a
-/// reference to the DirTree that works as an stack during iteration. In order to access
-/// mutability uses the RefCell inside the DirTree.
+/// reference to the DirTree that works as a stack during iteration. In order to get
+/// interior mutability uses the RefCell inside the DirTree.
 #[derive(Debug)]
 struct DirBranch<'a> {
     tree: &'a DirTree,
@@ -235,8 +238,8 @@ impl<'a> LinkedPoint<'a> {
     }
 
     /// Syncs (or Links) the two points on the filesystem. The behaviour of this function
-    /// for making the sync is controlled by the overwrite option. See the docs for OverwriteMode
-    /// to get more info.
+    /// for making the sync is controlled by the overwrite option. See the docs for 
+    /// OverwriteMode to get more info.
     pub(self) fn mirror(&self, overwrite: OverwriteMode) -> Result<()> {
         if overwrite == OverwriteMode::Disallow && self.pointer.dst.exists() {
             err!(AppErrorType::ObjectExists(
