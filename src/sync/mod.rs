@@ -107,10 +107,6 @@ impl<'a, 'b> Branchable<'a, DirBranch<'a>, &'b OsString> for DirTree {
 impl<'a> Linkable<'a, DirRoot> for DirTree {
     type Link = LinkedPoint<'a>;
 
-    fn valid(&self) -> bool {
-        self.root.borrow().valid()
-    }
-
     fn to_ref(&self) -> Ref<DirRoot> {
         self.root.borrow()
     }
@@ -150,15 +146,6 @@ impl DirRoot {
         self.src.pop();
         self.dst.pop();
     }
-
-    /// Confirms the validity of the link. A DirRoot link is valid only if both points are
-    /// directories. This function will return false in some points during tree visiting.
-    /// Specifically, during the visiting of file nodes. This is not an issue since validity
-    /// will only be verified before running a directory iterator and in that point it will
-    /// return true if both directories exist.
-    pub(self) fn valid(&self) -> bool {
-        self.src.is_dir() && self.dst.is_dir()
-    }
 }
 
 /// Represents a branch of the directory tree being iterated over. It is fundamentally a
@@ -197,10 +184,6 @@ impl<'a> Drop for DirBranch<'a> {
 impl<'a, 'b> Linkable<'b, DirRoot> for DirBranch<'a> {
     type Link = LinkedPoint<'b>;
 
-    fn valid(&self) -> bool {
-        self.tree.valid()
-    }
-
     fn to_ref(&self) -> Ref<DirRoot> {
         self.tree.to_ref()
     }
@@ -238,7 +221,7 @@ impl<'a> LinkedPoint<'a> {
     }
 
     /// Syncs (or Links) the two points on the filesystem. The behaviour of this function
-    /// for making the sync is controlled by the overwrite option. See the docs for 
+    /// for making the sync is controlled by the overwrite option. See the docs for
     /// OverwriteMode to get more info.
     pub(self) fn mirror(&self, overwrite: OverwriteMode) -> Result<()> {
         if overwrite == OverwriteMode::Disallow && self.pointer.dst.exists() {
@@ -285,27 +268,6 @@ mod tests {
     use std::fs::File;
     use std::io::{Read, Write};
     use std::{thread, time};
-
-    #[test]
-    fn test_tree_valid() {
-        let src = tempfile::tempdir().unwrap();
-        let dst = tempfile::tempdir().unwrap();
-
-        let tree = DirTree::new(src.path().into(), dst.path().into());
-        assert!(tree.valid());
-    }
-
-    #[test]
-    fn test_tree_invalid() {
-        let dir = tempfile::tempdir().unwrap();
-        let srcpath = dir.path().join("a.txt");
-        let dstpath = dir.path().join("b.txt");
-
-        let _srcfile = File::create(&srcpath).unwrap();
-        let _dstfile = File::create(&dstpath).unwrap();
-        let tree = DirTree::new(srcpath, dstpath);
-        assert!(!tree.valid());
-    }
 
     #[test]
     fn test_branching() {

@@ -2,7 +2,7 @@ use failure::{Fail, ResultExt};
 use logger::pathlight;
 use std::cell::Ref;
 use std::ffi::OsString;
-use std::fs;
+use std::fs::{self, ReadDir};
 use std::path::Path;
 use Result;
 
@@ -41,7 +41,6 @@ pub(super) trait Branchable<'a, T: 'a, P> {
 pub(super) trait Linkable<'a, T> {
     type Link: 'a;
 
-    fn valid(&self) -> bool;
     fn to_ref(&self) -> Ref<T>;
     fn link(&'a self) -> Self::Link;
 }
@@ -56,23 +55,14 @@ where
     O: Into<SyncOptions>,
 {
     let mut options = options.into();
+    check(tree.to_ref(), &mut options.clean)?;
 
-    debug!(
-        "Syncing {} with {}",
-        pathlight(&tree.to_ref().dst),
-        pathlight(&tree.to_ref().src)
-    );
-
-    if !tree.valid() {
-        fs::create_dir_all(&tree.to_ref().dst).context("Unable to create backup dir")?;
-        options.clean = false; // no need to perform the clean check if the dir is empty
-    }
-
-    let iter = fs::read_dir(&tree.to_ref().src).context("Unable to read dir")?;
-    for entry in iter {
+    for entry in read(tree.to_ref()).context("Unable to read dir")? {
         match entry {
             Ok(component) => {
                 let branch = tree.branch(&component.file_name());
+
+                // done separatly to avoid RefCell issues
                 let class = FileSystemType::from(&branch.to_ref().src);
                 match class {
                     FileSystemType::File => {
@@ -100,7 +90,7 @@ where
                     FileSystemType::Other => {
                         warn!("Unable to process {}", pathlight(&branch.to_ref().src));
                     }
-                };
+                }
             }
 
             Err(_) => warn!("Unable to read entry"),
@@ -112,6 +102,28 @@ where
     }
 
     Ok(())
+}
+
+// The next three functions are simply wrappers for reducing the size of the sync
+// function. Since there are RefCells involved be specially careful when modifying any
+// part of these code
+
+#[inline(always)]
+fn check(tree: Ref<DirRoot>, clean: &mut bool) -> Result<()> {
+    let (src, dst) = (pathlight(&tree.src), pathlight(&tree.dst));
+    debug!("Syncing {} with {}", dst, src);
+
+    if !tree.dst.is_dir() {
+        fs::create_dir_all(&tree.dst).context("Unable to create backup dir")?;
+        *clean = false; // useless to perform cleaning on a new dir.
+    }
+
+    Ok(())
+}
+
+#[inline(always)]
+fn read(tree: Ref<DirRoot>) -> ::std::io::Result<ReadDir> {
+    fs::read_dir(&tree.src)
 }
 
 /// Internal recursive function used to clean the backup directory of garbage files.
@@ -188,8 +200,9 @@ impl<P: AsRef<Path>> From<P> for FileSystemType {
 mod tests {
     extern crate tempfile;
 
+    use super::{check, DirRoot, FileSystemType};
     use std::fs::File;
-    use super::{FileSystemType};
+    use std::cell::RefCell;
 
     #[test]
     fn test_system_dir() {
@@ -201,7 +214,35 @@ mod tests {
     fn test_system_file() {
         let dir = tempfile::tempdir().unwrap();
         let _file = File::create(dir.path().join("a.txt"));
-        assert_eq!(FileSystemType::from(dir.path().join("a.txt")), FileSystemType::File);
+        assert_eq!(
+            FileSystemType::from(dir.path().join("a.txt")),
+            FileSystemType::File
+        );
     }
-    
+
+    #[test]
+    fn test_check_creation() {
+        let src = tempfile::tempdir().unwrap();
+        let dst = src.path().join("asd");
+        let mut clean = true;
+
+        let root = RefCell::new(DirRoot::new(src.path().into(), dst.clone()));
+        check(root.borrow(), &mut clean).unwrap();
+
+        assert!(dst.exists(), "Directory was not created");
+        assert_eq!(clean, false);
+    }
+
+    #[test]
+    fn test_check_not_creation() {
+        let src = tempfile::tempdir().unwrap();
+        let dst = tempfile::tempdir().unwrap();
+        let mut clean = true;
+
+        let root = RefCell::new(DirRoot::new(src.path().into(), dst.path().into()));
+        check(root.borrow(), &mut clean).unwrap();
+
+        assert_eq!(clean, true);
+    }
+
 }
