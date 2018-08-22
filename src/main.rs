@@ -28,7 +28,7 @@ fn main() {
     }
 
     let yaml = load_yaml!("cli.yml");
-    let app = App::new(clap::App::from(yaml).get_matches());
+    let mut app = App::new(clap::App::from(yaml));
 
     if let Err(err) = app.run() {
         if app.backtrace {
@@ -44,77 +44,55 @@ fn main() {
 }
 
 struct App<'a> {
+    app: clap::App<'a, 'a>,
     matches: ArgMatches<'a>,
     backtrace: bool,
 }
 
 impl<'a> App<'a> {
-    pub fn new(matches: ArgMatches<'a>) -> Self {
+    pub fn new(app: clap::App<'a, 'a>) -> Self {
+        let matches = app.clone().get_matches();
         let backtrace = matches.is_present("backtrace");
 
-        App { matches, backtrace }
+        App { app, matches, backtrace }
     }
 
-    pub fn run(&self) -> Result<()> {
-        match self.matches.subcommand() {
-            ("update", Some(matches)) => Backup::new(matches).execute()?,
-            ("restore", Some(matches)) => Restore::new(matches).execute()?,
-            _ => unreachable!(),
+    pub fn run(&mut self) -> Result<()> {
+        match self.matches.subcommand_name() {
+            Some("update") => backup(self.matches.subcommand_matches("update").unwrap())?,
+            Some("restore") => restore(self.matches.subcommand_matches("restore").unwrap())?,
+            _ => {
+                self.app.print_long_help().unwrap();
+                println!("");
+            }
         }
 
         Ok(())
     }
 }
 
-struct Backup<'a> {
-    options: BackupOptions,
-    path: Option<&'a str>,
+fn backup(matches: &ArgMatches) -> Result<()> {
+    let options = BackupOptions::new(matches.is_present("warn"));
+    let mut path = curr_dir!();
+
+    if let Some(val) = matches.value_of("path") {
+        path.push(val);
+        debug!("Working directory set to {}", pathlight(&path));
+    }
+
+    info!("Starting backup on {}", path.display());
+    ConfigFile::load(&path)?.backup(options)
 }
 
-impl<'a> Backup<'a> {
-    pub fn new(matches: &'a ArgMatches<'a>) -> Self {
-        let options = BackupOptions::new(matches.is_present("warn"));
-        let path = matches.value_of("path");
+fn restore(matches: &ArgMatches) -> Result<()> {
+    let options = RestoreOptions::new(matches.is_present("warn"), matches.is_present("overwrite"));
+    let mut path = curr_dir!();
 
-        Backup { options, path }
+    if let Some(val) = matches.value_of("path") {
+        path.push(val);
+        debug!("Working directory set to {}", pathlight(&path));
     }
 
-    pub fn execute(&self) -> Result<()> {
-        let mut path = curr_dir!();
-
-        if let Some(val) = self.path {
-            path.push(val);
-            debug!("Working directory set to {}", pathlight(&path));
-        }
-
-        info!("Starting backup on {}", path.display());
-        ConfigFile::load(&path)?.backup(self.options)
-    }
-}
-
-struct Restore<'a> {
-    options: RestoreOptions,
-    path: Option<&'a str>,
-}
-
-impl<'a> Restore<'a> {
-    pub fn new(matches: &'a ArgMatches<'a>) -> Self {
-        let options =
-            RestoreOptions::new(matches.is_present("warn"), matches.is_present("overwrite"));
-        let path = matches.value_of("path");
-
-        Restore { options, path }
-    }
-
-    pub fn execute(&self) -> Result<()> {
-        let mut path = curr_dir!();
-
-        if let Some(val) = self.path {
-            path.push(val);
-            debug!("Working directory set to {}", pathlight(&path));
-        }
-
-        info!("Starting restore of {}", path.display());
-        ConfigFile::load(&path)?.restore(self.options)
-    }
+    info!("Starting restore of {}", path.display());
+    ConfigFile::load(&path)?.restore(options)
 }
