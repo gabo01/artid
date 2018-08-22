@@ -57,43 +57,37 @@ where
     let mut options = options.into();
     check(tree.to_ref(), &mut options.clean)?;
 
-    for entry in read(tree.to_ref())? {
-        match entry {
-            Ok(component) => {
-                let branch = tree.branch(&component.file_name());
+    for entry in read(tree.to_ref())?.into_iter().filter_map(|e| e.ok()) {
+        let branch = tree.branch(&entry.file_name());
 
-                // done separatly to avoid RefCell issues
-                let class = FileSystemType::from(&branch.to_ref().src);
-                match class {
-                    FileSystemType::File => {
-                        if let Err(err) = branch.link().mirror(options.overwrite) {
-                            handle!(
-                                options.warn,
-                                err,
-                                "Unable to copy {}",
-                                pathlight(&branch.to_ref().src)
-                            );
-                        }
-                    }
-
-                    FileSystemType::Dir => {
-                        if let Err(err) = sync(&branch, options) {
-                            handle!(
-                                options.warn,
-                                err,
-                                "Unable to read {}",
-                                pathlight(&branch.to_ref().src)
-                            );
-                        }
-                    }
-
-                    FileSystemType::Other => {
-                        warn!("Unable to process {}", pathlight(&branch.to_ref().src));
-                    }
+        // done separatly to avoid RefCell issues
+        let class = FileSystemType::from(&branch.to_ref().src);
+        match class {
+            FileSystemType::File => {
+                if let Err(err) = branch.link().mirror(options.overwrite) {
+                    handle!(
+                        options.warn,
+                        err,
+                        "Unable to copy {}",
+                        pathlight(&branch.to_ref().src)
+                    );
                 }
             }
 
-            Err(_) => warn!("Unable to read entry"),
+            FileSystemType::Dir => {
+                if let Err(err) = sync(&branch, options) {
+                    handle!(
+                        options.warn,
+                        err,
+                        "Unable to read {}",
+                        pathlight(&branch.to_ref().src)
+                    );
+                }
+            }
+
+            FileSystemType::Other => {
+                warn!("Unable to process {}", pathlight(&branch.to_ref().src));
+            }
         }
     }
 
@@ -135,41 +129,34 @@ where
 {
     let val = fs::read_dir(&tree.to_ref().dst);
     if let Ok(iter) = val {
-        for entry in iter {
-            match entry {
-                Ok(component) => {
-                    let branch = tree.branch(&component.file_name());
+        for entry in iter.filter_map(|e| e.ok()) {
+            let branch = tree.branch(&entry.file_name());
 
-                    if !branch.to_ref().src.exists() {
-                        debug!(
-                            "Unnexistant {}, removing {}",
-                            pathlight(&branch.to_ref().src),
+            if !branch.to_ref().src.exists() {
+                debug!(
+                    "Unnexistant {}, removing {}",
+                    pathlight(&branch.to_ref().src),
+                    pathlight(&branch.to_ref().dst)
+                );
+
+                if branch.to_ref().dst.is_dir() {
+                    if let Err(err) = fs::remove_dir_all(&branch.to_ref().dst) {
+                        error!("{}", err);
+                        warn!(
+                            "Unable to remove garbage location {}",
                             pathlight(&branch.to_ref().dst)
                         );
-
-                        if branch.to_ref().dst.is_dir() {
-                            if let Err(err) = fs::remove_dir_all(&branch.to_ref().dst) {
-                                error!("{}", err);
-                                warn!(
-                                    "Unable to remove garbage location {}",
-                                    pathlight(&branch.to_ref().dst)
-                                );
-                            }
-                        } else {
-                            if let Err(err) = fs::remove_file(&branch.to_ref().dst) {
-                                error!("{}", err);
-                                warn!(
-                                    "Unable to remove garbage location {}",
-                                    pathlight(&branch.to_ref().dst)
-                                );
-                            }
-                        }
+                    }
+                } else {
+                    if let Err(err) = fs::remove_file(&branch.to_ref().dst) {
+                        error!("{}", err);
+                        warn!(
+                            "Unable to remove garbage location {}",
+                            pathlight(&branch.to_ref().dst)
+                        );
                     }
                 }
-
-                // FIXME: improve the handle of this case
-                Err(_) => warn!("Unable to read entry 2"),
-            }
+            }  
         }
     }
 }
