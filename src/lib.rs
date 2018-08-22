@@ -154,8 +154,8 @@ where
     }
 
     pub fn load_from<T: AsRef<Path>>(dir: P, path: T) -> Result<Self> {
-        let file = Self::filepath(&dir, &path, false)?;
-
+        let file = dir.as_ref().join(path);
+        debug!("Config file location: {}", pathlight(&file));
         let reader = File::open(&file).context(FsError::OpenFile((&file).into()))?;
         let folders = json::from_reader(reader).context(ParseError::JsonParse((&file).into()))?;
         trace!("{:?}", folders);
@@ -176,14 +176,15 @@ where
     /// the master directory of ConfigFile. All the parent components of 'to' must exist
     /// in order for this function to suceed.
     pub fn save_to<T: AsRef<Path>>(&self, to: T) -> Result<()> {
-        let path = Self::filepath(&self.dir, to, true)?;
+        let file = self.dir.as_ref().join(to);
+        debug!("Config file location: {}", pathlight(&file));
         write!(
-            File::create(&path).context(FsError::CreateFile((&path).into()))?,
+            File::create(&file).context(FsError::CreateFile((&file).into()))?,
             "{}",
             json::to_string_pretty(&self.folders).expect("ConfigFile cannot fail serialization")
-        ).context(FsError::ReadFile((&path).into()))?;
+        ).context(FsError::ReadFile((&file).into()))?;
 
-        info!("Config file saved on {}", pathlight(path));
+        info!("Config file saved on {}", pathlight(file));
         Ok(())
     }
 
@@ -245,27 +246,6 @@ where
         }
 
         Ok(())
-    }
-
-    /// Constructs the path to the configuration file from a given directory 'dir'. The
-    /// path to add is the 'ext' path.
-    ///
-    /// If allow is set to true, the function will allow the restore path to be unexistant.
-    /// Note that the dir argument must still be a valid directory.
-    fn filepath<T: AsRef<Path>, U: AsRef<Path>>(dir: T, ext: U, allow: bool) -> Result<PathBuf> {
-        let path = dir.as_ref();
-
-        if !path.is_dir() {
-            err!(FsError::NotDir(path.into()));
-        }
-
-        let restore = path.join(ext);
-        if !restore.is_file() && !allow {
-            err!(FsError::PathUnexistant(restore.into()));
-        }
-
-        debug!("config file: {}", pathlight(&restore));
-        Ok(restore)
     }
 }
 

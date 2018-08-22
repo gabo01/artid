@@ -67,8 +67,6 @@ impl From<Context<AppErrorType>> for AppError {
 /// carries the system path that triggered the error.
 #[derive(Clone, Debug, Fail, Eq, PartialEq)]
 pub enum FsError {
-    NotDir(PathRepr),
-    PathUnexistant(PathRepr),
     OpenFile(PathRepr),
     CreateFile(PathRepr),
     ReadFile(PathRepr),
@@ -79,16 +77,9 @@ pub enum FsError {
 impl Display for FsError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            FsError::NotDir(ref path) => write!(f, "{} is not a valid directory", highlight(path)),
-
-            FsError::PathUnexistant(ref path) => write!(f, "{} does not exist", highlight(path)),
-
             FsError::OpenFile(ref file) => write!(f, "Could not open {}", highlight(file)),
-
             FsError::CreateFile(ref file) => write!(f, "Could not create {}", highlight(file)),
-
             FsError::ReadFile(ref file) => write!(f, "Could not read {}", highlight(file)),
-
             FsError::PathExists(ref path) => write!(
                 f,
                 "{} already exists, could not write to it",
