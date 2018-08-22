@@ -112,16 +112,21 @@ fn check(tree: Ref<DirRoot>, clean: &mut bool) -> Result<()> {
         *clean = false; // useless to perform cleaning on a new dir.
     }
 
+    ::std::mem::drop(tree);
     Ok(())
 }
 
 #[inline(always)]
 fn read_src(tree: Ref<DirRoot>) -> Result<ReadDir> {
-    Ok(fs::read_dir(&tree.src).context(FsError::ReadFile((&tree.src).into()))?)
+    let res = Ok(fs::read_dir(&tree.src).context(FsError::ReadFile((&tree.src).into()))?);
+    ::std::mem::drop(tree);
+    res
 }
 
 fn read_dst(tree: Ref<DirRoot>) -> Result<ReadDir> {
-    Ok(fs::read_dir(&tree.dst).context(FsError::ReadFile((&tree.src).into()))?)
+    let res = Ok(fs::read_dir(&tree.dst).context(FsError::ReadFile((&tree.src).into()))?);
+    ::std::mem::drop(tree);
+    res
 }
 
 /// Internal recursive function used to clean the backup directory of garbage files.

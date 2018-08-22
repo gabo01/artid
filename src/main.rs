@@ -63,7 +63,7 @@ impl<'a> App<'a> {
             Some("restore") => restore(self.matches.subcommand_matches("restore").unwrap())?,
             _ => {
                 self.app.print_long_help().unwrap();
-                println!("");
+                println!();
             }
         }
 
