@@ -18,7 +18,7 @@ extern crate yansi;
 extern crate env_path;
 
 use chrono::offset::Utc;
-use chrono::DateTime;
+use chrono::{DateTime, SecondsFormat};
 use env_path::EnvPath;
 use failure::ResultExt;
 use std::fmt::Debug;
@@ -200,9 +200,12 @@ where
     /// Also, this function will delete files present in the backup that have been removed from
     /// their original locations and fail it cannot delete a file.
     pub fn backup(&mut self, options: BackupOptions) -> Result<()> {
+        let modified = Utc::now();
+
         let mut error = None;
         for folder in &mut self.folders {
-            let dirs = folder.resolve(&self.dir);
+            let mut dirs = folder.resolve(&self.dir);
+            dirs.rel.push(modified.to_rfc3339_opts(SecondsFormat::Nanos, true));
             debug!("Starting backup of: {}", pathlight(&dirs.abs));
 
             if let Err(err) = DirTree::new(dirs.abs, dirs.rel)
@@ -213,7 +216,7 @@ where
                 break;
             }
 
-            folder.modified = Some(Utc::now());
+            folder.modified = Some(modified);
         }
 
         if let Err(err) = self.save() {
