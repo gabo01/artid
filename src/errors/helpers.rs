@@ -1,6 +1,8 @@
 use std::fmt::{self, Display};
 use std::path::Path;
 
+/// Represents a system path seen as a string. Convenience struct to reduce code
+/// boilerplate when creating a FsError.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PathRepr {
     inner: String,

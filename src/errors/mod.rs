@@ -29,16 +29,22 @@ impl Display for AppError {
     }
 }
 
-/// Internal representation of the type of error that happened in the application. This
-/// representation contains the kind of error that happened and the associated data.
+/// Type of error that was encountered in the application. Many of these types are backed by
+/// a more specific error contained in these module.
 #[derive(Copy, Clone, Debug, Fail, Eq, PartialEq)]
 pub enum AppErrorType {
+    /// Represents failure while communicating with the file system. The specific details
+    /// of the failure are stored in the FsError.
     #[fail(display = "Unable to access the given disk path")]
     FileSystem,
+    /// Represents failure while trying to parse the config file. The specific details of
+    /// the failure are stored in ParseError.
     #[fail(display = "Unable to parse the config file")]
     JsonParse,
+    /// Represents failure while trying to make a new backup.
     #[fail(display = "Unable to update the backup folder")]
     UpdateFolder,
+    /// Represents failure while trying to restore a folder.
     #[fail(display = "Unable to restore the backup")]
     RestoreFolder,
 }
@@ -57,6 +63,8 @@ impl From<Context<AppErrorType>> for AppError {
     }
 }
 
+/// Type of error that was encountered while interacting with the file system. These type
+/// carries the system path that triggered the error.
 #[derive(Clone, Debug, Fail, Eq, PartialEq)]
 pub enum FsError {
     NotDir(PathRepr),
@@ -105,8 +113,10 @@ impl From<Context<FsError>> for AppError {
     }
 }
 
+/// Type of error that was encountered while parsing the configuration file.
 #[derive(Clone, Debug, Fail, Eq, PartialEq)]
 pub enum ParseError {
+    // ! Fixme: improve the details on these error type
     JsonParse(PathRepr),
 }
 
