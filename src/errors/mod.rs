@@ -73,6 +73,7 @@ pub enum FsError {
     CreateFile(PathRepr),
     ReadFile(PathRepr),
     PathExists(PathRepr),
+    DeleteFile(PathRepr),
 }
 
 impl Display for FsError {
@@ -93,6 +94,8 @@ impl Display for FsError {
                 "{} already exists, could not write to it",
                 highlight(path)
             ),
+
+            FsError::DeleteFile(ref file) => write!(f, "Could not remove {}", highlight(file)),
         }
     }
 }

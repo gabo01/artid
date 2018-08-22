@@ -57,7 +57,7 @@ where
     let mut options = options.into();
     check(tree.to_ref(), &mut options.clean)?;
 
-    for entry in read(tree.to_ref())?.into_iter().filter_map(|e| e.ok()) {
+    for entry in read_src(tree.to_ref())?.into_iter().filter_map(|e| e.ok()) {
         let branch = tree.branch(&entry.file_name());
 
         // done separatly to avoid RefCell issues
@@ -92,7 +92,7 @@ where
     }
 
     if options.clean {
-        clean(tree);
+        clean(tree)?;
     }
 
     Ok(())
@@ -116,49 +116,42 @@ fn check(tree: Ref<DirRoot>, clean: &mut bool) -> Result<()> {
 }
 
 #[inline(always)]
-fn read(tree: Ref<DirRoot>) -> Result<ReadDir> {
+fn read_src(tree: Ref<DirRoot>) -> Result<ReadDir> {
     Ok(fs::read_dir(&tree.src).context(FsError::ReadFile((&tree.src).into()))?)
 }
 
+fn read_dst(tree: Ref<DirRoot>) -> Result<ReadDir> {
+    Ok(fs::read_dir(&tree.dst).context(FsError::ReadFile((&tree.src).into()))?)
+}
+
 /// Internal recursive function used to clean the backup directory of garbage files.
-fn clean<'a, T>(tree: &'a T)
+fn clean<'a, T>(tree: &'a T) -> Result<()>
 where
     T: 'a
         + for<'b> Branchable<'a, DirBranch<'a>, &'b OsString>
         + for<'b> Linkable<'b, DirRoot, Link = LinkedPoint<'b>>,
 {
-    let val = fs::read_dir(&tree.to_ref().dst);
-    if let Ok(iter) = val {
-        for entry in iter.filter_map(|e| e.ok()) {
-            let branch = tree.branch(&entry.file_name());
+    for entry in read_dst(tree.to_ref())?.filter_map(|e| e.ok()) {
+        let branch = tree.branch(&entry.file_name());
 
-            if !branch.to_ref().src.exists() {
-                debug!(
-                    "Unnexistant {}, removing {}",
-                    pathlight(&branch.to_ref().src),
-                    pathlight(&branch.to_ref().dst)
-                );
+        if !branch.to_ref().src.exists() {
+            debug!(
+                "Unnexistant {}, removing {}",
+                pathlight(&branch.to_ref().src),
+                pathlight(&branch.to_ref().dst)
+            );
 
-                if branch.to_ref().dst.is_dir() {
-                    if let Err(err) = fs::remove_dir_all(&branch.to_ref().dst) {
-                        error!("{}", err);
-                        warn!(
-                            "Unable to remove garbage location {}",
-                            pathlight(&branch.to_ref().dst)
-                        );
-                    }
-                } else {
-                    if let Err(err) = fs::remove_file(&branch.to_ref().dst) {
-                        error!("{}", err);
-                        warn!(
-                            "Unable to remove garbage location {}",
-                            pathlight(&branch.to_ref().dst)
-                        );
-                    }
-                }
-            }  
+            if branch.to_ref().dst.is_dir() {
+                fs::remove_dir_all(&branch.to_ref().dst)
+                    .context(FsError::DeleteFile((&branch.to_ref().dst).into()))?;
+            } else {
+                fs::remove_file(&branch.to_ref().dst)
+                    .context(FsError::DeleteFile((&branch.to_ref().dst).into()))?;
+            }
         }
     }
+
+    Ok(())
 }
 
 /// Represents the different types a path can take on the file system. It is just a convenience

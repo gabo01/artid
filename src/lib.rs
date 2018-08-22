@@ -195,6 +195,9 @@ where
     ///
     /// This function will only copy the needed files, if a file has not been modified since the
     /// last time it was backed up it will not be copied.
+    /// 
+    /// Also, this function will delete files present in the backup that have been removed from
+    /// their original locations and fail it cannot delete a file.
     pub fn backup(&mut self, options: BackupOptions) -> Result<()> {
         let mut error = None;
         for folder in &mut self.folders {
