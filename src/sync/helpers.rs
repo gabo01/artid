@@ -4,7 +4,7 @@ use std::cell::Ref;
 use std::ffi::OsString;
 use std::fs::{self, ReadDir};
 use std::path::Path;
-use Result;
+use {FsError, Result};
 
 use super::{DirBranch, DirRoot, LinkedPoint, SyncOptions};
 
@@ -57,7 +57,7 @@ where
     let mut options = options.into();
     check(tree.to_ref(), &mut options.clean)?;
 
-    for entry in read(tree.to_ref()).context("Unable to read dir")? {
+    for entry in read(tree.to_ref())? {
         match entry {
             Ok(component) => {
                 let branch = tree.branch(&component.file_name());
@@ -114,7 +114,7 @@ fn check(tree: Ref<DirRoot>, clean: &mut bool) -> Result<()> {
     debug!("Syncing {} with {}", dst, src);
 
     if !tree.dst.is_dir() {
-        fs::create_dir_all(&tree.dst).context("Unable to create backup dir")?;
+        fs::create_dir_all(&tree.dst).context(FsError::OpenFile((&tree.dst).into()))?;
         *clean = false; // useless to perform cleaning on a new dir.
     }
 
@@ -122,8 +122,8 @@ fn check(tree: Ref<DirRoot>, clean: &mut bool) -> Result<()> {
 }
 
 #[inline(always)]
-fn read(tree: Ref<DirRoot>) -> ::std::io::Result<ReadDir> {
-    fs::read_dir(&tree.src)
+fn read(tree: Ref<DirRoot>) -> Result<ReadDir> {
+    Ok(fs::read_dir(&tree.src).context(FsError::ReadFile((&tree.src).into()))?)
 }
 
 /// Internal recursive function used to clean the backup directory of garbage files.
@@ -201,8 +201,8 @@ mod tests {
     extern crate tempfile;
 
     use super::{check, DirRoot, FileSystemType};
-    use std::fs::File;
     use std::cell::RefCell;
+    use std::fs::File;
 
     #[test]
     fn test_system_dir() {

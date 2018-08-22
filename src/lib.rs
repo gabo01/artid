@@ -46,6 +46,7 @@ pub mod logger;
 mod sync;
 
 pub use errors::{AppError, AppErrorType};
+use errors::{FsError, ParseError};
 use logger::pathlight;
 use sync::{DirTree, OverwriteMode, SyncOptions};
 
@@ -155,10 +156,8 @@ where
     pub fn load_from<T: AsRef<Path>>(dir: P, path: T) -> Result<Self> {
         let file = Self::filepath(&dir, &path, false)?;
 
-        let reader =
-            File::open(&file).context(AppErrorType::AccessFile(file.display().to_string()))?;
-        let folders = json::from_reader(reader)
-            .context(AppErrorType::JsonParse(file.display().to_string()))?;
+        let reader = File::open(&file).context(FsError::OpenFile((&file).into()))?;
+        let folders = json::from_reader(reader).context(ParseError::JsonParse((&file).into()))?;
         trace!("{:?}", folders);
 
         Ok(ConfigFile { dir, folders })
@@ -179,10 +178,10 @@ where
     pub fn save_to<T: AsRef<Path>>(&self, to: T) -> Result<()> {
         let path = Self::filepath(&self.dir, to, true)?;
         write!(
-            File::create(&path).context(AppErrorType::AccessFile(path.display().to_string()))?,
+            File::create(&path).context(FsError::CreateFile((&path).into()))?,
             "{}",
             json::to_string_pretty(&self.folders).expect("ConfigFile cannot fail serialization")
-        ).context(AppErrorType::AccessFile(path.display().to_string()))?;
+        ).context(FsError::ReadFile((&path).into()))?;
 
         info!("Config file saved on {}", pathlight(path));
         Ok(())
@@ -202,12 +201,10 @@ where
             let dirs = folder.resolve(&self.dir);
             debug!("Starting backup of: {}", pathlight(&dirs.abs));
 
-            if let Err(err) =
-                DirTree::new(dirs.abs, dirs.rel)
-                    .sync(options)
-                    .context(AppErrorType::UpdateFolder(
-                        self.dir.as_ref().display().to_string(),
-                    )) {
+            if let Err(err) = DirTree::new(dirs.abs, dirs.rel)
+                .sync(options)
+                .context(AppErrorType::UpdateFolder)
+            {
                 error = Some(err);
                 break;
             }
@@ -241,9 +238,7 @@ where
 
             DirTree::new(dirs.rel, dirs.abs)
                 .sync(options)
-                .context(AppErrorType::RestoreFolder(
-                    self.dir.as_ref().display().to_string(),
-                ))?;
+                .context(AppErrorType::RestoreFolder)?;
         }
 
         Ok(())
@@ -258,12 +253,12 @@ where
         let path = dir.as_ref();
 
         if !path.is_dir() {
-            err!(AppErrorType::NotDir(path.display().to_string()));
+            err!(FsError::NotDir(path.into()));
         }
 
         let restore = path.join(ext);
         if !restore.is_file() && !allow {
-            err!(AppErrorType::PathUnexistant(restore.display().to_string()));
+            err!(FsError::PathUnexistant(restore.into()));
         }
 
         debug!("config file: {}", pathlight(&restore));

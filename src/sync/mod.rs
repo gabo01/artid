@@ -5,7 +5,7 @@ use std::ffi::OsString;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
-use {AppError, AppErrorType, Result};
+use {AppError, FsError, Result};
 
 mod helpers;
 use self::helpers::{sync, Branchable, Linkable};
@@ -225,14 +225,13 @@ impl<'a> LinkedPoint<'a> {
     /// OverwriteMode to get more info.
     pub(self) fn mirror(&self, overwrite: OverwriteMode) -> Result<()> {
         if overwrite == OverwriteMode::Disallow && self.pointer.dst.exists() {
-            err!(AppErrorType::ObjectExists(
-                self.pointer.dst.display().to_string()
-            ));
+            err!(FsError::PathExists((&self.pointer.dst).into()));
         }
 
         if overwrite == OverwriteMode::Force || overwrite == OverwriteMode::Allow && !self.synced()
         {
-            fs::copy(&self.pointer.src, &self.pointer.dst).context("Unable to copy the file")?;
+            fs::copy(&self.pointer.src, &self.pointer.dst)
+                .context(FsError::CreateFile((&self.pointer.dst).into()))?;
             info!(
                 "synced: {} -> {}",
                 pathlight(&self.pointer.src),
