@@ -234,12 +234,7 @@ where
     /// RestoreOptions to see what things can be modified.
     pub fn restore(self, options: RestoreOptions) -> Result<()> {
         for folder in &self.folders {
-            let dirs = folder.resolve(&self.dir);
-            debug!("Starting restore of: {}", pathlight(&dirs.rel));
-
-            DirTree::new(dirs.rel, dirs.abs)
-                .sync(options.into())
-                .context(AppErrorType::RestoreFolder)?;
+            folder.restore(&self.dir, options).context(AppErrorType::RestoreFolder)?;
         }
 
         Ok(())
@@ -289,6 +284,21 @@ impl Folder {
         self.sync(&root, stamp, options)?;
         self.modified = Some(stamp);
         Ok(())
+    }
+
+    pub(self) fn restore<P: AsRef<Path>>(&self, root: P, options: RestoreOptions) -> Result<()> {
+        let mut dirs = self.resolve(root);
+        if let Some(modified) = self.modified {
+            debug!("Starting restore of: {}", pathlight(&dirs.rel));
+            dirs.rel.push(modified.to_rfc3339_opts(SecondsFormat::Nanos, true));
+
+            Ok(DirTree::new(dirs.rel, dirs.abs)
+                .sync(options.into())
+                .context(AppErrorType::RestoreFolder)?)
+        } else {
+            info!("Restore not needed for {}", pathlight(&dirs.rel));
+            Ok(())
+        }
     }
 
     /// Resolves the link between the two elements in a folder. In order to do so a root
