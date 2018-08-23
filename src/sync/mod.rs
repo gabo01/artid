@@ -369,7 +369,7 @@ mod tests {
         let _srcfile = File::create(&srcpath).unwrap();
         let _dstfile = File::create(&dstpath).unwrap();
         let tree = DirTree::new(srcpath, dstpath);
-        assert!(tree.link().mirror(OverwriteMode::Disallow).is_err());
+        assert!(tree.link().mirror(OverwriteMode::Disallow, false).is_err());
     }
 
     #[test]
@@ -390,7 +390,7 @@ mod tests {
 
         let tree = DirTree::new(srcpath.clone(), dstpath.clone());
         assert!(
-            tree.link().mirror(OverwriteMode::Allow).is_ok(),
+            tree.link().mirror(OverwriteMode::Allow, false).is_ok(),
             "Mirror was not successful"
         );
 
@@ -418,7 +418,7 @@ mod tests {
 
         let tree = DirTree::new(srcpath.clone(), dstpath.clone());
         assert!(
-            tree.link().mirror(OverwriteMode::Allow).is_ok(),
+            tree.link().mirror(OverwriteMode::Allow, false).is_ok(),
             "Mirror was not successful"
         );
 
@@ -446,7 +446,7 @@ mod tests {
 
         let tree = DirTree::new(srcpath.clone(), dstpath.clone());
         assert!(
-            tree.link().mirror(OverwriteMode::Force).is_ok(),
+            tree.link().mirror(OverwriteMode::Force, false).is_ok(),
             "Mirror was not successful"
         );
 
@@ -474,7 +474,7 @@ mod tests {
 
         let tree = DirTree::new(srcpath.clone(), dstpath.clone());
         assert!(
-            tree.link().mirror(OverwriteMode::Force).is_ok(),
+            tree.link().mirror(OverwriteMode::Force, false).is_ok(),
             "Mirror was not successful"
         );
 
