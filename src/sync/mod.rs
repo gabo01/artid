@@ -228,16 +228,17 @@ impl<'a> LinkedPoint<'a> {
             err!(FsError::PathExists((&self.pointer.dst).into()));
         }
 
-        if overwrite == OverwriteMode::Force || overwrite == OverwriteMode::Allow && !self.synced()
-        {
-            fs::copy(&self.pointer.src, &self.pointer.dst)
-                .context(FsError::CreateFile((&self.pointer.dst).into()))?;
-            info!(
-                "synced: {} -> {}",
-                pathlight(&self.pointer.src),
-                pathlight(&self.pointer.dst)
-            );
+        if overwrite == OverwriteMode::Allow && self.synced() {
+            return Ok(());
         }
+
+        fs::copy(&self.pointer.src, &self.pointer.dst)
+            .context(FsError::CreateFile((&self.pointer.dst).into()))?;
+        info!(
+            "synced: {} -> {}",
+            pathlight(&self.pointer.src),
+            pathlight(&self.pointer.dst)
+        );
 
         Ok(())
     }
