@@ -240,6 +240,13 @@ impl<'a> LinkedPoint<'a> {
         }
 
         if !symbolic {
+            if let Ok(metadata) = fs::symlink_metadata(&self.pointer.dst) {
+                if metadata.file_type().is_symlink() {
+                    fs::remove_file(&self.pointer.dst)
+                        .context(FsError::DeleteFile((&self.pointer.dst).into()))?;
+                }
+            }
+
             fs::copy(&self.pointer.src, &self.pointer.dst)
                 .context(FsError::CreateFile((&self.pointer.dst).into()))?;
         } else {
