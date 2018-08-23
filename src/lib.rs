@@ -286,6 +286,8 @@ impl Folder {
         Ok(())
     }
 
+    /// Performs the restore of the folder entry. Given a root, the function looks for the
+    /// backup folder with the latest timestamp and performs the restore from there.
     pub(self) fn restore<P: AsRef<Path>>(&self, root: P, options: RestoreOptions) -> Result<()> {
         let mut dirs = self.resolve(root);
         if let Some(modified) = self.modified {
