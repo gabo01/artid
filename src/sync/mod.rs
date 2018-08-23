@@ -29,10 +29,8 @@ pub struct SyncOptions {
     /// Controls how to handle if a location to be written on already exists. See OverwriteMode
     /// docs for more info on how this setting behaves.
     pub overwrite: OverwriteMode,
-    ///
-    ///
-    ///
-    ///
+    /// Enables/Disables sync through symbolic links. If set to true a symbolic link will be
+    /// created in the destination instead of copying the whole file.
     pub symbolic: bool,
 }
 
@@ -228,7 +226,10 @@ impl<'a> LinkedPoint<'a> {
 
     /// Syncs (or Links) the two points on the filesystem. The behaviour of this function
     /// for making the sync is controlled by the overwrite option. See the docs for
-    /// OverwriteMode to get more info.
+    /// OverwriteMode to get more info. 
+    /// 
+    /// The behaviour is also controlled by the symbolic parameter. If set to true the
+    /// function will create a symbolic link instead of copying the file.
     pub(self) fn mirror(&self, overwrite: OverwriteMode, symbolic: bool) -> Result<()> {
         if overwrite == OverwriteMode::Disallow && self.pointer.dst.exists() {
             err!(FsError::PathExists((&self.pointer.dst).into()));
@@ -255,12 +256,14 @@ impl<'a> LinkedPoint<'a> {
         Ok(())
     }
 
+    /// Intended to create a symlink on Unix operating systems
     #[cfg(unix)]
     fn symlink<P: AsRef<Path>, T: AsRef<Path>>(src: P, dst: T) -> ::std::io::Result<()> {
         use std::os::unix::fs::symlink;
         symlink(src, dst)
     }
 
+    /// Intended to create a symlink on Windows operating systems
     #[cfg(windows)]
     fn symlink<P: AsRef<Path>, T: AsRef<Path>>(src: P, dst: T) -> ::std::io::Result<()> {
         use std::os::windows::fs::symlink_file as symlink;

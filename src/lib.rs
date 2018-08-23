@@ -273,6 +273,9 @@ struct Dirs {
 }
 
 impl Folder {
+    /// Performs the backup of a specified folder entry. Given a root, the function checks
+    /// for a previous backup and links all the files from the previous location, after
+    /// that performs a sync operation between the folder and the origin location.
     pub(self) fn backup<P>(
         &mut self,
         root: P,
@@ -289,7 +292,7 @@ impl Folder {
     }
 
     /// Resolves the link between the two elements in a folder. In order to do so a root
-    /// must be given to the relative path
+    /// must be given to the relative path.
     fn resolve<P: AsRef<Path>>(&self, root: P) -> Dirs {
         Dirs {
             rel: root.as_ref().join(self.path.as_ref()),
@@ -297,10 +300,13 @@ impl Folder {
         }
     }
 
+    /// Resolves only the link of the relative path.
     fn resolve_rel<P: AsRef<Path>>(&self, root: P) -> PathBuf {
         root.as_ref().join(self.path.as_ref())
     }
 
+    /// Performs the sync between the backup and the previous one. The sync is performed
+    /// through symbolic links to avoid unnecessary file copies.
     fn push<P>(&mut self, root: &P, stamp: DateTime<Utc>, options: BackupOptions) -> Result<()>
     where
         P: AsRef<Path>,
@@ -319,6 +325,7 @@ impl Folder {
         Ok(DirTree::new(src, dst).sync(options)?)
     }
 
+    /// Main sync operation, syncs the backup directory with the origin location.
     fn sync<P>(&mut self, root: P, stamp: DateTime<Utc>, options: BackupOptions) -> Result<()>
     where
         P: AsRef<Path>,
