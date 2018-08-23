@@ -196,27 +196,21 @@ where
     ///
     /// This function will only copy the needed files, if a file has not been modified since the
     /// last time it was backed up it will not be copied.
-    /// 
+    ///
     /// Also, this function will delete files present in the backup that have been removed from
     /// their original locations and fail it cannot delete a file.
     pub fn backup(&mut self, options: BackupOptions) -> Result<()> {
-        let modified = Utc::now();
+        let stamp = Utc::now();
 
         let mut error = None;
         for folder in &mut self.folders {
-            let mut dirs = folder.resolve(&self.dir);
-            dirs.rel.push(modified.to_rfc3339_opts(SecondsFormat::Nanos, true));
-            debug!("Starting backup of: {}", pathlight(&dirs.abs));
-
-            if let Err(err) = DirTree::new(dirs.abs, dirs.rel)
-                .sync(options)
+            if let Err(err) = folder
+                .backup(&self.dir, stamp, options)
                 .context(AppErrorType::UpdateFolder)
             {
                 error = Some(err);
                 break;
             }
-
-            folder.modified = Some(modified);
         }
 
         if let Err(err) = self.save() {
@@ -244,7 +238,7 @@ where
             debug!("Starting restore of: {}", pathlight(&dirs.rel));
 
             DirTree::new(dirs.rel, dirs.abs)
-                .sync(options)
+                .sync(options.into())
                 .context(AppErrorType::RestoreFolder)?;
         }
 
@@ -279,6 +273,21 @@ struct Dirs {
 }
 
 impl Folder {
+    pub(self) fn backup<P>(
+        &mut self,
+        root: P,
+        stamp: DateTime<Utc>,
+        options: BackupOptions,
+    ) -> Result<()>
+    where
+        P: AsRef<Path>,
+    {
+        self.push(&root, stamp, options)?;
+        self.sync(&root, stamp, options)?;
+        self.modified = Some(stamp);
+        Ok(())
+    }
+
     /// Resolves the link between the two elements in a folder. In order to do so a root
     /// must be given to the relative path
     fn resolve<P: AsRef<Path>>(&self, root: P) -> Dirs {
@@ -286,6 +295,40 @@ impl Folder {
             rel: root.as_ref().join(self.path.as_ref()),
             abs: PathBuf::from(self.origin.as_ref()),
         }
+    }
+
+    fn resolve_rel<P: AsRef<Path>>(&self, root: P) -> PathBuf {
+        root.as_ref().join(self.path.as_ref())
+    }
+
+    fn push<P>(&mut self, root: &P, stamp: DateTime<Utc>, options: BackupOptions) -> Result<()>
+    where
+        P: AsRef<Path>,
+    {
+        let dir = self.resolve_rel(root);
+        let (mut src, mut dst) = (dir.clone(), dir);
+        match self.modified {
+            Some(time) => src.push(time.to_rfc3339_opts(SecondsFormat::Nanos, true)),
+            None => return Ok(()),
+        };
+        dst.push(stamp.to_rfc3339_opts(SecondsFormat::Nanos, true));
+
+        let mut options: SyncOptions = options.into();
+        options.symbolic = true;
+
+        Ok(DirTree::new(src, dst).sync(options)?)
+    }
+
+    fn sync<P>(&mut self, root: P, stamp: DateTime<Utc>, options: BackupOptions) -> Result<()>
+    where
+        P: AsRef<Path>,
+    {
+        let mut dirs = self.resolve(root);
+        dirs.rel
+            .push(stamp.to_rfc3339_opts(SecondsFormat::Nanos, true));
+        debug!("Starting backup of: {}", pathlight(&dirs.abs));
+
+        Ok(DirTree::new(dirs.abs, dirs.rel).sync(options.into())?)
     }
 }
 

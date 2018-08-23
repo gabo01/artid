@@ -47,14 +47,12 @@ pub(super) trait Linkable<'a, T> {
 
 /// Internal recursive function used to sync two trees by using branches. See the docs of
 /// DirTree::sync to understand how this function works on a general level.
-pub(super) fn sync<'a, T, O>(tree: &'a T, options: O) -> Result<()>
+pub(super) fn sync<'a, T>(tree: &'a T, mut options: SyncOptions) -> Result<()>
 where
     T: 'a
         + for<'b> Branchable<'a, DirBranch<'a>, &'b OsString>
         + for<'b> Linkable<'b, DirRoot, Link = LinkedPoint<'b>>,
-    O: Into<SyncOptions>,
 {
-    let mut options = options.into();
     check(tree.to_ref(), &mut options.clean)?;
 
     for entry in read_src(tree.to_ref())?.into_iter().filter_map(|e| e.ok()) {
@@ -64,7 +62,7 @@ where
         let class = FileSystemType::from(&branch.to_ref().src);
         match class {
             FileSystemType::File => {
-                if let Err(err) = branch.link().mirror(options.overwrite) {
+                if let Err(err) = branch.link().mirror(options.overwrite, options.symbolic) {
                     handle!(
                         options.warn,
                         err,

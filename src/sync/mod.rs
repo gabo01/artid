@@ -29,6 +29,11 @@ pub struct SyncOptions {
     /// Controls how to handle if a location to be written on already exists. See OverwriteMode
     /// docs for more info on how this setting behaves.
     pub overwrite: OverwriteMode,
+    ///
+    ///
+    ///
+    ///
+    pub symbolic: bool,
 }
 
 impl SyncOptions {
@@ -38,6 +43,7 @@ impl SyncOptions {
             warn,
             clean,
             overwrite,
+            symbolic: false,
         }
     }
 }
@@ -88,7 +94,7 @@ impl DirTree {
     /// Behaviour of these function can be controlled through the options sent for things such
     /// as file clashes, errors while processing a file or a subdirectory and other things. See
     /// SyncOptions docs for more info on these topic.
-    pub fn sync<T: Into<SyncOptions>>(&self, options: T) -> Result<()> {
+    pub fn sync(&self, options: SyncOptions) -> Result<()> {
         sync(self, options)
     }
 }
@@ -223,7 +229,7 @@ impl<'a> LinkedPoint<'a> {
     /// Syncs (or Links) the two points on the filesystem. The behaviour of this function
     /// for making the sync is controlled by the overwrite option. See the docs for
     /// OverwriteMode to get more info.
-    pub(self) fn mirror(&self, overwrite: OverwriteMode) -> Result<()> {
+    pub(self) fn mirror(&self, overwrite: OverwriteMode, symbolic: bool) -> Result<()> {
         if overwrite == OverwriteMode::Disallow && self.pointer.dst.exists() {
             err!(FsError::PathExists((&self.pointer.dst).into()));
         }
@@ -232,8 +238,14 @@ impl<'a> LinkedPoint<'a> {
             return Ok(());
         }
 
-        fs::copy(&self.pointer.src, &self.pointer.dst)
-            .context(FsError::CreateFile((&self.pointer.dst).into()))?;
+        if !symbolic {
+            fs::copy(&self.pointer.src, &self.pointer.dst)
+                .context(FsError::CreateFile((&self.pointer.dst).into()))?;
+        } else {
+            Self::symlink(&self.pointer.src, &self.pointer.dst)
+                .context(FsError::CreateFile((&self.pointer.dst).into()))?;
+        }
+
         info!(
             "synced: {} -> {}",
             pathlight(&self.pointer.src),
@@ -241,6 +253,18 @@ impl<'a> LinkedPoint<'a> {
         );
 
         Ok(())
+    }
+
+    #[cfg(unix)]
+    fn symlink<P: AsRef<Path>, T: AsRef<Path>>(src: P, dst: T) -> ::std::io::Result<()> {
+        use std::os::unix::fs::symlink;
+        symlink(src, dst)
+    }
+
+    #[cfg(windows)]
+    fn symlink<P: AsRef<Path>, T: AsRef<Path>>(src: P, dst: T) -> ::std::io::Result<()> {
+        use std::os::windows::fs::symlink_file as symlink;
+        symlink(src, dst)
     }
 }
 
