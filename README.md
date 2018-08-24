@@ -39,8 +39,8 @@ git update-index --assume-unchanged debug/**/
 
 ## Features
 
-- [x] Command line client
-- [ ] Versioned backups
+- [x] Command line client (Unstable)
+- [x] Versioned backups (Unstable)
 - [ ] Zip the backups made
 - [ ] GUI client
 - [ ] Integration with Mega, Dropbox and Google Drive
