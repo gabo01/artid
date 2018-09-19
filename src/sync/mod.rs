@@ -297,11 +297,12 @@ fn modified<P: AsRef<Path>>(file: P) -> Option<SystemTime> {
 mod tests {
     extern crate tempfile;
 
-    use super::{modified, Branchable, DirTree, Linkable, LinkedPoint, OverwriteMode};
+    use super::{modified, Branchable, DirTree, Linkable, LinkedPoint, OverwriteMode, SyncOptions};
     use std::ffi::OsString;
-    use std::fs::File;
+    use std::fs::{self, File};
     use std::io::{Read, Write};
     use std::{thread, time};
+    use std::path::PathBuf;
 
     #[test]
     fn test_branching() {
@@ -482,5 +483,53 @@ mod tests {
         let mut string = String::new();
         dstfile.read_to_string(&mut string).unwrap();
         assert_eq!(string, String::from("Hello, world"));
+    }
+
+    #[test]
+    fn test_sync_copy_single_dir() {
+        let options = SyncOptions::new(false, false, OverwriteMode::Force);
+        let src = tempfile::tempdir().unwrap();
+        let dst = tempfile::tempdir().unwrap();
+
+        // Create two files in src
+        let mut file = File::create(src.path().join("a.txt")).unwrap();
+        write!(file, "aaaa").unwrap();
+        ::std::mem::drop(file);
+        let mut file = File::create(src.path().join("b.txt")).unwrap();
+        write!(file, "bbbb").unwrap();
+        ::std::mem::drop(file);
+
+        DirTree::new(PathBuf::from(src.path()), PathBuf::from(dst.path())).sync(options).unwrap();
+
+        assert!(dst.path().join("a.txt").exists());
+        assert!(dst.path().join("b.txt").exists());
+
+        let mut buf = String::new();
+        File::open(dst.path().join("a.txt")).unwrap().read_to_string(&mut buf).unwrap();
+        assert_eq!(buf, "aaaa");
+        buf.truncate(0);
+        File::open(dst.path().join("b.txt")).unwrap().read_to_string(&mut buf).unwrap();
+        assert_eq!(buf, "bbbb");
+    }
+
+    #[test]
+    fn test_sync_copy_recursive() {
+        let options = SyncOptions::new(false, false, OverwriteMode::Force);
+        let src = tempfile::tempdir().unwrap();
+        let dst = tempfile::tempdir().unwrap();
+
+        // Create a dir with a file in src
+        fs::create_dir(src.path().join("c")).unwrap();
+        let mut file = File::create(src.path().join("c/d.txt")).unwrap();
+        write!(file, "dddd").unwrap();
+        ::std::mem::drop(file);
+
+        DirTree::new(PathBuf::from(src.path()), PathBuf::from(dst.path())).sync(options).unwrap();
+
+        assert!(dst.path().join("c/d.txt").exists());
+
+        let mut buf = String::new();
+        File::open(dst.path().join("c/d.txt")).unwrap().read_to_string(&mut buf).unwrap();
+        assert_eq!(buf, "dddd");
     }
 }
