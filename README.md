@@ -7,17 +7,18 @@ by specifying a configuration file and letting the program take care of the rest
 
 ### Prerequisites
 
-Rust version 1.27.1 or later
-
-Cargo verion 1.27.0 or later
+- Rust version 1.27.1 or later
+- Cargo verion 1.27.0 or later
 
 ### Building from Source
 
-```
+```bash
 cargo build
 ```
+
 or just
-```
+
+```bash
 cargo run -- [ARGS]
 ```
 
@@ -33,7 +34,7 @@ During the debug process the debug folder contents will change, this changes are
 submitted to the repo. To avoid tracking this changes on your local copy run the following
 command on your local repo:
 
-```
+```bash
 git update-index --assume-unchanged debug/**/
 ```
 
@@ -48,7 +49,7 @@ git update-index --assume-unchanged debug/**/
 
 ## Usage from CLI
 
-```
+```bash
 backup-rs 0.1.0
 Gabriel Dos Ramos <dosramosgabriel@gmail.com>
 Light client to backup your data
