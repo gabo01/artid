@@ -268,6 +268,16 @@ struct Dirs {
 }
 
 impl Folder {
+    /// Creates a new folder from the options specified
+    #[cfg(test)]
+    pub(self) fn new(path: EnvPath, origin: EnvPath, modified: Option<DateTime<Utc>>) -> Self {
+        Self {
+            path,
+            origin,
+            modified,
+        }
+    }
+
     /// Performs the backup of a specified folder entry. Given a root, the function checks
     /// for a previous backup and links all the files from the previous location, after
     /// that performs a sync operation between the folder and the origin location.
@@ -355,11 +365,15 @@ impl Folder {
 mod tests {
     extern crate tempfile;
 
+    use chrono::offset::Utc;
+    use chrono::SecondsFormat;
     use env_path::EnvPath;
     use std::env;
-    use std::fs;
-    use std::io::Write;
+    use std::fs::{self, File, OpenOptions};
+    use std::io::{Read, Write};
     use std::path::PathBuf;
+    use std::thread;
+    use std::time;
     use sync::{OverwriteMode, SyncOptions};
     use {BackupOptions, ConfigFile, Folder, RestoreOptions};
 
@@ -493,6 +507,294 @@ mod tests {
             PathBuf::from(env::var("HOME").unwrap())
                 .display()
                 .to_string()
+        );
+    }
+
+    #[test]
+    fn test_folder_backup_single() {
+        let origin = tempfile::tempdir().unwrap();
+
+        // Create two files in origin
+        let mut file = File::create(origin.path().join("a.txt")).unwrap();
+        write!(file, "aaaa").unwrap();
+        ::std::mem::drop(file);
+        let mut file = File::create(origin.path().join("b.txt")).unwrap();
+        write!(file, "bbbb").unwrap();
+        ::std::mem::drop(file);
+
+        let root = tempfile::tempdir().unwrap();
+
+        let stamp = Utc::now();
+        let options = BackupOptions::new(false);
+
+        Folder::new(
+            EnvPath::new("backup"),
+            EnvPath::new(origin.path().display().to_string()),
+            None,
+        ).backup(root.path(), stamp, options)
+        .unwrap();
+
+        let mut backup = root.path().join("backup");
+        assert!(backup.exists());
+
+        backup.push(stamp.to_rfc3339_opts(SecondsFormat::Nanos, true));
+        assert!(backup.exists());
+
+        assert!(backup.join("a.txt").exists());
+        assert!(backup.join("b.txt").exists());
+
+        let mut buf = String::new();
+        File::open(backup.join("a.txt"))
+            .unwrap()
+            .read_to_string(&mut buf)
+            .unwrap();
+        assert_eq!(buf, "aaaa");
+        buf.truncate(0);
+        File::open(backup.join("b.txt"))
+            .unwrap()
+            .read_to_string(&mut buf)
+            .unwrap();
+        assert_eq!(buf, "bbbb");
+    }
+
+    #[test]
+    fn test_folder_backup_double() {
+        let origin = tempfile::tempdir().unwrap();
+
+        // Create two files in origin
+        let mut file = File::create(origin.path().join("a.txt")).unwrap();
+        write!(file, "aaaa").unwrap();
+        ::std::mem::drop(file);
+        let mut file = File::create(origin.path().join("b.txt")).unwrap();
+        write!(file, "bbbb").unwrap();
+        ::std::mem::drop(file);
+
+        let root = tempfile::tempdir().unwrap();
+
+        let stamp = Utc::now();
+        let options = BackupOptions::new(false);
+        let mut folder = Folder::new(
+            EnvPath::new("backup"),
+            EnvPath::new(origin.path().display().to_string()),
+            None,
+        );
+
+        folder.backup(root.path(), stamp, options).unwrap();
+
+        let mut backup = root.path().join("backup");
+        assert!(backup.exists());
+
+        backup.push(stamp.to_rfc3339_opts(SecondsFormat::Nanos, true));
+        assert!(backup.exists());
+
+        assert!(backup.join("a.txt").exists());
+        assert!(backup.join("b.txt").exists());
+
+        let mut buf = String::new();
+        File::open(backup.join("a.txt"))
+            .unwrap()
+            .read_to_string(&mut buf)
+            .unwrap();
+        assert_eq!(buf, "aaaa");
+        buf.truncate(0);
+        File::open(backup.join("b.txt"))
+            .unwrap()
+            .read_to_string(&mut buf)
+            .unwrap();
+        assert_eq!(buf, "bbbb");
+
+        thread::sleep(time::Duration::from_millis(2000));
+        let stamp = Utc::now();
+        folder.backup(root.path(), stamp, options).unwrap();
+
+        backup.pop();
+        backup.push(stamp.to_rfc3339_opts(SecondsFormat::Nanos, true));
+        assert!(backup.exists());
+
+        assert!(
+            fs::symlink_metadata(backup.join("a.txt"))
+                .unwrap()
+                .file_type()
+                .is_symlink()
+        );
+        assert!(
+            fs::symlink_metadata(backup.join("b.txt"))
+                .unwrap()
+                .file_type()
+                .is_symlink()
+        );
+    }
+
+    #[test]
+    fn test_folder_backup_double_addition() {
+        let origin = tempfile::tempdir().unwrap();
+
+        // Create two files in origin
+        let mut file = File::create(origin.path().join("a.txt")).unwrap();
+        write!(file, "aaaa").unwrap();
+        ::std::mem::drop(file);
+        let mut file = File::create(origin.path().join("b.txt")).unwrap();
+        write!(file, "bbbb").unwrap();
+        ::std::mem::drop(file);
+
+        let root = tempfile::tempdir().unwrap();
+
+        let stamp = Utc::now();
+        let options = BackupOptions::new(false);
+        let mut folder = Folder::new(
+            EnvPath::new("backup"),
+            EnvPath::new(origin.path().display().to_string()),
+            None,
+        );
+
+        folder.backup(root.path(), stamp, options).unwrap();
+
+        let mut backup = root.path().join("backup");
+        assert!(backup.exists());
+
+        backup.push(stamp.to_rfc3339_opts(SecondsFormat::Nanos, true));
+        assert!(backup.exists());
+
+        assert!(backup.join("a.txt").exists());
+        assert!(backup.join("b.txt").exists());
+
+        let mut buf = String::new();
+        File::open(backup.join("a.txt"))
+            .unwrap()
+            .read_to_string(&mut buf)
+            .unwrap();
+        assert_eq!(buf, "aaaa");
+        buf.truncate(0);
+        File::open(backup.join("b.txt"))
+            .unwrap()
+            .read_to_string(&mut buf)
+            .unwrap();
+        assert_eq!(buf, "bbbb");
+
+        thread::sleep(time::Duration::from_millis(2000));
+
+        // Create a new file in origin
+        let mut file = File::create(origin.path().join("c.txt")).unwrap();
+        write!(file, "cccc").unwrap();
+        ::std::mem::drop(file);
+
+        let stamp = Utc::now();
+        folder.backup(root.path(), stamp, options).unwrap();
+
+        backup.pop();
+        backup.push(stamp.to_rfc3339_opts(SecondsFormat::Nanos, true));
+        assert!(backup.exists());
+
+        assert!(
+            fs::symlink_metadata(backup.join("a.txt"))
+                .unwrap()
+                .file_type()
+                .is_symlink()
+        );
+        assert!(
+            fs::symlink_metadata(backup.join("b.txt"))
+                .unwrap()
+                .file_type()
+                .is_symlink()
+        );
+
+        assert!(
+            fs::symlink_metadata(backup.join("c.txt"))
+                .unwrap()
+                .file_type()
+                .is_file()
+        );
+        let mut buf = String::new();
+        File::open(backup.join("c.txt"))
+            .unwrap()
+            .read_to_string(&mut buf)
+            .unwrap();
+        assert_eq!(buf, "cccc");
+    }
+
+    #[test]
+    fn test_folder_backup_double_modification() {
+        let origin = tempfile::tempdir().unwrap();
+
+        // Create two files in origin
+        let mut file = File::create(origin.path().join("a.txt")).unwrap();
+        write!(file, "aaaa").unwrap();
+        ::std::mem::drop(file);
+        let mut file = File::create(origin.path().join("b.txt")).unwrap();
+        write!(file, "bbbb").unwrap();
+        ::std::mem::drop(file);
+
+        let root = tempfile::tempdir().unwrap();
+
+        let stamp = Utc::now();
+        let options = BackupOptions::new(false);
+        let mut folder = Folder::new(
+            EnvPath::new("backup"),
+            EnvPath::new(origin.path().display().to_string()),
+            None,
+        );
+
+        folder.backup(root.path(), stamp, options).unwrap();
+
+        let mut backup = root.path().join("backup");
+        assert!(backup.exists());
+
+        backup.push(stamp.to_rfc3339_opts(SecondsFormat::Nanos, true));
+        assert!(backup.exists());
+
+        assert!(backup.join("a.txt").exists());
+        assert!(backup.join("b.txt").exists());
+
+        let mut buf = String::new();
+        File::open(backup.join("a.txt"))
+            .unwrap()
+            .read_to_string(&mut buf)
+            .unwrap();
+        assert_eq!(buf, "aaaa");
+        buf.truncate(0);
+        File::open(backup.join("b.txt"))
+            .unwrap()
+            .read_to_string(&mut buf)
+            .unwrap();
+        assert_eq!(buf, "bbbb");
+
+        thread::sleep(time::Duration::from_millis(2000));
+
+        // Modify a file in origin
+        let mut file = OpenOptions::new()
+            .write(true)
+            .append(true)
+            .open(origin.path().join("a.txt"))
+            .unwrap();
+        write!(file, "cccc").unwrap();
+        ::std::mem::drop(file);
+
+        let stamp = Utc::now();
+        folder.backup(root.path(), stamp, options).unwrap();
+
+        backup.pop();
+        backup.push(stamp.to_rfc3339_opts(SecondsFormat::Nanos, true));
+        assert!(backup.exists());
+
+        assert!(
+            fs::symlink_metadata(backup.join("a.txt"))
+                .unwrap()
+                .file_type()
+                .is_file()
+        );
+
+        let mut buf = String::new();
+        File::open(backup.join("a.txt"))
+            .unwrap()
+            .read_to_string(&mut buf)
+            .unwrap();
+        assert_eq!(buf, "aaaacccc");
+
+        assert!(
+            fs::symlink_metadata(backup.join("b.txt"))
+                .unwrap()
+                .file_type()
+                .is_symlink()
         );
     }
 }
