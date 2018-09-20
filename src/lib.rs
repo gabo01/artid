@@ -368,6 +368,7 @@ mod tests {
     use chrono::offset::Utc;
     use chrono::SecondsFormat;
     use env_path::EnvPath;
+    use json;
     use std::env;
     use std::fs::{self, File, OpenOptions};
     use std::io::{Read, Write};
@@ -907,5 +908,105 @@ mod tests {
             .read_to_string(&mut buf)
             .unwrap();
         assert_eq!(buf, "bbbb");
+    }
+
+    #[test]
+    fn test_config_load_from() {
+        let tmp = tempfile::tempdir().unwrap();
+
+        let mut file = File::create(tmp.path().join("config.json")).unwrap();
+        write!(
+            file,
+            "[
+            {{
+                \"path\": \"backup\",
+                \"origin\": \"{}\",
+                \"modified\": null
+            }}
+        ]",
+            tmp.path().join("origin").display().to_string()
+        ).unwrap();
+
+        let _config = ConfigFile::load_from(tmp.path(), "config.json").unwrap();
+    }
+
+    #[test]
+    fn test_config_load() {
+        let tmp = tempfile::tempdir().unwrap();
+        fs::create_dir_all(tmp.path().join(".backup")).unwrap();
+
+        let mut file = File::create(tmp.path().join(".backup/config.json")).unwrap();
+        write!(
+            file,
+            "[
+            {{
+                \"path\": \"backup\",
+                \"origin\": \"{}\",
+                \"modified\": null
+            }}
+        ]",
+            tmp.path().join("origin").display().to_string()
+        ).unwrap();
+
+        let _config = ConfigFile::load(tmp.path()).unwrap();
+    }
+
+    #[test]
+    fn test_config_save_to() {
+        let tmp = tempfile::tempdir().unwrap();
+
+        let mut file = File::create(tmp.path().join("config.json")).unwrap();
+        write!(
+            file,
+            "[
+            {{
+                \"path\": \"backup\",
+                \"origin\": \"{}\",
+                \"modified\": null
+            }}
+        ]",
+            tmp.path().join("origin").display().to_string()
+        ).unwrap();
+
+        let config = ConfigFile::load_from(tmp.path(), "config.json").unwrap();
+        config.save_to("config2.json").unwrap();
+
+        let mut buf = String::new();
+        File::open(tmp.path().join("config2.json"))
+            .unwrap()
+            .read_to_string(&mut buf)
+            .unwrap();
+
+        assert_eq!(buf, json::to_string_pretty(&config.folders).unwrap());
+    }
+
+    #[test]
+    fn test_config_save() {
+        let tmp = tempfile::tempdir().unwrap();
+        fs::create_dir_all(tmp.path().join(".backup")).unwrap();
+
+        let mut file = File::create(tmp.path().join("config.json")).unwrap();
+        write!(
+            file,
+            "[
+            {{
+                \"path\": \"backup\",
+                \"origin\": \"{}\",
+                \"modified\": null
+            }}
+        ]",
+            tmp.path().join("origin").display().to_string()
+        ).unwrap();
+
+        let config = ConfigFile::load_from(tmp.path(), "config.json").unwrap();
+        config.save().unwrap();
+
+        let mut buf = String::new();
+        File::open(tmp.path().join(".backup/config.json"))
+            .unwrap()
+            .read_to_string(&mut buf)
+            .unwrap();
+
+        assert_eq!(buf, json::to_string_pretty(&config.folders).unwrap());
     }
 }
