@@ -199,7 +199,7 @@ where
     ///
     /// Also, this function will delete files present in the backup that have been removed from
     /// their original locations and fail it cannot delete a file.
-    pub fn backup(&mut self, options: BackupOptions) -> Result<()> {
+    pub fn backup(&mut self, options: BackupOptions) -> Result<DateTime<Utc>> {
         let stamp = Utc::now();
 
         let mut error = None;
@@ -223,7 +223,7 @@ where
 
         match error {
             Some(err) => Err(err.into()),
-            None => Ok(()),
+            None => Ok(stamp),
         }
     }
 

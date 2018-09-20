@@ -2,14 +2,16 @@
 
 #[macro_use]
 extern crate clap;
+extern crate chrono;
 extern crate failure;
 extern crate libc;
 #[macro_use]
 extern crate log;
 extern crate backup_rs as app;
 
-use app::logger::{self, pathlight};
+use app::logger::{self, highlight, pathlight};
 use app::{BackupOptions, ConfigFile, RestoreOptions, Result};
+use chrono::{offset::Utc, DateTime, SecondsFormat};
 use clap::ArgMatches;
 use failure::Fail;
 use libc::EXIT_FAILURE;
@@ -59,7 +61,14 @@ impl<'a> App<'a> {
 
     pub fn run(&mut self) -> Result<()> {
         match self.matches.subcommand_name() {
-            Some("update") => backup(self.matches.subcommand_matches("update").unwrap())?,
+            Some("update") => {
+                let stamp = backup(self.matches.subcommand_matches("update").unwrap())?;
+                info!(
+                    "Bakup timestamp in {}",
+                    highlight(stamp.to_rfc3339_opts(SecondsFormat::Nanos, true))
+                );
+            }
+
             Some("restore") => restore(self.matches.subcommand_matches("restore").unwrap())?,
             _ => {
                 self.app.print_long_help().unwrap();
@@ -71,7 +80,7 @@ impl<'a> App<'a> {
     }
 }
 
-fn backup(matches: &ArgMatches) -> Result<()> {
+fn backup(matches: &ArgMatches) -> Result<DateTime<Utc>> {
     let options = BackupOptions::new(matches.is_present("warn"));
     let mut path = curr_dir!();
 
