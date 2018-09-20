@@ -1009,4 +1009,88 @@ mod tests {
 
         assert_eq!(buf, json::to_string_pretty(&config.folders).unwrap());
     }
+
+    #[test]
+    fn test_config_backup() {
+        let tmp = tempfile::tempdir().unwrap();
+        let backup = tmp.path().join("backup");
+
+        fs::create_dir_all(tmp.path().join("origin")).unwrap();
+        fs::create_dir_all(backup.join(".backup")).unwrap();
+
+        let mut file = File::create(backup.join(".backup/config.json")).unwrap();
+        write!(
+            file,
+            "[
+            {{
+                \"path\": \"backup\",
+                \"origin\": \"{origin}\",
+                \"modified\": null
+            }},
+
+            {{
+                \"path\": \"other\",
+                \"origin\": \"{origin}\",
+                \"modified\": null
+            }}
+        ]",
+            origin = tmp.path().join("origin").display().to_string()
+        ).unwrap();
+
+        let mut config = ConfigFile::load(&backup).unwrap();
+        let stamp = config.backup(BackupOptions::new(false)).unwrap();
+
+        assert!(
+            backup
+                .join("backup")
+                .join(stamp.to_rfc3339_opts(SecondsFormat::Nanos, true))
+                .exists()
+        );
+        assert!(
+            backup
+                .join("other")
+                .join(stamp.to_rfc3339_opts(SecondsFormat::Nanos, true))
+                .exists()
+        );
+    }
+
+    #[test]
+    fn test_config_restore() {
+        let origin = tempfile::tempdir().unwrap();
+        let root = tempfile::tempdir().unwrap();
+        let stamp = Utc::now();
+
+        // Create the config file
+        fs::create_dir_all(root.path().join(".backup")).unwrap();
+        write!(
+            File::create(root.path().join(".backup/config.json")).unwrap(),
+            "[
+            {{
+                \"path\": \"backup\",
+                \"origin\": \"{}\",
+                \"modified\": \"{}\"
+            }}
+        ]",
+            origin.path().display().to_string(),
+            stamp.to_rfc3339_opts(SecondsFormat::Nanos, true)
+        ).unwrap();
+
+        // Create some files on the backup
+        let backup = root
+            .path()
+            .join("backup")
+            .join(stamp.to_rfc3339_opts(SecondsFormat::Nanos, true));
+        fs::create_dir_all(&backup).unwrap();
+
+        let file = File::create(backup.join("a.txt")).unwrap();
+        ::std::mem::drop(file);
+        let file = File::create(backup.join("b.txt")).unwrap();
+        ::std::mem::drop(file);
+
+        let config = ConfigFile::load(root.path()).unwrap();
+        config.restore(RestoreOptions::new(false, true)).unwrap();
+
+        assert!(origin.path().join("a.txt").exists());
+        assert!(origin.path().join("b.txt").exists());
+    }
 }
