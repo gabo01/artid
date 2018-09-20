@@ -513,6 +513,42 @@ mod tests {
     }
 
     #[test]
+    fn test_sync_copy_symbolic() {
+        let mut options = SyncOptions::new(false, false, OverwriteMode::Force);
+        options.symbolic = true;
+        let src = tempfile::tempdir().unwrap();
+        let dst = tempfile::tempdir().unwrap();
+
+        // Create two files in src
+        let mut file = File::create(src.path().join("a.txt")).unwrap();
+        write!(file, "aaaa").unwrap();
+        ::std::mem::drop(file);
+        let mut file = File::create(src.path().join("b.txt")).unwrap();
+        write!(file, "bbbb").unwrap();
+        ::std::mem::drop(file);
+
+        DirTree::new(PathBuf::from(src.path()), PathBuf::from(dst.path()))
+            .sync(options)
+            .unwrap();
+
+        assert!(dst.path().join("a.txt").exists());
+        assert!(dst.path().join("b.txt").exists());
+
+        assert!(
+            fs::symlink_metadata(dst.path().join("a.txt"))
+                .unwrap()
+                .file_type()
+                .is_symlink()
+        );
+        assert!(
+            fs::symlink_metadata(dst.path().join("b.txt"))
+                .unwrap()
+                .file_type()
+                .is_symlink()
+        );
+    }
+
+    #[test]
     fn test_sync_copy_recursive() {
         let options = SyncOptions::new(false, false, OverwriteMode::Force);
         let src = tempfile::tempdir().unwrap();
@@ -531,5 +567,31 @@ mod tests {
         let mut buf = String::new();
         File::open(dst.path().join("c/d.txt")).unwrap().read_to_string(&mut buf).unwrap();
         assert_eq!(buf, "dddd");
+    }
+
+    #[test]
+    fn test_sync_copy_symbolic_recursive() {
+        let mut options = SyncOptions::new(false, false, OverwriteMode::Force);
+        options.symbolic = true;
+        let src = tempfile::tempdir().unwrap();
+        let dst = tempfile::tempdir().unwrap();
+
+        // Create a dir with a file in src
+        fs::create_dir(src.path().join("c")).unwrap();
+        let mut file = File::create(src.path().join("c/d.txt")).unwrap();
+        write!(file, "dddd").unwrap();
+        ::std::mem::drop(file);
+
+        DirTree::new(PathBuf::from(src.path()), PathBuf::from(dst.path()))
+            .sync(options)
+            .unwrap();
+
+        assert!(dst.path().join("c/d.txt").exists());
+        assert!(
+            fs::symlink_metadata(dst.path().join("c/d.txt"))
+                .unwrap()
+                .file_type()
+                .is_symlink()
+        );
     }
 }
