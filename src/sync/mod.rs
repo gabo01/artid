@@ -295,14 +295,9 @@ fn modified<P: AsRef<Path>>(file: P) -> Option<SystemTime> {
 
 #[cfg(test)]
 mod tests {
-    extern crate tempfile;
-
     use super::{modified, Branchable, DirTree, Linkable, LinkedPoint, OverwriteMode, SyncOptions};
     use std::ffi::OsString;
-    use std::fs::{self, File};
-    use std::io::{Read, Write};
-    use std::{thread, time};
-    use std::path::PathBuf;
+    use tempfile;
 
     #[test]
     fn test_branching() {
@@ -336,262 +331,290 @@ mod tests {
         );
     }
 
-    #[test]
-    fn test_linked() {
-        let dir = tempfile::tempdir().unwrap();
-        let srcpath = dir.path().join("a.txt");
-        let dstpath = dir.path().join("b.txt");
+    mod linked_point {
+        use super::{modified, DirTree, Linkable, LinkedPoint, OverwriteMode};
+        use std::io::{Read, Write};
+        use std::{fs::File, mem, thread, time};
+        use tempfile;
 
-        let _srcfile = File::create(&srcpath).unwrap();
-        let _dstfile = File::create(&dstpath).unwrap();
-        let tree = DirTree::new(srcpath, dstpath);
-        let link = LinkedPoint::new(tree.root.borrow());
-        assert!(link.synced());
+        #[test]
+        fn test_linked() {
+            let dir = tempfile::tempdir().unwrap();
+            let srcpath = dir.path().join("a.txt");
+            let dstpath = dir.path().join("b.txt");
+
+            let _srcfile = File::create(&srcpath).unwrap();
+            let _dstfile = File::create(&dstpath).unwrap();
+            let tree = DirTree::new(srcpath, dstpath);
+            let link = LinkedPoint::new(tree.root.borrow());
+            assert!(link.synced());
+        }
+
+        #[test]
+        fn test_link_generation_linked() {
+            let dir = tempfile::tempdir().unwrap();
+            let srcpath = dir.path().join("a.txt");
+            let dstpath = dir.path().join("b.txt");
+
+            let _srcfile = File::create(&srcpath).unwrap();
+            let _dstfile = File::create(&dstpath).unwrap();
+            let tree = DirTree::new(srcpath, dstpath);
+            assert!(tree.link().synced());
+        }
+
+        #[test]
+        fn test_mirror_disallowed() {
+            let dir = tempfile::tempdir().unwrap();
+            let srcpath = dir.path().join("a.txt");
+            let dstpath = dir.path().join("b.txt");
+
+            let _srcfile = File::create(&srcpath).unwrap();
+            let _dstfile = File::create(&dstpath).unwrap();
+            let tree = DirTree::new(srcpath, dstpath);
+            assert!(tree.link().mirror(OverwriteMode::Disallow, false).is_err());
+        }
+
+        #[test]
+        fn test_mirror_allow_copy() {
+            let dir = tempfile::tempdir().unwrap();
+            let srcpath = dir.path().join("a.txt");
+            let dstpath = dir.path().join("b.txt");
+
+            let dstfile = File::create(&dstpath).unwrap();
+            mem::drop(dstfile);
+            thread::sleep(time::Duration::from_millis(2000));
+
+            let mut srcfile = File::create(&srcpath).unwrap();
+            write!(srcfile, "Hello, world").unwrap();
+            mem::drop(srcfile);
+
+            assert!(modified(&srcpath).unwrap() > modified(&dstpath).unwrap());
+
+            let tree = DirTree::new(srcpath.clone(), dstpath.clone());
+            assert!(
+                tree.link().mirror(OverwriteMode::Allow, false).is_ok(),
+                "Mirror was not successful"
+            );
+
+            let mut dstfile = File::open(&dstpath).unwrap();
+            let mut string = String::new();
+            dstfile.read_to_string(&mut string).unwrap();
+            assert_eq!(string, String::from("Hello, world"));
+        }
+
+        #[test]
+        fn test_mirror_allow_not_copy() {
+            let dir = tempfile::tempdir().unwrap();
+            let srcpath = dir.path().join("a.txt");
+            let dstpath = dir.path().join("b.txt");
+
+            let mut srcfile = File::create(&srcpath).unwrap();
+            write!(srcfile, "Hello, world").unwrap();
+            mem::drop(srcfile);
+            thread::sleep(time::Duration::from_millis(2000));
+
+            let dstfile = File::create(&dstpath).unwrap();
+            mem::drop(dstfile);
+
+            assert!(modified(&dstpath).unwrap() > modified(&srcpath).unwrap());
+
+            let tree = DirTree::new(srcpath.clone(), dstpath.clone());
+            assert!(
+                tree.link().mirror(OverwriteMode::Allow, false).is_ok(),
+                "Mirror was not successful"
+            );
+
+            let mut dstfile = File::open(&dstpath).unwrap();
+            let mut string = String::new();
+            dstfile.read_to_string(&mut string).unwrap();
+            assert_ne!(string, String::from("Hello, world"));
+        }
+
+        #[test]
+        fn test_mirror_force() {
+            let dir = tempfile::tempdir().unwrap();
+            let srcpath = dir.path().join("a.txt");
+            let dstpath = dir.path().join("b.txt");
+
+            let mut srcfile = File::create(&srcpath).unwrap();
+            write!(srcfile, "Hello, world").unwrap();
+            mem::drop(srcfile);
+            thread::sleep(time::Duration::from_millis(2000));
+
+            let dstfile = File::create(&dstpath).unwrap();
+            mem::drop(dstfile);
+
+            assert!(modified(&dstpath).unwrap() > modified(&srcpath).unwrap());
+
+            let tree = DirTree::new(srcpath.clone(), dstpath.clone());
+            assert!(
+                tree.link().mirror(OverwriteMode::Force, false).is_ok(),
+                "Mirror was not successful"
+            );
+
+            let mut dstfile = File::open(&dstpath).unwrap();
+            let mut string = String::new();
+            dstfile.read_to_string(&mut string).unwrap();
+            assert_eq!(string, String::from("Hello, world"));
+        }
+
+        #[test]
+        fn test_mirror_force_allow() {
+            let dir = tempfile::tempdir().unwrap();
+            let srcpath = dir.path().join("a.txt");
+            let dstpath = dir.path().join("b.txt");
+
+            let dstfile = File::create(&dstpath).unwrap();
+            mem::drop(dstfile);
+            thread::sleep(time::Duration::from_millis(2000));
+
+            let mut srcfile = File::create(&srcpath).unwrap();
+            write!(srcfile, "Hello, world").unwrap();
+            mem::drop(srcfile);
+
+            assert!(modified(&srcpath).unwrap() > modified(&dstpath).unwrap());
+
+            let tree = DirTree::new(srcpath.clone(), dstpath.clone());
+            assert!(
+                tree.link().mirror(OverwriteMode::Force, false).is_ok(),
+                "Mirror was not successful"
+            );
+
+            let mut dstfile = File::open(&dstpath).unwrap();
+            let mut string = String::new();
+            dstfile.read_to_string(&mut string).unwrap();
+            assert_eq!(string, String::from("Hello, world"));
+        }
     }
 
-    #[test]
-    fn test_link_generation_linked() {
-        let dir = tempfile::tempdir().unwrap();
-        let srcpath = dir.path().join("a.txt");
-        let dstpath = dir.path().join("b.txt");
+    mod sync_op {
+        use super::{DirTree, OverwriteMode, SyncOptions};
+        use std::fs::{self, File};
+        use std::io::{Read, Write};
+        use std::{mem, path::PathBuf};
+        use tempfile;
 
-        let _srcfile = File::create(&srcpath).unwrap();
-        let _dstfile = File::create(&dstpath).unwrap();
-        let tree = DirTree::new(srcpath, dstpath);
-        assert!(tree.link().synced());
-    }
+        #[test]
+        fn test_sync_copy_single_dir() {
+            let options = SyncOptions::new(false, false, OverwriteMode::Force);
+            let src = tempfile::tempdir().unwrap();
+            let dst = tempfile::tempdir().unwrap();
 
-    #[test]
-    fn test_mirror_disallowed() {
-        let dir = tempfile::tempdir().unwrap();
-        let srcpath = dir.path().join("a.txt");
-        let dstpath = dir.path().join("b.txt");
+            // Create two files in src
+            let mut file = File::create(src.path().join("a.txt")).unwrap();
+            write!(file, "aaaa").unwrap();
+            mem::drop(file);
+            let mut file = File::create(src.path().join("b.txt")).unwrap();
+            write!(file, "bbbb").unwrap();
+            mem::drop(file);
 
-        let _srcfile = File::create(&srcpath).unwrap();
-        let _dstfile = File::create(&dstpath).unwrap();
-        let tree = DirTree::new(srcpath, dstpath);
-        assert!(tree.link().mirror(OverwriteMode::Disallow, false).is_err());
-    }
+            DirTree::new(PathBuf::from(src.path()), PathBuf::from(dst.path()))
+                .sync(options)
+                .unwrap();
 
-    #[test]
-    fn test_mirror_allow_copy() {
-        let dir = tempfile::tempdir().unwrap();
-        let srcpath = dir.path().join("a.txt");
-        let dstpath = dir.path().join("b.txt");
+            assert!(dst.path().join("a.txt").exists());
+            assert!(dst.path().join("b.txt").exists());
 
-        let dstfile = File::create(&dstpath).unwrap();
-        ::std::mem::drop(dstfile);
-        thread::sleep(time::Duration::from_millis(2000));
-
-        let mut srcfile = File::create(&srcpath).unwrap();
-        write!(srcfile, "Hello, world").unwrap();
-        ::std::mem::drop(srcfile);
-
-        assert!(modified(&srcpath).unwrap() > modified(&dstpath).unwrap());
-
-        let tree = DirTree::new(srcpath.clone(), dstpath.clone());
-        assert!(
-            tree.link().mirror(OverwriteMode::Allow, false).is_ok(),
-            "Mirror was not successful"
-        );
-
-        let mut dstfile = File::open(&dstpath).unwrap();
-        let mut string = String::new();
-        dstfile.read_to_string(&mut string).unwrap();
-        assert_eq!(string, String::from("Hello, world"));
-    }
-
-    #[test]
-    fn test_mirror_allow_not_copy() {
-        let dir = tempfile::tempdir().unwrap();
-        let srcpath = dir.path().join("a.txt");
-        let dstpath = dir.path().join("b.txt");
-
-        let mut srcfile = File::create(&srcpath).unwrap();
-        write!(srcfile, "Hello, world").unwrap();
-        ::std::mem::drop(srcfile);
-        thread::sleep(time::Duration::from_millis(2000));
-
-        let dstfile = File::create(&dstpath).unwrap();
-        ::std::mem::drop(dstfile);
-
-        assert!(modified(&dstpath).unwrap() > modified(&srcpath).unwrap());
-
-        let tree = DirTree::new(srcpath.clone(), dstpath.clone());
-        assert!(
-            tree.link().mirror(OverwriteMode::Allow, false).is_ok(),
-            "Mirror was not successful"
-        );
-
-        let mut dstfile = File::open(&dstpath).unwrap();
-        let mut string = String::new();
-        dstfile.read_to_string(&mut string).unwrap();
-        assert_ne!(string, String::from("Hello, world"));
-    }
-
-    #[test]
-    fn test_mirror_force() {
-        let dir = tempfile::tempdir().unwrap();
-        let srcpath = dir.path().join("a.txt");
-        let dstpath = dir.path().join("b.txt");
-
-        let mut srcfile = File::create(&srcpath).unwrap();
-        write!(srcfile, "Hello, world").unwrap();
-        ::std::mem::drop(srcfile);
-        thread::sleep(time::Duration::from_millis(2000));
-
-        let dstfile = File::create(&dstpath).unwrap();
-        ::std::mem::drop(dstfile);
-
-        assert!(modified(&dstpath).unwrap() > modified(&srcpath).unwrap());
-
-        let tree = DirTree::new(srcpath.clone(), dstpath.clone());
-        assert!(
-            tree.link().mirror(OverwriteMode::Force, false).is_ok(),
-            "Mirror was not successful"
-        );
-
-        let mut dstfile = File::open(&dstpath).unwrap();
-        let mut string = String::new();
-        dstfile.read_to_string(&mut string).unwrap();
-        assert_eq!(string, String::from("Hello, world"));
-    }
-
-    #[test]
-    fn test_mirror_force_allow() {
-        let dir = tempfile::tempdir().unwrap();
-        let srcpath = dir.path().join("a.txt");
-        let dstpath = dir.path().join("b.txt");
-
-        let dstfile = File::create(&dstpath).unwrap();
-        ::std::mem::drop(dstfile);
-        thread::sleep(time::Duration::from_millis(2000));
-
-        let mut srcfile = File::create(&srcpath).unwrap();
-        write!(srcfile, "Hello, world").unwrap();
-        ::std::mem::drop(srcfile);
-
-        assert!(modified(&srcpath).unwrap() > modified(&dstpath).unwrap());
-
-        let tree = DirTree::new(srcpath.clone(), dstpath.clone());
-        assert!(
-            tree.link().mirror(OverwriteMode::Force, false).is_ok(),
-            "Mirror was not successful"
-        );
-
-        let mut dstfile = File::open(&dstpath).unwrap();
-        let mut string = String::new();
-        dstfile.read_to_string(&mut string).unwrap();
-        assert_eq!(string, String::from("Hello, world"));
-    }
-
-    #[test]
-    fn test_sync_copy_single_dir() {
-        let options = SyncOptions::new(false, false, OverwriteMode::Force);
-        let src = tempfile::tempdir().unwrap();
-        let dst = tempfile::tempdir().unwrap();
-
-        // Create two files in src
-        let mut file = File::create(src.path().join("a.txt")).unwrap();
-        write!(file, "aaaa").unwrap();
-        ::std::mem::drop(file);
-        let mut file = File::create(src.path().join("b.txt")).unwrap();
-        write!(file, "bbbb").unwrap();
-        ::std::mem::drop(file);
-
-        DirTree::new(PathBuf::from(src.path()), PathBuf::from(dst.path())).sync(options).unwrap();
-
-        assert!(dst.path().join("a.txt").exists());
-        assert!(dst.path().join("b.txt").exists());
-
-        let mut buf = String::new();
-        File::open(dst.path().join("a.txt")).unwrap().read_to_string(&mut buf).unwrap();
-        assert_eq!(buf, "aaaa");
-        buf.truncate(0);
-        File::open(dst.path().join("b.txt")).unwrap().read_to_string(&mut buf).unwrap();
-        assert_eq!(buf, "bbbb");
-    }
-
-    #[test]
-    fn test_sync_copy_symbolic() {
-        let mut options = SyncOptions::new(false, false, OverwriteMode::Force);
-        options.symbolic = true;
-        let src = tempfile::tempdir().unwrap();
-        let dst = tempfile::tempdir().unwrap();
-
-        // Create two files in src
-        let mut file = File::create(src.path().join("a.txt")).unwrap();
-        write!(file, "aaaa").unwrap();
-        ::std::mem::drop(file);
-        let mut file = File::create(src.path().join("b.txt")).unwrap();
-        write!(file, "bbbb").unwrap();
-        ::std::mem::drop(file);
-
-        DirTree::new(PathBuf::from(src.path()), PathBuf::from(dst.path()))
-            .sync(options)
-            .unwrap();
-
-        assert!(dst.path().join("a.txt").exists());
-        assert!(dst.path().join("b.txt").exists());
-
-        assert!(
-            fs::symlink_metadata(dst.path().join("a.txt"))
+            let mut buf = String::new();
+            File::open(dst.path().join("a.txt"))
                 .unwrap()
-                .file_type()
-                .is_symlink()
-        );
-        assert!(
-            fs::symlink_metadata(dst.path().join("b.txt"))
+                .read_to_string(&mut buf)
+                .unwrap();
+            assert_eq!(buf, "aaaa");
+            buf.truncate(0);
+            File::open(dst.path().join("b.txt"))
                 .unwrap()
-                .file_type()
-                .is_symlink()
-        );
-    }
+                .read_to_string(&mut buf)
+                .unwrap();
+            assert_eq!(buf, "bbbb");
+        }
 
-    #[test]
-    fn test_sync_copy_recursive() {
-        let options = SyncOptions::new(false, false, OverwriteMode::Force);
-        let src = tempfile::tempdir().unwrap();
-        let dst = tempfile::tempdir().unwrap();
+        #[test]
+        fn test_sync_copy_symbolic() {
+            let mut options = SyncOptions::new(false, false, OverwriteMode::Force);
+            options.symbolic = true;
+            let src = tempfile::tempdir().unwrap();
+            let dst = tempfile::tempdir().unwrap();
 
-        // Create a dir with a file in src
-        fs::create_dir(src.path().join("c")).unwrap();
-        let mut file = File::create(src.path().join("c/d.txt")).unwrap();
-        write!(file, "dddd").unwrap();
-        ::std::mem::drop(file);
+            // Create two files in src
+            let mut file = File::create(src.path().join("a.txt")).unwrap();
+            write!(file, "aaaa").unwrap();
+            mem::drop(file);
+            let mut file = File::create(src.path().join("b.txt")).unwrap();
+            write!(file, "bbbb").unwrap();
+            mem::drop(file);
 
-        DirTree::new(PathBuf::from(src.path()), PathBuf::from(dst.path())).sync(options).unwrap();
+            DirTree::new(PathBuf::from(src.path()), PathBuf::from(dst.path()))
+                .sync(options)
+                .unwrap();
 
-        assert!(dst.path().join("c/d.txt").exists());
+            assert!(dst.path().join("a.txt").exists());
+            assert!(dst.path().join("b.txt").exists());
 
-        let mut buf = String::new();
-        File::open(dst.path().join("c/d.txt")).unwrap().read_to_string(&mut buf).unwrap();
-        assert_eq!(buf, "dddd");
-    }
+            assert!(
+                fs::symlink_metadata(dst.path().join("a.txt"))
+                    .unwrap()
+                    .file_type()
+                    .is_symlink()
+            );
+            assert!(
+                fs::symlink_metadata(dst.path().join("b.txt"))
+                    .unwrap()
+                    .file_type()
+                    .is_symlink()
+            );
+        }
 
-    #[test]
-    fn test_sync_copy_symbolic_recursive() {
-        let mut options = SyncOptions::new(false, false, OverwriteMode::Force);
-        options.symbolic = true;
-        let src = tempfile::tempdir().unwrap();
-        let dst = tempfile::tempdir().unwrap();
+        #[test]
+        fn test_sync_copy_recursive() {
+            let options = SyncOptions::new(false, false, OverwriteMode::Force);
+            let src = tempfile::tempdir().unwrap();
+            let dst = tempfile::tempdir().unwrap();
 
-        // Create a dir with a file in src
-        fs::create_dir(src.path().join("c")).unwrap();
-        let mut file = File::create(src.path().join("c/d.txt")).unwrap();
-        write!(file, "dddd").unwrap();
-        ::std::mem::drop(file);
+            // Create a dir with a file in src
+            fs::create_dir(src.path().join("c")).unwrap();
+            let mut file = File::create(src.path().join("c/d.txt")).unwrap();
+            write!(file, "dddd").unwrap();
+            mem::drop(file);
 
-        DirTree::new(PathBuf::from(src.path()), PathBuf::from(dst.path()))
-            .sync(options)
-            .unwrap();
+            DirTree::new(PathBuf::from(src.path()), PathBuf::from(dst.path()))
+                .sync(options)
+                .unwrap();
 
-        assert!(dst.path().join("c/d.txt").exists());
-        assert!(
-            fs::symlink_metadata(dst.path().join("c/d.txt"))
+            assert!(dst.path().join("c/d.txt").exists());
+
+            let mut buf = String::new();
+            File::open(dst.path().join("c/d.txt"))
                 .unwrap()
-                .file_type()
-                .is_symlink()
-        );
+                .read_to_string(&mut buf)
+                .unwrap();
+            assert_eq!(buf, "dddd");
+        }
+
+        #[test]
+        fn test_sync_copy_symbolic_recursive() {
+            let mut options = SyncOptions::new(false, false, OverwriteMode::Force);
+            options.symbolic = true;
+            let src = tempfile::tempdir().unwrap();
+            let dst = tempfile::tempdir().unwrap();
+
+            // Create a dir with a file in src
+            fs::create_dir(src.path().join("c")).unwrap();
+            let mut file = File::create(src.path().join("c/d.txt")).unwrap();
+            write!(file, "dddd").unwrap();
+            mem::drop(file);
+
+            DirTree::new(PathBuf::from(src.path()), PathBuf::from(dst.path()))
+                .sync(options)
+                .unwrap();
+
+            assert!(dst.path().join("c/d.txt").exists());
+            assert!(
+                fs::symlink_metadata(dst.path().join("c/d.txt"))
+                    .unwrap()
+                    .file_type()
+                    .is_symlink()
+            );
+        }
     }
 }

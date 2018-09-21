@@ -181,26 +181,30 @@ impl<P: AsRef<Path>> From<P> for FileSystemType {
 
 #[cfg(test)]
 mod tests {
-    extern crate tempfile;
-
     use super::{check, DirRoot, FileSystemType};
     use std::cell::RefCell;
-    use std::fs::File;
+    use tempfile;
 
-    #[test]
-    fn test_system_dir() {
-        let dir = tempfile::tempdir().unwrap();
-        assert_eq!(FileSystemType::from(dir.path()), FileSystemType::Dir);
-    }
+    mod file_system {
+        use super::FileSystemType;
+        use std::fs::File;
+        use tempfile;
 
-    #[test]
-    fn test_system_file() {
-        let dir = tempfile::tempdir().unwrap();
-        let _file = File::create(dir.path().join("a.txt"));
-        assert_eq!(
-            FileSystemType::from(dir.path().join("a.txt")),
-            FileSystemType::File
-        );
+        #[test]
+        fn test_system_dir() {
+            let dir = tempfile::tempdir().unwrap();
+            assert_eq!(FileSystemType::from(dir.path()), FileSystemType::Dir);
+        }
+
+        #[test]
+        fn test_system_file() {
+            let dir = tempfile::tempdir().unwrap();
+            let _file = File::create(dir.path().join("a.txt"));
+            assert_eq!(
+                FileSystemType::from(dir.path().join("a.txt")),
+                FileSystemType::File
+            );
+        }
     }
 
     #[test]
