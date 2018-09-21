@@ -200,10 +200,7 @@ mod tests {
         fn test_system_file() {
             let dir = tmpdir!();
             let path = create_file!(tmppath!(dir, "a.txt"));
-            assert_eq!(
-                FileSystemType::from(path),
-                FileSystemType::File
-            );
+            assert_eq!(FileSystemType::from(path), FileSystemType::File);
         }
     }
 

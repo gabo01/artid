@@ -226,8 +226,8 @@ impl<'a> LinkedPoint<'a> {
 
     /// Syncs (or Links) the two points on the filesystem. The behaviour of this function
     /// for making the sync is controlled by the overwrite option. See the docs for
-    /// OverwriteMode to get more info. 
-    /// 
+    /// OverwriteMode to get more info.
+    ///
     /// The behaviour is also controlled by the symbolic parameter. If set to true the
     /// function will create a symbolic link instead of copying the file.
     pub(self) fn mirror(&self, overwrite: OverwriteMode, symbolic: bool) -> Result<()> {

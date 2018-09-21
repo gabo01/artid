@@ -56,7 +56,11 @@ impl<'a> App<'a> {
         let matches = app.clone().get_matches();
         let backtrace = matches.is_present("backtrace");
 
-        App { app, matches, backtrace }
+        App {
+            app,
+            matches,
+            backtrace,
+        }
     }
 
     pub fn run(&mut self) -> Result<()> {

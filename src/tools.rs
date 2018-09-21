@@ -34,16 +34,14 @@ macro_rules! create_file {
 
 #[macro_export]
 macro_rules! read_file {
-    ($file:expr) => {
-        {
-            use std::io::Read;
+    ($file:expr) => {{
+        use std::io::Read;
 
-            let mut file = File::open($file).expect("Unable to open file");
-            let mut buf = String::new();
-            file.read_to_string(&mut buf).expect("Unable to read file");
-            buf
-        }
-    };
+        let mut file = File::open($file).expect("Unable to open file");
+        let mut buf = String::new();
+        file.read_to_string(&mut buf).expect("Unable to read file");
+        buf
+    }};
 }
 
 #[macro_export]
@@ -55,12 +53,10 @@ macro_rules! symlink {
 
 #[macro_export]
 macro_rules! filetype {
-    ($path:expr) => {
-        {
-            use std::fs;
-            fs::symlink_metadata($path)
-                    .expect("Unable to get metadata")
-                    .file_type()
-        }
-    };
+    ($path:expr) => {{
+        use std::fs;
+        fs::symlink_metadata($path)
+            .expect("Unable to get metadata")
+            .file_type()
+    }};
 }

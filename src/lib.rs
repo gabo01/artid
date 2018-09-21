@@ -240,7 +240,9 @@ where
     /// RestoreOptions to see what things can be modified.
     pub fn restore(self, options: RestoreOptions) -> Result<()> {
         for folder in &self.folders {
-            folder.restore(&self.dir, options).context(AppErrorType::RestoreFolder)?;
+            folder
+                .restore(&self.dir, options)
+                .context(AppErrorType::RestoreFolder)?;
         }
 
         Ok(())
@@ -308,7 +310,8 @@ impl Folder {
         let mut dirs = self.resolve(root);
         if let Some(modified) = self.modified {
             debug!("Starting restore of: {}", pathlight(&dirs.rel));
-            dirs.rel.push(modified.to_rfc3339_opts(SecondsFormat::Nanos, true));
+            dirs.rel
+                .push(modified.to_rfc3339_opts(SecondsFormat::Nanos, true));
 
             Ok(DirTree::new(dirs.rel, dirs.abs)
                 .sync(options.into())
@@ -372,12 +375,10 @@ mod tests {
     use {sync, BackupOptions, ConfigFile, Folder, RestoreOptions};
 
     macro_rules! rfc3339 {
-        ($stamp:expr) => {
-            {
-                use chrono::SecondsFormat;
-                $stamp.to_rfc3339_opts(SecondsFormat::Nanos, true)
-            }            
-        };
+        ($stamp:expr) => {{
+            use chrono::SecondsFormat;
+            $stamp.to_rfc3339_opts(SecondsFormat::Nanos, true)
+        }};
     }
 
     mod options {
@@ -414,10 +415,10 @@ mod tests {
 
     mod folder {
         use super::{BackupOptions, Folder, RestoreOptions};
-        use chrono::{offset::Utc};
+        use chrono::offset::Utc;
         use env_path::EnvPath;
         use std::fs::{self, File, OpenOptions};
-        use std::{env, mem, path::PathBuf, thread, time, io::Write};
+        use std::{env, io::Write, mem, path::PathBuf, thread, time};
         use tempfile;
 
         #[test]
@@ -443,9 +444,7 @@ mod tests {
 
             assert_eq!(
                 dirs.abs.display().to_string(),
-                PathBuf::from(home.clone())
-                    .display()
-                    .to_string()
+                PathBuf::from(home.clone()).display().to_string()
             );
         }
 
@@ -496,7 +495,9 @@ mod tests {
                 None,
             );
 
-            folder.backup(root.path(), stamp, options).expect("Unable to perform backup");
+            folder
+                .backup(root.path(), stamp, options)
+                .expect("Unable to perform backup");
 
             let mut backup = tmppath!(root, "backup");
             assert!(backup.exists());
@@ -508,11 +509,13 @@ mod tests {
             assert!(backup.join("b.txt").exists());
 
             assert_eq!(read_file!(backup.join("a.txt")), "aaaa");
-            assert_eq!(read_file!(backup.join("b.txt")), "bbbb");            
+            assert_eq!(read_file!(backup.join("b.txt")), "bbbb");
 
             thread::sleep(time::Duration::from_millis(2000));
             let stamp = Utc::now();
-            folder.backup(root.path(), stamp, options).expect("Unable to perform backup");
+            folder
+                .backup(root.path(), stamp, options)
+                .expect("Unable to perform backup");
 
             backup.pop();
             backup.push(rfc3339!(stamp));
@@ -538,7 +541,9 @@ mod tests {
                 None,
             );
 
-            folder.backup(root.path(), stamp, options).expect("Unable to perform backup");
+            folder
+                .backup(root.path(), stamp, options)
+                .expect("Unable to perform backup");
 
             let mut backup = root.path().join("backup");
             assert!(backup.exists());
@@ -558,7 +563,9 @@ mod tests {
             create_file!(tmppath!(origin, "c.txt"), "cccc");
 
             let stamp = Utc::now();
-            folder.backup(root.path(), stamp, options).expect("Unable to perform backup");
+            folder
+                .backup(root.path(), stamp, options)
+                .expect("Unable to perform backup");
 
             backup.pop();
             backup.push(rfc3339!(stamp));
@@ -588,7 +595,9 @@ mod tests {
                 None,
             );
 
-            folder.backup(root.path(), stamp, options).expect("Unable to perform backup");
+            folder
+                .backup(root.path(), stamp, options)
+                .expect("Unable to perform backup");
 
             let mut backup = root.path().join("backup");
             assert!(backup.exists());
@@ -614,7 +623,9 @@ mod tests {
             mem::drop(file);
 
             let stamp = Utc::now();
-            folder.backup(root.path(), stamp, options).expect("Unable to perform backup");
+            folder
+                .backup(root.path(), stamp, options)
+                .expect("Unable to perform backup");
 
             backup.pop();
             backup.push(rfc3339!(stamp));
@@ -699,7 +710,7 @@ mod tests {
 
     mod config_file {
         use super::{BackupOptions, ConfigFile, RestoreOptions};
-        use chrono::{offset::Utc};
+        use chrono::offset::Utc;
         use std::fs::{self, File};
         use std::io::Write;
         use {json, tempfile};
@@ -707,46 +718,50 @@ mod tests {
         #[test]
         fn test_config_file_load_valid() {
             let dir = tmpdir!();
-            create_file!(tmppath!(dir, "config.json"), 
-            "[
+            create_file!(
+                tmppath!(dir, "config.json"),
+                "[
                 {{
                     \"path\": \"asd\", 
                     \"origin\": \"$HOME\", 
                     \"modified\": null
                 }}
-            ]");
-            assert!(
-                ConfigFile::load_from(dir, "config.json").is_ok()
+            ]"
             );
+            assert!(ConfigFile::load_from(dir, "config.json").is_ok());
         }
 
         #[test]
         fn test_config_file_load_invalid() {
             let dir = tmpdir!();
-            create_file!(tmppath!(dir, "config.json"), 
-            "[
+            create_file!(
+                tmppath!(dir, "config.json"),
+                "[
                 {{
                     \"path\": \"asd, 
                     \"origin\": \"$HOME\", 
                     \"modified\": null
                 }}
-            ]");
-            assert!(
-                ConfigFile::load_from(dir, "config.json").is_err()
+            ]"
             );
+            assert!(ConfigFile::load_from(dir, "config.json").is_err());
         }
 
         #[test]
         fn test_config_load() {
             let tmp = tmpdir!();
             fs::create_dir(tmppath!(tmp, ".backup")).expect("Unable to create folder");
-            create_file!(tmppath!(tmp, ".backup/config.json"), "[
+            create_file!(
+                tmppath!(tmp, ".backup/config.json"),
+                "[
                 {{
                     \"path\": \"backup\",
                     \"origin\": \"{}\",
                     \"modified\": null
                 }}
-            ]",  tmppath!(tmp, "origin").display().to_string());
+            ]",
+                tmppath!(tmp, "origin").display().to_string()
+            );
             assert!(ConfigFile::load(tmp.path()).is_ok());
         }
 
@@ -769,7 +784,6 @@ mod tests {
 
             let _config = ConfigFile::load_from(tmp.path(), "config.json").unwrap();
         }
-
 
         #[test]
         fn test_config_file_save_exists() {
@@ -799,19 +813,26 @@ mod tests {
         #[test]
         fn test_config_save_to_format() {
             let tmp = tmpdir!();
-            create_file!(tmppath!(tmp, "config.json"), "[
+            create_file!(
+                tmppath!(tmp, "config.json"),
+                "[
                 {{
                     \"path\": \"backup\",
                     \"origin\": \"{}\",
                     \"modified\": null
                 }}
-            ]", tmppath!(tmp, "origin").display().to_string());
+            ]",
+                tmppath!(tmp, "origin").display().to_string()
+            );
 
-            let config = ConfigFile::load_from(tmp.path(), "config.json").expect("Unable to load file");
-            config.save_to("config2.json").expect("Unable to save the file");
+            let config =
+                ConfigFile::load_from(tmp.path(), "config.json").expect("Unable to load file");
+            config
+                .save_to("config2.json")
+                .expect("Unable to save the file");
 
             assert_eq!(
-                read_file!(tmppath!(tmp, "config2.json")), 
+                read_file!(tmppath!(tmp, "config2.json")),
                 json::to_string_pretty(&config.folders).expect("Unable to serialize")
             );
         }
@@ -823,7 +844,7 @@ mod tests {
 
             let config = ConfigFile {
                 dir: tmp.path(),
-                folders: vec![]
+                folders: vec![],
             };
             config.save().expect("Unable to save");
 
@@ -838,7 +859,9 @@ mod tests {
             fs::create_dir(tmppath!(tmp, "origin")).expect("Unable to create path");
             fs::create_dir_all(backup.join(".backup")).expect("Unable to create path");
 
-            create_file!(backup.join(".backup/config.json"), "[
+            create_file!(
+                backup.join(".backup/config.json"),
+                "[
                 {{
                     \"path\": \"backup\",
                     \"origin\": \"{origin}\",
@@ -850,10 +873,14 @@ mod tests {
                     \"origin\": \"{origin}\",
                     \"modified\": null
                 }}
-            ]", origin=tmppath!(tmp, "origin").display().to_string());
+            ]",
+                origin = tmppath!(tmp, "origin").display().to_string()
+            );
 
             let mut config = ConfigFile::load(&backup).expect("Unable to load file");
-            let stamp = config.backup(BackupOptions::new(false)).expect("Unable to perform backup");
+            let stamp = config
+                .backup(BackupOptions::new(false))
+                .expect("Unable to perform backup");
 
             assert!(backup.join(format!("backup/{}", rfc3339!(stamp))).exists());
             assert!(backup.join(format!("other/{}", rfc3339!(stamp))).exists());
@@ -866,13 +893,18 @@ mod tests {
 
             // Create the config file
             fs::create_dir(tmppath!(root, ".backup")).expect("Unable to create path");
-            create_file!(tmppath!(root, ".backup/config.json"), "[
+            create_file!(
+                tmppath!(root, ".backup/config.json"),
+                "[
                 {{
                     \"path\": \"backup\",
                     \"origin\": \"{}\",
                     \"modified\": \"{}\"
                 }}
-            ]", origin.path().display().to_string(), rfc3339!(stamp));
+            ]",
+                origin.path().display().to_string(),
+                rfc3339!(stamp)
+            );
 
             // Create some files on the backup
             let backup = tmppath!(root, format!("backup/{}", rfc3339!(stamp)));
@@ -881,7 +913,9 @@ mod tests {
             create_file!(backup.join("b.txt"));
 
             let config = ConfigFile::load(root.path()).expect("Unable to load file");
-            config.restore(RestoreOptions::new(false, true)).expect("Unable to perform restore");
+            config
+                .restore(RestoreOptions::new(false, true))
+                .expect("Unable to perform restore");
 
             assert!(tmppath!(origin, "a.txt").exists());
             assert!(tmppath!(origin, "b.txt").exists());
