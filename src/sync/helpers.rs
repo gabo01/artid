@@ -192,16 +192,16 @@ mod tests {
 
         #[test]
         fn test_system_dir() {
-            let dir = tempfile::tempdir().unwrap();
+            let dir = tmpdir!();
             assert_eq!(FileSystemType::from(dir.path()), FileSystemType::Dir);
         }
 
         #[test]
         fn test_system_file() {
-            let dir = tempfile::tempdir().unwrap();
-            let _file = File::create(dir.path().join("a.txt"));
+            let dir = tmpdir!();
+            let path = create_file!(tmppath!(dir, "a.txt"));
             assert_eq!(
-                FileSystemType::from(dir.path().join("a.txt")),
+                FileSystemType::from(path),
                 FileSystemType::File
             );
         }
@@ -209,27 +209,25 @@ mod tests {
 
     #[test]
     fn test_check_creation() {
-        let src = tempfile::tempdir().unwrap();
-        let dst = src.path().join("asd");
+        let src = tmpdir!();
+        let dst = tmppath!(src, "asd");;
         let mut clean = true;
 
         let root = RefCell::new(DirRoot::new(src.path().into(), dst.clone()));
         check(root.borrow(), &mut clean).unwrap();
 
-        assert!(dst.exists(), "Directory was not created");
-        assert_eq!(clean, false);
+        assert!(dst.exists());
+        assert!(!clean);
     }
 
     #[test]
     fn test_check_not_creation() {
-        let src = tempfile::tempdir().unwrap();
-        let dst = tempfile::tempdir().unwrap();
+        let (src, dst) = (tmpdir!(), tmpdir!());
         let mut clean = true;
 
         let root = RefCell::new(DirRoot::new(src.path().into(), dst.path().into()));
         check(root.borrow(), &mut clean).unwrap();
 
-        assert_eq!(clean, true);
+        assert!(clean);
     }
-
 }

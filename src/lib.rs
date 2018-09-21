@@ -43,6 +43,10 @@ macro_rules! err {
     };
 }
 
+#[cfg(test)]
+#[macro_use]
+mod tools;
+
 pub mod errors;
 pub mod logger;
 mod sync;
@@ -367,6 +371,15 @@ impl Folder {
 mod tests {
     use {sync, BackupOptions, ConfigFile, Folder, RestoreOptions};
 
+    macro_rules! rfc3339 {
+        ($stamp:expr) => {
+            {
+                use chrono::SecondsFormat;
+                $stamp.to_rfc3339_opts(SecondsFormat::Nanos, true)
+            }            
+        };
+    }
+
     mod options {
         use super::{
             sync::{OverwriteMode, SyncOptions},
@@ -379,7 +392,7 @@ mod tests {
             let sync: SyncOptions = backup.clone().into();
 
             assert_eq!(sync.warn, backup.warn);
-            assert_eq!(sync.clean, true);
+            assert!(sync.clean);
             assert_eq!(sync.overwrite, OverwriteMode::Allow);
         }
 
@@ -389,7 +402,7 @@ mod tests {
             let sync: SyncOptions = restore.clone().into();
 
             assert_eq!(sync.warn, restore.warn);
-            assert_eq!(sync.clean, false);
+            assert!(!sync.clean);
             assert_eq!(sync.overwrite, OverwriteMode::Force);
 
             let restore = RestoreOptions::new(true, false);
@@ -401,26 +414,28 @@ mod tests {
 
     mod folder {
         use super::{BackupOptions, Folder, RestoreOptions};
-        use chrono::{offset::Utc, SecondsFormat};
+        use chrono::{offset::Utc};
         use env_path::EnvPath;
         use std::fs::{self, File, OpenOptions};
-        use std::io::{Read, Write};
-        use std::{env, mem, path::PathBuf, thread, time};
+        use std::{env, mem, path::PathBuf, thread, time, io::Write};
         use tempfile;
 
         #[test]
         fn test_folder_resolve() {
+            let home = env::var("HOME").expect("Unable to access $HOME var");
+            let user = env::var("USER").expect("Unable to access $USER var");
+
             let folder = Folder {
                 path: EnvPath::new("config"),
-                origin: EnvPath::new(env::var("HOME").unwrap()),
+                origin: EnvPath::new(home.clone()),
                 modified: None,
             };
 
-            let dirs = folder.resolve(env::var("USER").unwrap());
+            let dirs = folder.resolve(user.clone());
 
             assert_eq!(
                 dirs.rel.display().to_string(),
-                PathBuf::from(env::var("USER").unwrap())
+                PathBuf::from(user.clone())
                     .join("config")
                     .display()
                     .to_string()
@@ -428,7 +443,7 @@ mod tests {
 
             assert_eq!(
                 dirs.abs.display().to_string(),
-                PathBuf::from(env::var("HOME").unwrap())
+                PathBuf::from(home.clone())
                     .display()
                     .to_string()
             );
@@ -436,17 +451,11 @@ mod tests {
 
         #[test]
         fn test_folder_backup_single() {
-            let origin = tempfile::tempdir().unwrap();
+            let origin = tmpdir!();
+            create_file!(tmppath!(origin, "a.txt"), "aaaa");
+            create_file!(tmppath!(origin, "b.txt"), "bbbb");
 
-            // Create two files in origin
-            let mut file = File::create(origin.path().join("a.txt")).unwrap();
-            write!(file, "aaaa").unwrap();
-            mem::drop(file);
-            let mut file = File::create(origin.path().join("b.txt")).unwrap();
-            write!(file, "bbbb").unwrap();
-            mem::drop(file);
-
-            let root = tempfile::tempdir().unwrap();
+            let root = tmpdir!();
 
             let stamp = Utc::now();
             let options = BackupOptions::new(false);
@@ -456,44 +465,28 @@ mod tests {
                 EnvPath::new(origin.path().display().to_string()),
                 None,
             ).backup(root.path(), stamp, options)
-            .unwrap();
+            .expect("Unable to perform backup");
 
-            let mut backup = root.path().join("backup");
+            let mut backup = tmppath!(&root, "backup");
             assert!(backup.exists());
 
-            backup.push(stamp.to_rfc3339_opts(SecondsFormat::Nanos, true));
-            assert!(backup.exists());
+            backup.push(rfc3339!(stamp));
 
+            assert!(backup.exists());
             assert!(backup.join("a.txt").exists());
             assert!(backup.join("b.txt").exists());
 
-            let mut buf = String::new();
-            File::open(backup.join("a.txt"))
-                .unwrap()
-                .read_to_string(&mut buf)
-                .unwrap();
-            assert_eq!(buf, "aaaa");
-            buf.truncate(0);
-            File::open(backup.join("b.txt"))
-                .unwrap()
-                .read_to_string(&mut buf)
-                .unwrap();
-            assert_eq!(buf, "bbbb");
+            assert_eq!(read_file!(backup.join("a.txt")), "aaaa");
+            assert_eq!(read_file!(backup.join("b.txt")), "bbbb");
         }
 
         #[test]
         fn test_folder_backup_double() {
-            let origin = tempfile::tempdir().unwrap();
+            let origin = tmpdir!();
+            create_file!(tmppath!(origin, "a.txt"), "aaaa");
+            create_file!(tmppath!(origin, "b.txt"), "bbbb");
 
-            // Create two files in origin
-            let mut file = File::create(origin.path().join("a.txt")).unwrap();
-            write!(file, "aaaa").unwrap();
-            mem::drop(file);
-            let mut file = File::create(origin.path().join("b.txt")).unwrap();
-            write!(file, "bbbb").unwrap();
-            mem::drop(file);
-
-            let root = tempfile::tempdir().unwrap();
+            let root = tmpdir!();
 
             let stamp = Utc::now();
             let options = BackupOptions::new(false);
@@ -503,65 +496,39 @@ mod tests {
                 None,
             );
 
-            folder.backup(root.path(), stamp, options).unwrap();
+            folder.backup(root.path(), stamp, options).expect("Unable to perform backup");
 
-            let mut backup = root.path().join("backup");
+            let mut backup = tmppath!(root, "backup");
             assert!(backup.exists());
 
-            backup.push(stamp.to_rfc3339_opts(SecondsFormat::Nanos, true));
-            assert!(backup.exists());
+            backup.push(rfc3339!(stamp));
 
+            assert!(backup.exists());
             assert!(backup.join("a.txt").exists());
             assert!(backup.join("b.txt").exists());
 
-            let mut buf = String::new();
-            File::open(backup.join("a.txt"))
-                .unwrap()
-                .read_to_string(&mut buf)
-                .unwrap();
-            assert_eq!(buf, "aaaa");
-            buf.truncate(0);
-            File::open(backup.join("b.txt"))
-                .unwrap()
-                .read_to_string(&mut buf)
-                .unwrap();
-            assert_eq!(buf, "bbbb");
+            assert_eq!(read_file!(backup.join("a.txt")), "aaaa");
+            assert_eq!(read_file!(backup.join("b.txt")), "bbbb");            
 
             thread::sleep(time::Duration::from_millis(2000));
             let stamp = Utc::now();
-            folder.backup(root.path(), stamp, options).unwrap();
+            folder.backup(root.path(), stamp, options).expect("Unable to perform backup");
 
             backup.pop();
-            backup.push(stamp.to_rfc3339_opts(SecondsFormat::Nanos, true));
-            assert!(backup.exists());
+            backup.push(rfc3339!(stamp));
 
-            assert!(
-                fs::symlink_metadata(backup.join("a.txt"))
-                    .unwrap()
-                    .file_type()
-                    .is_symlink()
-            );
-            assert!(
-                fs::symlink_metadata(backup.join("b.txt"))
-                    .unwrap()
-                    .file_type()
-                    .is_symlink()
-            );
+            assert!(backup.exists());
+            assert!(symlink!(backup.join("a.txt")));
+            assert!(symlink!(backup.join("b.txt")));
         }
 
         #[test]
         fn test_folder_backup_double_addition() {
-            let origin = tempfile::tempdir().unwrap();
+            let origin = tmpdir!();
+            create_file!(tmppath!(origin, "a.txt"), "aaaa");
+            create_file!(tmppath!(origin, "b.txt"), "bbbb");
 
-            // Create two files in origin
-            let mut file = File::create(origin.path().join("a.txt")).unwrap();
-            write!(file, "aaaa").unwrap();
-            mem::drop(file);
-            let mut file = File::create(origin.path().join("b.txt")).unwrap();
-            write!(file, "bbbb").unwrap();
-            mem::drop(file);
-
-            let root = tempfile::tempdir().unwrap();
+            let root = tmpdir!();
 
             let stamp = Utc::now();
             let options = BackupOptions::new(false);
@@ -571,84 +538,47 @@ mod tests {
                 None,
             );
 
-            folder.backup(root.path(), stamp, options).unwrap();
+            folder.backup(root.path(), stamp, options).expect("Unable to perform backup");
 
             let mut backup = root.path().join("backup");
             assert!(backup.exists());
 
-            backup.push(stamp.to_rfc3339_opts(SecondsFormat::Nanos, true));
-            assert!(backup.exists());
+            backup.push(rfc3339!(stamp));
 
+            assert!(backup.exists());
             assert!(backup.join("a.txt").exists());
             assert!(backup.join("b.txt").exists());
 
-            let mut buf = String::new();
-            File::open(backup.join("a.txt"))
-                .unwrap()
-                .read_to_string(&mut buf)
-                .unwrap();
-            assert_eq!(buf, "aaaa");
-            buf.truncate(0);
-            File::open(backup.join("b.txt"))
-                .unwrap()
-                .read_to_string(&mut buf)
-                .unwrap();
-            assert_eq!(buf, "bbbb");
+            assert_eq!(read_file!(backup.join("a.txt")), "aaaa");
+            assert_eq!(read_file!(backup.join("b.txt")), "bbbb");
 
             thread::sleep(time::Duration::from_millis(2000));
 
             // Create a new file in origin
-            let mut file = File::create(origin.path().join("c.txt")).unwrap();
-            write!(file, "cccc").unwrap();
-            mem::drop(file);
+            create_file!(tmppath!(origin, "c.txt"), "cccc");
 
             let stamp = Utc::now();
-            folder.backup(root.path(), stamp, options).unwrap();
+            folder.backup(root.path(), stamp, options).expect("Unable to perform backup");
 
             backup.pop();
-            backup.push(stamp.to_rfc3339_opts(SecondsFormat::Nanos, true));
+            backup.push(rfc3339!(stamp));
+
             assert!(backup.exists());
 
-            assert!(
-                fs::symlink_metadata(backup.join("a.txt"))
-                    .unwrap()
-                    .file_type()
-                    .is_symlink()
-            );
-            assert!(
-                fs::symlink_metadata(backup.join("b.txt"))
-                    .unwrap()
-                    .file_type()
-                    .is_symlink()
-            );
+            assert!(symlink!(backup.join("a.txt")));
+            assert!(symlink!(backup.join("b.txt")));
+            assert!(filetype!(backup.join("c.txt")).is_file());
 
-            assert!(
-                fs::symlink_metadata(backup.join("c.txt"))
-                    .unwrap()
-                    .file_type()
-                    .is_file()
-            );
-            let mut buf = String::new();
-            File::open(backup.join("c.txt"))
-                .unwrap()
-                .read_to_string(&mut buf)
-                .unwrap();
-            assert_eq!(buf, "cccc");
+            assert_eq!(read_file!(backup.join("c.txt")), "cccc");
         }
 
         #[test]
         fn test_folder_backup_double_modification() {
-            let origin = tempfile::tempdir().unwrap();
+            let origin = tmpdir!();
+            create_file!(tmppath!(origin, "a.txt"), "aaaa");
+            create_file!(tmppath!(origin, "b.txt"), "bbbb");
 
-            // Create two files in origin
-            let mut file = File::create(origin.path().join("a.txt")).unwrap();
-            write!(file, "aaaa").unwrap();
-            mem::drop(file);
-            let mut file = File::create(origin.path().join("b.txt")).unwrap();
-            write!(file, "bbbb").unwrap();
-            mem::drop(file);
-
-            let root = tempfile::tempdir().unwrap();
+            let root = tmpdir!();
 
             let stamp = Utc::now();
             let options = BackupOptions::new(false);
@@ -658,29 +588,19 @@ mod tests {
                 None,
             );
 
-            folder.backup(root.path(), stamp, options).unwrap();
+            folder.backup(root.path(), stamp, options).expect("Unable to perform backup");
 
             let mut backup = root.path().join("backup");
             assert!(backup.exists());
 
-            backup.push(stamp.to_rfc3339_opts(SecondsFormat::Nanos, true));
-            assert!(backup.exists());
+            backup.push(rfc3339!(stamp));
 
+            assert!(backup.exists());
             assert!(backup.join("a.txt").exists());
             assert!(backup.join("b.txt").exists());
 
-            let mut buf = String::new();
-            File::open(backup.join("a.txt"))
-                .unwrap()
-                .read_to_string(&mut buf)
-                .unwrap();
-            assert_eq!(buf, "aaaa");
-            buf.truncate(0);
-            File::open(backup.join("b.txt"))
-                .unwrap()
-                .read_to_string(&mut buf)
-                .unwrap();
-            assert_eq!(buf, "bbbb");
+            assert_eq!(read_file!(backup.join("a.txt")), "aaaa");
+            assert_eq!(read_file!(backup.join("b.txt")), "bbbb");
 
             thread::sleep(time::Duration::from_millis(2000));
 
@@ -689,58 +609,33 @@ mod tests {
                 .write(true)
                 .append(true)
                 .open(origin.path().join("a.txt"))
-                .unwrap();
+                .expect("Unable to open file");
             write!(file, "cccc").unwrap();
             mem::drop(file);
 
             let stamp = Utc::now();
-            folder.backup(root.path(), stamp, options).unwrap();
+            folder.backup(root.path(), stamp, options).expect("Unable to perform backup");
 
             backup.pop();
-            backup.push(stamp.to_rfc3339_opts(SecondsFormat::Nanos, true));
+            backup.push(rfc3339!(stamp));
+
             assert!(backup.exists());
+            assert!(filetype!(backup.join("a.txt")).is_file());
+            assert!(symlink!(backup.join("b.txt")));
 
-            assert!(
-                fs::symlink_metadata(backup.join("a.txt"))
-                    .unwrap()
-                    .file_type()
-                    .is_file()
-            );
-
-            let mut buf = String::new();
-            File::open(backup.join("a.txt"))
-                .unwrap()
-                .read_to_string(&mut buf)
-                .unwrap();
-            assert_eq!(buf, "aaaacccc");
-
-            assert!(
-                fs::symlink_metadata(backup.join("b.txt"))
-                    .unwrap()
-                    .file_type()
-                    .is_symlink()
-            );
+            assert_eq!(read_file!(backup.join("a.txt")), "aaaacccc");
         }
 
         #[test]
         fn test_folder_restore_single() {
-            let origin = tempfile::tempdir().unwrap();
-            let root = tempfile::tempdir().unwrap();
+            let (origin, root) = (tmpdir!(), tmpdir!());
             let stamp = Utc::now();
 
             // Create some files on the backup
-            let backup = root
-                .path()
-                .join("backup")
-                .join(stamp.to_rfc3339_opts(SecondsFormat::Nanos, true));
-            fs::create_dir_all(&backup).unwrap();
-
-            let mut file = File::create(backup.join("a.txt")).unwrap();
-            write!(file, "aaaa").unwrap();
-            mem::drop(file);
-            let mut file = File::create(backup.join("b.txt")).unwrap();
-            write!(file, "bbbb").unwrap();
-            mem::drop(file);
+            let backup = tmppath!(root, format!("backup/{}", rfc3339!(stamp)));
+            fs::create_dir_all(&backup).expect("Unable to create path");
+            create_file!(backup.join("a.txt"), "aaaa");
+            create_file!(backup.join("b.txt"), "bbbb");
 
             let folder = Folder::new(
                 EnvPath::new("backup"),
@@ -750,52 +645,30 @@ mod tests {
 
             folder
                 .restore(root.path(), RestoreOptions::new(false, true))
-                .unwrap();
+                .expect("Unable to perform restore");
 
-            assert!(origin.path().join("a.txt").exists());
-            assert!(origin.path().join("b.txt").exists());
+            assert!(tmppath!(origin, "a.txt").exists());
+            assert!(tmppath!(origin, "b.txt").exists());
 
-            let mut buf = String::new();
-            File::open(origin.path().join("a.txt"))
-                .unwrap()
-                .read_to_string(&mut buf)
-                .unwrap();
-            assert_eq!(buf, "aaaa");
-            buf.truncate(0);
-            File::open(origin.path().join("b.txt"))
-                .unwrap()
-                .read_to_string(&mut buf)
-                .unwrap();
-            assert_eq!(buf, "bbbb");
+            assert_eq!(read_file!(tmppath!(origin, "a.txt")), "aaaa");
+            assert_eq!(read_file!(tmppath!(origin, "b.txt")), "bbbb");
         }
 
         #[test]
         fn test_folder_restore_with_symlinks() {
-            let origin = tempfile::tempdir().unwrap();
-            let root = tempfile::tempdir().unwrap();
+            let (origin, root) = (tmpdir!(), tmpdir!());
             let stamp = Utc::now();
 
             // Create some files on the backup
-            let backup = root
-                .path()
-                .join("backup")
-                .join(stamp.to_rfc3339_opts(SecondsFormat::Nanos, true));
-            fs::create_dir_all(&backup).unwrap();
-
-            let mut file = File::create(backup.join("a.txt")).unwrap();
-            write!(file, "aaaa").unwrap();
-            mem::drop(file);
-            let mut file = File::create(backup.join("b.txt")).unwrap();
-            write!(file, "bbbb").unwrap();
-            mem::drop(file);
+            let backup = tmppath!(root, format!("backup/{}", rfc3339!(stamp)));
+            fs::create_dir_all(&backup).expect("Unable to create path");
+            create_file!(backup.join("a.txt"), "aaaa");
+            create_file!(backup.join("b.txt"), "bbbb");
 
             thread::sleep(time::Duration::from_millis(2000));
             let stamp_new = Utc::now();
-            let backup_second = root
-                .path()
-                .join("backup")
-                .join(stamp_new.to_rfc3339_opts(SecondsFormat::Nanos, true));
-            fs::create_dir_all(&backup_second).unwrap();
+            let backup_second = tmppath!(root, format!("backup/{}", rfc3339!(stamp_new)));
+            fs::create_dir_all(&backup_second).expect("Unable to create path");
 
             // Create some symlinks
             #[cfg(unix)]
@@ -814,114 +687,67 @@ mod tests {
 
             folder
                 .restore(root.path(), RestoreOptions::new(false, true))
-                .unwrap();
+                .expect("Unable to perform restore");
 
-            assert!(origin.path().join("a.txt").exists());
-            assert!(origin.path().join("b.txt").exists());
+            assert!(tmppath!(origin, "a.txt").exists());
+            assert!(tmppath!(origin, "b.txt").exists());
 
-            let mut buf = String::new();
-            File::open(origin.path().join("a.txt"))
-                .unwrap()
-                .read_to_string(&mut buf)
-                .unwrap();
-            assert_eq!(buf, "aaaa");
-            buf.truncate(0);
-            File::open(origin.path().join("b.txt"))
-                .unwrap()
-                .read_to_string(&mut buf)
-                .unwrap();
-            assert_eq!(buf, "bbbb");
+            assert_eq!(read_file!(tmppath!(origin, "a.txt")), "aaaa");
+            assert_eq!(read_file!(tmppath!(origin, "b.txt")), "bbbb");
         }
     }
 
     mod config_file {
         use super::{BackupOptions, ConfigFile, RestoreOptions};
-        use chrono::{offset::Utc, SecondsFormat};
+        use chrono::{offset::Utc};
         use std::fs::{self, File};
-        use std::io::{Read, Write};
-        use std::mem;
+        use std::io::Write;
         use {json, tempfile};
 
         #[test]
         fn test_config_file_load_valid() {
-            let dir = tempfile::tempdir().expect("Creation of temp dir failed");
-            let mut tmpfile = fs::OpenOptions::new()
-                .read(true)
-                .write(true)
-                .create(true)
-                .open(dir.path().join("config.json"))
-                .expect("Unable to create tmp file");
-
-            write!(
-                tmpfile,
-                "[{{\"path\": \"asd\", \"origin\": \"$HOME\", \"modified\": null}}]"
-            ).expect("Unable to write on tmp file");
-
+            let dir = tmpdir!();
+            create_file!(tmppath!(dir, "config.json"), 
+            "[
+                {{
+                    \"path\": \"asd\", 
+                    \"origin\": \"$HOME\", 
+                    \"modified\": null
+                }}
+            ]");
             assert!(
-                ConfigFile::load_from(dir, "config.json").is_ok(),
-                "Unable to load configuration"
+                ConfigFile::load_from(dir, "config.json").is_ok()
             );
         }
 
         #[test]
         fn test_config_file_load_invalid() {
-            let dir = tempfile::tempdir().expect("Creation of temp dir failed");
-            let mut tmpfile = fs::OpenOptions::new()
-                .read(true)
-                .write(true)
-                .create(true)
-                .open(dir.path().join("config.json"))
-                .expect("Unable to create tmp file");
-
-            write!(
-                tmpfile,
-                "[{{\"path\": \"asd, \"origin\": \"$HOME\", \"modified\": null}}]"
-            ).expect("Unable to write on tmp file");
-
+            let dir = tmpdir!();
+            create_file!(tmppath!(dir, "config.json"), 
+            "[
+                {{
+                    \"path\": \"asd, 
+                    \"origin\": \"$HOME\", 
+                    \"modified\": null
+                }}
+            ]");
             assert!(
-                ConfigFile::load_from(dir, "config.json").is_err(),
-                "Unable to load configuration"
+                ConfigFile::load_from(dir, "config.json").is_err()
             );
         }
 
         #[test]
-        fn test_config_file_save_exists() {
-            let dir = tempfile::tempdir().expect("Creation of temp dir failed");
-            let _tmpfile = fs::OpenOptions::new()
-                .write(true)
-                .create(true)
-                .open(dir.path().join("config.json"))
-                .expect("Unable to create tmp file");
-
-            assert!(
-                dir.path().join("config.json").exists(),
-                "Save file was not created"
-            );
-
-            let config = ConfigFile {
-                dir: dir.path(),
-                folders: vec![],
-            };
-
-            assert!(
-                config.save_to("config.json").is_ok(),
-                "Unable to save into location"
-            );
-        }
-
-        #[test]
-        fn test_config_file_save_unexistant() {
-            let dir = tempfile::tempdir().expect("Creation of temp dir failed");
-
-            let config = ConfigFile {
-                dir: dir.path(),
-                folders: vec![],
-            };
-
-            assert!(
-                config.save_to("config.json").is_ok(),
-                "Unable to save into location"
-            );
+        fn test_config_load() {
+            let tmp = tmpdir!();
+            fs::create_dir(tmppath!(tmp, ".backup")).expect("Unable to create folder");
+            create_file!(tmppath!(tmp, ".backup/config.json"), "[
+                {{
+                    \"path\": \"backup\",
+                    \"origin\": \"{}\",
+                    \"modified\": null
+                }}
+            ]",  tmppath!(tmp, "origin").display().to_string());
+            assert!(ConfigFile::load(tmp.path()).is_ok());
         }
 
         #[test]
@@ -944,98 +770,75 @@ mod tests {
             let _config = ConfigFile::load_from(tmp.path(), "config.json").unwrap();
         }
 
+
         #[test]
-        fn test_config_load() {
-            let tmp = tempfile::tempdir().unwrap();
-            fs::create_dir_all(tmp.path().join(".backup")).unwrap();
+        fn test_config_file_save_exists() {
+            let dir = tmpdir!();
+            assert!(create_file!(tmppath!(dir, "config.json")).exists());
 
-            let mut file = File::create(tmp.path().join(".backup/config.json")).unwrap();
-            write!(
-                file,
-                "[
-                {{
-                    \"path\": \"backup\",
-                    \"origin\": \"{}\",
-                    \"modified\": null
-                }}
-            ]",
-                tmp.path().join("origin").display().to_string()
-            ).unwrap();
+            let config = ConfigFile {
+                dir: dir.path(),
+                folders: vec![],
+            };
 
-            let _config = ConfigFile::load(tmp.path()).unwrap();
+            assert!(config.save_to("config.json").is_ok());
         }
 
         #[test]
-        fn test_config_save_to() {
-            let tmp = tempfile::tempdir().unwrap();
+        fn test_config_file_save_unexistant() {
+            let dir = tmpdir!();
 
-            let mut file = File::create(tmp.path().join("config.json")).unwrap();
-            write!(
-                file,
-                "[
+            let config = ConfigFile {
+                dir: dir.path(),
+                folders: vec![],
+            };
+
+            assert!(config.save_to("config.json").is_ok());
+        }
+
+        #[test]
+        fn test_config_save_to_format() {
+            let tmp = tmpdir!();
+            create_file!(tmppath!(tmp, "config.json"), "[
                 {{
                     \"path\": \"backup\",
                     \"origin\": \"{}\",
                     \"modified\": null
                 }}
-            ]",
-                tmp.path().join("origin").display().to_string()
-            ).unwrap();
+            ]", tmppath!(tmp, "origin").display().to_string());
 
-            let config = ConfigFile::load_from(tmp.path(), "config.json").unwrap();
-            config.save_to("config2.json").unwrap();
+            let config = ConfigFile::load_from(tmp.path(), "config.json").expect("Unable to load file");
+            config.save_to("config2.json").expect("Unable to save the file");
 
-            let mut buf = String::new();
-            File::open(tmp.path().join("config2.json"))
-                .unwrap()
-                .read_to_string(&mut buf)
-                .unwrap();
-
-            assert_eq!(buf, json::to_string_pretty(&config.folders).unwrap());
+            assert_eq!(
+                read_file!(tmppath!(tmp, "config2.json")), 
+                json::to_string_pretty(&config.folders).expect("Unable to serialize")
+            );
         }
 
         #[test]
         fn test_config_save() {
-            let tmp = tempfile::tempdir().unwrap();
-            fs::create_dir_all(tmp.path().join(".backup")).unwrap();
+            let tmp = tmpdir!();
+            fs::create_dir(tmppath!(tmp, ".backup")).expect("Unable to create folder");
 
-            let mut file = File::create(tmp.path().join("config.json")).unwrap();
-            write!(
-                file,
-                "[
-                {{
-                    \"path\": \"backup\",
-                    \"origin\": \"{}\",
-                    \"modified\": null
-                }}
-            ]",
-                tmp.path().join("origin").display().to_string()
-            ).unwrap();
+            let config = ConfigFile {
+                dir: tmp.path(),
+                folders: vec![]
+            };
+            config.save().expect("Unable to save");
 
-            let config = ConfigFile::load_from(tmp.path(), "config.json").unwrap();
-            config.save().unwrap();
-
-            let mut buf = String::new();
-            File::open(tmp.path().join(".backup/config.json"))
-                .unwrap()
-                .read_to_string(&mut buf)
-                .unwrap();
-
-            assert_eq!(buf, json::to_string_pretty(&config.folders).unwrap());
+            assert!(tmppath!(tmp, ".backup/config.json").exists());
         }
 
         #[test]
         fn test_config_backup() {
-            let tmp = tempfile::tempdir().unwrap();
-            let backup = tmp.path().join("backup");
+            let tmp = tmpdir!();
+            let backup = tmppath!(tmp, "backup");
 
-            fs::create_dir_all(tmp.path().join("origin")).unwrap();
-            fs::create_dir_all(backup.join(".backup")).unwrap();
+            fs::create_dir(tmppath!(tmp, "origin")).expect("Unable to create path");
+            fs::create_dir_all(backup.join(".backup")).expect("Unable to create path");
 
-            let mut file = File::create(backup.join(".backup/config.json")).unwrap();
-            write!(
-                file,
-                "[
+            create_file!(backup.join(".backup/config.json"), "[
                 {{
                     \"path\": \"backup\",
                     \"origin\": \"{origin}\",
@@ -1047,65 +850,41 @@ mod tests {
                     \"origin\": \"{origin}\",
                     \"modified\": null
                 }}
-            ]",
-                origin = tmp.path().join("origin").display().to_string()
-            ).unwrap();
+            ]", origin=tmppath!(tmp, "origin").display().to_string());
 
-            let mut config = ConfigFile::load(&backup).unwrap();
-            let stamp = config.backup(BackupOptions::new(false)).unwrap();
+            let mut config = ConfigFile::load(&backup).expect("Unable to load file");
+            let stamp = config.backup(BackupOptions::new(false)).expect("Unable to perform backup");
 
-            assert!(
-                backup
-                    .join("backup")
-                    .join(stamp.to_rfc3339_opts(SecondsFormat::Nanos, true))
-                    .exists()
-            );
-            assert!(
-                backup
-                    .join("other")
-                    .join(stamp.to_rfc3339_opts(SecondsFormat::Nanos, true))
-                    .exists()
-            );
+            assert!(backup.join(format!("backup/{}", rfc3339!(stamp))).exists());
+            assert!(backup.join(format!("other/{}", rfc3339!(stamp))).exists());
         }
 
         #[test]
         fn test_config_restore() {
-            let origin = tempfile::tempdir().unwrap();
-            let root = tempfile::tempdir().unwrap();
+            let (origin, root) = (tmpdir!(), tmpdir!());
             let stamp = Utc::now();
 
             // Create the config file
-            fs::create_dir_all(root.path().join(".backup")).unwrap();
-            write!(
-                File::create(root.path().join(".backup/config.json")).unwrap(),
-                "[
+            fs::create_dir(tmppath!(root, ".backup")).expect("Unable to create path");
+            create_file!(tmppath!(root, ".backup/config.json"), "[
                 {{
                     \"path\": \"backup\",
                     \"origin\": \"{}\",
                     \"modified\": \"{}\"
                 }}
-            ]",
-                origin.path().display().to_string(),
-                stamp.to_rfc3339_opts(SecondsFormat::Nanos, true)
-            ).unwrap();
+            ]", origin.path().display().to_string(), rfc3339!(stamp));
 
             // Create some files on the backup
-            let backup = root
-                .path()
-                .join("backup")
-                .join(stamp.to_rfc3339_opts(SecondsFormat::Nanos, true));
-            fs::create_dir_all(&backup).unwrap();
+            let backup = tmppath!(root, format!("backup/{}", rfc3339!(stamp)));
+            fs::create_dir_all(&backup).expect("Unable to create path");
+            create_file!(backup.join("a.txt"));
+            create_file!(backup.join("b.txt"));
 
-            let file = File::create(backup.join("a.txt")).unwrap();
-            mem::drop(file);
-            let file = File::create(backup.join("b.txt")).unwrap();
-            mem::drop(file);
+            let config = ConfigFile::load(root.path()).expect("Unable to load file");
+            config.restore(RestoreOptions::new(false, true)).expect("Unable to perform restore");
 
-            let config = ConfigFile::load(root.path()).unwrap();
-            config.restore(RestoreOptions::new(false, true)).unwrap();
-
-            assert!(origin.path().join("a.txt").exists());
-            assert!(origin.path().join("b.txt").exists());
+            assert!(tmppath!(origin, "a.txt").exists());
+            assert!(tmppath!(origin, "b.txt").exists());
         }
     }
 }
