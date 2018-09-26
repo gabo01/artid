@@ -5,9 +5,6 @@ use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 use {AppError, FsError, Result};
 
-mod helpers;
-use self::helpers::FileSystemType;
-
 /// Used to handle errors in the sync process.
 macro_rules! handle_errors {
     ($warn:expr, $err:expr, $($msg:tt)*) => {
@@ -189,6 +186,26 @@ impl<'a> Entry<'a> {
     }
 }
 
+#[derive(Debug, PartialEq)]
+enum FileSystemType {
+    File,
+    Dir,
+    Other,
+}
+
+impl<P: AsRef<Path>> From<P> for FileSystemType {
+    fn from(path: P) -> Self {
+        let path = path.as_ref();
+        if path.is_file() {
+            FileSystemType::File
+        } else if path.is_dir() {
+            FileSystemType::Dir
+        } else {
+            FileSystemType::Other
+        }
+    }
+}
+
 pub enum SyncActions {
     CreateDir(PathBuf),
     LinkFile(PathBuf),
@@ -328,6 +345,25 @@ mod tests {
     use super::{modified, Branchable, DirTree, Linkable, LinkedPoint, OverwriteMode, SyncOptions};
     use std::ffi::OsString;
     use tempfile;
+
+    mod file_system {
+        use super::FileSystemType;
+        use std::fs::File;
+        use tempfile;
+
+        #[test]
+        fn test_system_dir() {
+            let dir = tmpdir!();
+            assert_eq!(FileSystemType::from(dir.path()), FileSystemType::Dir);
+        }
+
+        #[test]
+        fn test_system_file() {
+            let dir = tmpdir!();
+            let path = create_file!(tmppath!(dir, "a.txt"));
+            assert_eq!(FileSystemType::from(path), FileSystemType::File);
+        }
+    }
 
     #[test]
     fn test_branching() {
