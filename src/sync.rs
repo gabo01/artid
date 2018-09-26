@@ -380,9 +380,7 @@ fn modified<P: AsRef<Path>>(file: P) -> Option<SystemTime> {
 
 #[cfg(test)]
 mod tests {
-    use super::{modified, Branchable, DirTree, Linkable, LinkedPoint, OverwriteMode, SyncOptions};
-    use std::ffi::OsString;
-    use tempfile;
+    use super::{modified, DirTree, FileSystemType, LinkedPoint, OverwriteMode, SyncOptions};
 
     mod file_system {
         use super::FileSystemType;
@@ -403,39 +401,8 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_branching() {
-        let (src, dst) = (tmpdir!(), tmpdir!());
-
-        let tree = DirTree::new(src.path().into(), dst.path().into());
-        {
-            let string = OsString::from("codes");
-            let _branch = tree.branch(&string);
-
-            assert_eq!(
-                tree.root.borrow().src.display().to_string(),
-                src.path().join(&string).display().to_string()
-            );
-
-            assert_eq!(
-                tree.root.borrow().dst.display().to_string(),
-                dst.path().join(&string).display().to_string()
-            );
-        }
-
-        assert_eq!(
-            tree.root.borrow().src.display().to_string(),
-            src.path().display().to_string()
-        );
-
-        assert_eq!(
-            tree.root.borrow().dst.display().to_string(),
-            dst.path().display().to_string()
-        );
-    }
-
     mod linked_point {
-        use super::{modified, DirTree, Linkable, LinkedPoint, OverwriteMode};
+        use super::{modified, LinkedPoint, OverwriteMode};
         use std::{fs::File, thread, time};
         use tempfile;
 
@@ -444,18 +411,8 @@ mod tests {
             let dir = tmpdir!();
             let srcpath = create_file!(tmppath!(dir, "a.txt"));
             let dstpath = create_file!(tmppath!(dir, "b.txt"));
-            let tree = DirTree::new(srcpath, dstpath);
-            let link = LinkedPoint::new(tree.root.borrow());
+            let link = LinkedPoint::new(srcpath, dstpath);
             assert!(link.synced());
-        }
-
-        #[test]
-        fn test_link_generation_linked() {
-            let dir = tmpdir!();
-            let srcpath = create_file!(tmppath!(dir, "a.txt"));
-            let dstpath = create_file!(tmppath!(dir, "b.txt"));
-            let tree = DirTree::new(srcpath, dstpath);
-            assert!(tree.link().synced());
         }
 
         #[test]
@@ -463,8 +420,8 @@ mod tests {
             let dir = tmpdir!();
             let srcpath = create_file!(tmppath!(dir, "a.txt"));
             let dstpath = create_file!(tmppath!(dir, "b.txt"));
-            let tree = DirTree::new(srcpath, dstpath);
-            assert!(tree.link().mirror(OverwriteMode::Disallow, false).is_err());
+            let link = LinkedPoint::new(srcpath, dstpath);
+            assert!(link.mirror(OverwriteMode::Disallow, false).is_err());
         }
 
         #[test]
@@ -476,10 +433,10 @@ mod tests {
             let srcpath = create_file!(tmppath!(dir, "a.txt"), "Hello, world");
             assert!(modified(&srcpath).unwrap() > modified(&dstpath).unwrap());
 
-            let tree = DirTree::new(srcpath.clone(), dstpath.clone());
-            assert!(tree.link().mirror(OverwriteMode::Allow, false).is_ok());
+            let link = LinkedPoint::new(srcpath.clone(), dstpath.clone());
+            assert!(link.mirror(OverwriteMode::Allow, false).is_ok());
 
-            assert_eq!(read_file!(&dstpath), String::from("Hello, world"));
+            assert_eq!(read_file!(&dstpath), "Hello, world");
         }
 
         #[test]
@@ -491,10 +448,10 @@ mod tests {
             let dstpath = create_file!(tmppath!(dir, "b.txt"));
             assert!(modified(&dstpath).unwrap() > modified(&srcpath).unwrap());
 
-            let tree = DirTree::new(srcpath.clone(), dstpath.clone());
-            assert!(tree.link().mirror(OverwriteMode::Allow, false).is_ok());
+            let link = LinkedPoint::new(srcpath.clone(), dstpath.clone());
+            assert!(link.mirror(OverwriteMode::Allow, false).is_ok());
 
-            assert_ne!(read_file!(&dstpath), String::from("Hello, world"));
+            assert_ne!(read_file!(&dstpath), "Hello, world");
         }
 
         #[test]
@@ -506,10 +463,10 @@ mod tests {
             let dstpath = create_file!(tmppath!(dir, "b.txt"));
             assert!(modified(&dstpath).unwrap() > modified(&srcpath).unwrap());
 
-            let tree = DirTree::new(srcpath.clone(), dstpath.clone());
-            assert!(tree.link().mirror(OverwriteMode::Force, false).is_ok());
+            let link = LinkedPoint::new(srcpath.clone(), dstpath.clone());
+            assert!(link.mirror(OverwriteMode::Force, false).is_ok());
 
-            assert_eq!(read_file!(&dstpath), String::from("Hello, world"));
+            assert_eq!(read_file!(&dstpath), "Hello, world");
         }
 
         #[test]
@@ -521,17 +478,16 @@ mod tests {
             let srcpath = create_file!(tmppath!(dir, "a.txt"), "Hello, world");
             assert!(modified(&srcpath).unwrap() > modified(&dstpath).unwrap());
 
-            let tree = DirTree::new(srcpath.clone(), dstpath.clone());
-            assert!(tree.link().mirror(OverwriteMode::Force, false).is_ok());
+            let link = LinkedPoint::new(srcpath.clone(), dstpath.clone());
+            assert!(link.mirror(OverwriteMode::Force, false).is_ok());
 
-            assert_eq!(read_file!(&dstpath), String::from("Hello, world"));
+            assert_eq!(read_file!(&dstpath), "Hello, world");
         }
     }
 
     mod sync_op {
         use super::{DirTree, OverwriteMode, SyncOptions};
         use std::fs::{self, File};
-        use std::path::PathBuf;
         use tempfile;
 
         #[test]
@@ -542,8 +498,10 @@ mod tests {
             create_file!(tmppath!(src, "a.txt"), "aaaa");
             create_file!(tmppath!(src, "b.txt"), "bbbb");
 
-            DirTree::new(PathBuf::from(src.path()), PathBuf::from(dst.path()))
+            DirTree::new(src.path().into(), dst.path().into())
                 .sync(options)
+                .unwrap()
+                .execute()
                 .unwrap();
 
             assert!(tmppath!(dst, "a.txt").exists());
@@ -561,8 +519,10 @@ mod tests {
             create_file!(tmppath!(src, "a.txt"), "aaaa");
             create_file!(tmppath!(src, "b.txt"), "bbbb");
 
-            DirTree::new(PathBuf::from(src.path()), PathBuf::from(dst.path()))
+            DirTree::new(src.path().into(), dst.path().into())
                 .sync(options)
+                .unwrap()
+                .execute()
                 .unwrap();
 
             assert!(tmppath!(dst, "a.txt").exists());
@@ -579,8 +539,10 @@ mod tests {
             fs::create_dir(tmppath!(src, "c")).expect("Unable to create folder");
             create_file!(tmppath!(src, "c/d.txt"), "dddd");
 
-            DirTree::new(PathBuf::from(src.path()), PathBuf::from(dst.path()))
+            DirTree::new(src.path().into(), dst.path().into())
                 .sync(options)
+                .unwrap()
+                .execute()
                 .unwrap();
 
             assert!(tmppath!(dst, "c/d.txt").exists());
@@ -596,8 +558,10 @@ mod tests {
             fs::create_dir(tmppath!(src, "c")).expect("Unable to create folder");
             create_file!(tmppath!(src, "c/d.txt"), "dddd");
 
-            DirTree::new(PathBuf::from(src.path()), PathBuf::from(dst.path()))
+            DirTree::new(src.path().into(), dst.path().into())
                 .sync(options)
+                .unwrap()
+                .execute()
                 .unwrap();
 
             assert!(dst.path().join("c/d.txt").exists());
