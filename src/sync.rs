@@ -105,7 +105,7 @@ impl DirTree {
     pub fn sync(self, options: SyncOptions) -> Result<(SyncModel)> {
         let mut actions = vec![];
 
-        for entry in self.walk(options.warn)? {
+        for entry in Self::walk(&self.src, options.warn)? {
             match entry.kind() {
                 FileSystemType::Dir => {
                     if !self.dst.join(&entry.path).exists() {
@@ -121,11 +121,27 @@ impl DirTree {
             }
         }
 
+        if options.clean && self.dst.exists() {
+            for entry in Self::walk(&self.dst, options.warn)? {
+                match entry.kind() {
+                    FileSystemType::Dir | FileSystemType::File => {
+                        if !self.src.join(&entry.path).exists() {
+                            actions.push(SyncActions::DeleteDst(entry.path))
+                        }
+                    }
+
+                    FileSystemType::Other => {
+                        warn!("Unable to process {}", pathlight(entry.full_path()))
+                    }
+                }
+            }
+        }
+
         Ok(SyncModel::new(self, actions, options))
     }
 
-    fn walk(&self, warn: bool) -> Result<Vec<Entry<'_>>> {
-        let mut entries = vec![Entry::new(&self.src, "".into(), 0)];
+    fn walk(dir: &Path, warn: bool) -> Result<Vec<Entry<'_>>> {
+        let mut entries = vec![Entry::new(dir, "".into(), 0)];
         let mut walked = Self::walk_recursive(&entries[0], warn)?;
         entries.append(&mut walked);
         Ok(entries)
@@ -209,6 +225,7 @@ impl<P: AsRef<Path>> From<P> for FileSystemType {
 pub enum SyncActions {
     CreateDir(PathBuf),
     LinkFile(PathBuf),
+    DeleteDst(PathBuf),
 }
 
 pub struct SyncModel {
@@ -235,9 +252,30 @@ impl SyncModel {
             match action {
                 SyncActions::CreateDir(dir) => fs::create_dir_all(self.dst.join(dir))
                     .context(FsError::OpenFile((&self.dst).into()))?,
+
                 SyncActions::LinkFile(ref link) => {
                     LinkedPoint::new(self.src.join(link), self.dst.join(link))
                         .mirror(self.overwrite, self.symbolic)?;
+                }
+
+                SyncActions::DeleteDst(ref path) => {
+                    let full_path = self.dst.join(path);
+
+                    match FileSystemType::from(&full_path) {
+                        FileSystemType::Dir => {
+                            fs::remove_dir_all(&full_path)
+                                .context(FsError::DeleteFile(full_path.into()))?;
+                        }
+
+                        FileSystemType::File => {
+                            fs::remove_file(&full_path)
+                                .context(FsError::DeleteFile(full_path.into()))?;
+                        }
+
+                        FileSystemType::Other => {
+                            warn!("Unable to identify {}", pathlight(full_path))
+                        }
+                    }
                 }
             }
         }
