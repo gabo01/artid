@@ -197,6 +197,46 @@ impl<'a, 'b> Linkable<'b, DirRoot> for DirBranch<'a> {
     }
 }
 
+enum SyncActions {
+    CreateDir(PathBuf),
+    LinkFile(PathBuf),
+}
+
+struct SyncModel {
+    src: PathBuf,
+    dst: PathBuf,
+    actions: Vec<SyncActions>,
+    overwrite: OverwriteMode,
+    symbolic: bool,
+}
+
+impl SyncModel {
+    pub(self) fn new(tree: DirTree, actions: Vec<SyncActions>, options: SyncOptions) -> Self {
+        Self {
+            src: tree.root.borrow().src.clone(),
+            dst: tree.root.borrow().dst.clone(),
+            actions,
+            overwrite: options.overwrite,
+            symbolic: options.symbolic,
+        }
+    }
+
+    pub(self) fn execute(self) -> Result<()> {
+        for action in self.actions {
+            match action {
+                SyncActions::CreateDir(dir) => fs::create_dir_all(self.dst.join(dir))
+                    .context(FsError::OpenFile((&self.dst).into()))?,
+                SyncActions::LinkFile(ref link) => {
+                    let root = RefCell::new(DirRoot::new(self.src.join(link), self.dst.join(link)));
+                    LinkedPoint::new(root.borrow()).mirror(self.overwrite, self.symbolic)?;
+                }
+            }
+        }
+
+        Ok(())
+    }
+}
+
 /// Represents a link between two different paths points. The dst path is seen as the
 /// 'link's location while the src path is seen as the link's pointed place.
 #[derive(Debug)]
