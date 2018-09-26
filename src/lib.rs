@@ -315,6 +315,8 @@ impl Folder {
 
             Ok(DirTree::new(dirs.rel, dirs.abs)
                 .sync(options.into())
+                .context(AppErrorType::RestoreFolder)?
+                .execute()
                 .context(AppErrorType::RestoreFolder)?)
         } else {
             info!("Restore not needed for {}", pathlight(&dirs.rel));
@@ -353,7 +355,7 @@ impl Folder {
         let mut options: SyncOptions = options.into();
         options.symbolic = true;
 
-        Ok(DirTree::new(src, dst).sync(options)?)
+        Ok(DirTree::new(src, dst).sync(options)?.execute()?)
     }
 
     /// Main sync operation, syncs the backup directory with the origin location.
@@ -366,7 +368,9 @@ impl Folder {
             .push(stamp.to_rfc3339_opts(SecondsFormat::Nanos, true));
         debug!("Starting backup of: {}", pathlight(&dirs.abs));
 
-        Ok(DirTree::new(dirs.abs, dirs.rel).sync(options.into())?)
+        Ok(DirTree::new(dirs.abs, dirs.rel)
+            .sync(options.into())?
+            .execute()?)
     }
 }
 

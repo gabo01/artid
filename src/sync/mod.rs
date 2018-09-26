@@ -1,14 +1,28 @@
-use failure::ResultExt;
+use failure::{Fail, ResultExt};
 use logger::pathlight;
-use std::cell::{Ref, RefCell};
-use std::ffi::OsString;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 use {AppError, FsError, Result};
 
 mod helpers;
-use self::helpers::{sync, Branchable, Linkable};
+use self::helpers::FileSystemType;
+
+/// Used to handle errors in the sync process.
+macro_rules! handle_errors {
+    ($warn:expr, $err:expr, $($msg:tt)*) => {
+        if $warn {
+            warn!($($msg)*);
+            if cfg!(debug_assertions) {
+                for cause in $err.causes() {
+                    trace!("{}", cause);
+                }
+            }
+        } else {
+            fail!($err);
+        }
+    };
+}
 
 /// Modifier options for the sync process in a DirTree. Check the properties to see which
 /// behaviour they control.
@@ -74,15 +88,14 @@ pub enum OverwriteMode {
 /// will fail and return an appropiate error.
 #[derive(Debug)]
 pub struct DirTree {
-    root: RefCell<DirRoot>,
+    src: PathBuf,
+    dst: PathBuf,
 }
 
 impl DirTree {
     /// Creates a new link representation for two different trees.
     pub fn new(src: PathBuf, dst: PathBuf) -> Self {
-        Self {
-            root: RefCell::new(DirRoot::new(src, dst)),
-        }
+        Self { src, dst }
     }
 
     /// Syncs the two trees. This function will fail if the two points aren't linked
@@ -92,117 +105,96 @@ impl DirTree {
     /// Behaviour of these function can be controlled through the options sent for things such
     /// as file clashes, errors while processing a file or a subdirectory and other things. See
     /// SyncOptions docs for more info on these topic.
-    pub fn sync(&self, options: SyncOptions) -> Result<()> {
-        sync(self, options)
+    pub fn sync(self, options: SyncOptions) -> Result<(SyncModel)> {
+        let mut actions = vec![];
+
+        for entry in self.walk(options.warn)? {
+            match entry.kind() {
+                FileSystemType::Dir => {
+                    if !self.dst.join(&entry.path).exists() {
+                        actions.push(SyncActions::CreateDir(entry.path))
+                    }
+                }
+
+                FileSystemType::File => actions.push(SyncActions::LinkFile(entry.path)),
+
+                FileSystemType::Other => {
+                    warn!("Unable to process {}", pathlight(entry.full_path()))
+                }
+            }
+        }
+
+        Ok(SyncModel::new(self, actions, options))
+    }
+
+    fn walk(&self, warn: bool) -> Result<Vec<Entry<'_>>> {
+        let mut entries = vec![Entry::new(&self.src, "".into(), 0)];
+        let mut walked = Self::walk_recursive(&entries[0], warn)?;
+        entries.append(&mut walked);
+        Ok(entries)
+    }
+
+    fn walk_recursive<'a>(entry: &Entry<'a>, warn: bool) -> Result<Vec<Entry<'a>>> {
+        let mut entries = vec![];
+
+        for element in fs::read_dir(entry.full_path())
+            .context(FsError::ReadFile(entry.full_path().into()))?
+            .into_iter()
+            .filter_map(|e| e.ok())
+        {
+            entries.push(Entry::new(
+                entry.root,
+                entry.path.join(element.file_name()),
+                entry.deepness + 1,
+            ));
+
+            if let FileSystemType::Dir = FileSystemType::from(element.path()) {
+                match Self::walk_recursive(&entries.last().unwrap(), warn) {
+                    Ok(mut walked) => entries.append(&mut walked),
+                    Err(err) => handle_errors!(
+                        warn,
+                        err,
+                        "Unable to read {}",
+                        pathlight(entries.last().unwrap().full_path())
+                    ),
+                }
+            }
+        }
+
+        Ok(entries)
     }
 }
 
-impl<'a, 'b> Branchable<'a, DirBranch<'a>, &'b OsString> for DirTree {
-    fn branch(&'a self, branch: &'b OsString) -> DirBranch<'a> {
-        self.root.borrow_mut().branch(branch);
-        DirBranch::new(self)
+struct Entry<'a> {
+    root: &'a Path,
+    path: PathBuf,
+    deepness: u8,
+}
+
+impl<'a> Entry<'a> {
+    pub fn new(root: &'a Path, path: PathBuf, deepness: u8) -> Self {
+        Self {
+            root,
+            path,
+            deepness,
+        }
     }
 
-    fn root(&self) {
-        self.root.borrow_mut().root();
+    pub fn kind(&self) -> FileSystemType {
+        FileSystemType::from(self.root.join(&self.path))
+    }
+
+    pub fn full_path(&self) -> PathBuf {
+        self.root.join(&self.path)
     }
 }
 
-impl<'a> Linkable<'a, DirRoot> for DirTree {
-    type Link = LinkedPoint<'a>;
-
-    fn to_ref(&self) -> Ref<DirRoot> {
-        self.root.borrow()
-    }
-
-    fn link(&'a self) -> Self::Link {
-        LinkedPoint::new(self.root.borrow())
-    }
-}
-
-/// Represents both roots of the directory trees designed to be linked. In order to make
-/// branches be able to hold a mutable instance of this object. This object is put inside
-/// a RefCell and handled from there. See DirTree related code for more specific details.
-#[derive(Debug)]
-struct DirRoot {
-    src: PathBuf,
-    dst: PathBuf,
-}
-
-impl DirRoot {
-    /// Creates a new DirRoot given the roots of both trees.
-    pub(self) fn new(src: PathBuf, dst: PathBuf) -> Self {
-        Self { src, dst }
-    }
-
-    /// Switches to a branch of the trees. This operation is to be called only when
-    /// generating a new DirBranch object.
-    pub(self) fn branch<P: AsRef<Path>>(&mut self, branch: P) {
-        let branch = branch.as_ref();
-        self.src.push(branch);
-        self.dst.push(branch);
-    }
-
-    /// Returns to the root of the current branch. Calling this function while being already
-    /// at the root of the trees will cause it to malfunction. This should be called only
-    /// by a drop implementation of the branch object.
-    pub(self) fn root(&mut self) {
-        self.src.pop();
-        self.dst.pop();
-    }
-}
-
-/// Represents a branch of the directory tree being iterated over. It is fundamentally a
-/// reference to the DirTree that works as a stack during iteration. In order to get
-/// interior mutability uses the RefCell inside the DirTree.
-#[derive(Debug)]
-struct DirBranch<'a> {
-    tree: &'a DirTree,
-}
-
-impl<'a> DirBranch<'a> {
-    /// Creates a new branch from a tree reference. This should be called only from the
-    /// branch method of DirTree or another DirBranch in order to do the other needed
-    /// operations to create a branch.
-    pub(self) fn new(tree: &'a DirTree) -> Self {
-        Self { tree }
-    }
-}
-
-impl<'a, 'b> Branchable<'a, DirBranch<'a>, &'b OsString> for DirBranch<'a> {
-    fn branch(&'a self, branch: &'b OsString) -> DirBranch<'a> {
-        self.tree.branch(branch)
-    }
-
-    fn root(&self) {
-        self.tree.root()
-    }
-}
-
-impl<'a> Drop for DirBranch<'a> {
-    fn drop(&mut self) {
-        self.root();
-    }
-}
-
-impl<'a, 'b> Linkable<'b, DirRoot> for DirBranch<'a> {
-    type Link = LinkedPoint<'b>;
-
-    fn to_ref(&self) -> Ref<DirRoot> {
-        self.tree.to_ref()
-    }
-
-    fn link(&'b self) -> Self::Link {
-        self.tree.link()
-    }
-}
-
-enum SyncActions {
+pub enum SyncActions {
     CreateDir(PathBuf),
     LinkFile(PathBuf),
 }
 
-struct SyncModel {
+pub struct SyncModel {
     src: PathBuf,
     dst: PathBuf,
     actions: Vec<SyncActions>,
@@ -211,24 +203,24 @@ struct SyncModel {
 }
 
 impl SyncModel {
-    pub(self) fn new(tree: DirTree, actions: Vec<SyncActions>, options: SyncOptions) -> Self {
+    pub fn new(tree: DirTree, actions: Vec<SyncActions>, options: SyncOptions) -> Self {
         Self {
-            src: tree.root.borrow().src.clone(),
-            dst: tree.root.borrow().dst.clone(),
+            src: tree.src,
+            dst: tree.dst,
             actions,
             overwrite: options.overwrite,
             symbolic: options.symbolic,
         }
     }
 
-    pub(self) fn execute(self) -> Result<()> {
+    pub fn execute(self) -> Result<()> {
         for action in self.actions {
             match action {
                 SyncActions::CreateDir(dir) => fs::create_dir_all(self.dst.join(dir))
                     .context(FsError::OpenFile((&self.dst).into()))?,
                 SyncActions::LinkFile(ref link) => {
-                    let root = RefCell::new(DirRoot::new(self.src.join(link), self.dst.join(link)));
-                    LinkedPoint::new(root.borrow()).mirror(self.overwrite, self.symbolic)?;
+                    LinkedPoint::new(self.src.join(link), self.dst.join(link))
+                        .mirror(self.overwrite, self.symbolic)?;
                 }
             }
         }
@@ -240,22 +232,23 @@ impl SyncModel {
 /// Represents a link between two different paths points. The dst path is seen as the
 /// 'link's location while the src path is seen as the link's pointed place.
 #[derive(Debug)]
-struct LinkedPoint<'a> {
-    pointer: Ref<'a, DirRoot>,
+struct LinkedPoint {
+    src: PathBuf,
+    dst: PathBuf,
 }
 
-impl<'a> LinkedPoint<'a> {
+impl LinkedPoint {
     /// Creates a link representation of two different locations.
-    pub(self) fn new(pointer: Ref<'a, DirRoot>) -> Self {
-        Self { pointer }
+    pub(self) fn new(src: PathBuf, dst: PathBuf) -> Self {
+        Self { src, dst }
     }
 
     /// Checks if the two points are already linked in the filesystem. Two points are linked
     /// if they both exist and the modification date of origin is equal or newer than dest.
     pub(self) fn synced(&self) -> bool {
-        if self.pointer.src.exists() && self.pointer.dst.exists() {
-            if let Some(linked) = modified(&self.pointer.src) {
-                if let Some(link) = modified(&self.pointer.dst) {
+        if self.src.exists() && self.dst.exists() {
+            if let Some(linked) = modified(&self.src) {
+                if let Some(link) = modified(&self.dst) {
                     return link >= linked;
                 }
             }
@@ -271,8 +264,8 @@ impl<'a> LinkedPoint<'a> {
     /// The behaviour is also controlled by the symbolic parameter. If set to true the
     /// function will create a symbolic link instead of copying the file.
     pub(self) fn mirror(&self, overwrite: OverwriteMode, symbolic: bool) -> Result<()> {
-        if overwrite == OverwriteMode::Disallow && self.pointer.dst.exists() {
-            err!(FsError::PathExists((&self.pointer.dst).into()));
+        if overwrite == OverwriteMode::Disallow && self.dst.exists() {
+            err!(FsError::PathExists((&self.dst).into()));
         }
 
         if overwrite == OverwriteMode::Allow && self.synced() {
@@ -280,24 +273,21 @@ impl<'a> LinkedPoint<'a> {
         }
 
         if !symbolic {
-            if let Ok(metadata) = fs::symlink_metadata(&self.pointer.dst) {
+            if let Ok(metadata) = fs::symlink_metadata(&self.dst) {
                 if metadata.file_type().is_symlink() {
-                    fs::remove_file(&self.pointer.dst)
-                        .context(FsError::DeleteFile((&self.pointer.dst).into()))?;
+                    fs::remove_file(&self.dst).context(FsError::DeleteFile((&self.dst).into()))?;
                 }
             }
 
-            fs::copy(&self.pointer.src, &self.pointer.dst)
-                .context(FsError::CreateFile((&self.pointer.dst).into()))?;
+            fs::copy(&self.src, &self.dst).context(FsError::CreateFile((&self.dst).into()))?;
         } else {
-            Self::symlink(&self.pointer.src, &self.pointer.dst)
-                .context(FsError::CreateFile((&self.pointer.dst).into()))?;
+            Self::symlink(&self.src, &self.dst).context(FsError::CreateFile((&self.dst).into()))?;
         }
 
         info!(
             "synced: {} -> {}",
-            pathlight(&self.pointer.src),
-            pathlight(&self.pointer.dst)
+            pathlight(&self.src),
+            pathlight(&self.dst)
         );
 
         Ok(())
