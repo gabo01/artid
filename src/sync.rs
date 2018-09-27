@@ -222,12 +222,14 @@ impl<P: AsRef<Path>> From<P> for FileSystemType {
     }
 }
 
+#[derive(Debug, Eq, PartialEq)]
 pub enum SyncActions {
     CreateDir(PathBuf),
     LinkFile(PathBuf),
     DeleteDst(PathBuf),
 }
 
+#[derive(Debug)]
 pub struct SyncModel {
     src: PathBuf,
     dst: PathBuf,
@@ -380,7 +382,10 @@ fn modified<P: AsRef<Path>>(file: P) -> Option<SystemTime> {
 
 #[cfg(test)]
 mod tests {
-    use super::{modified, DirTree, FileSystemType, LinkedPoint, OverwriteMode, SyncOptions};
+    use super::{
+        modified, DirTree, FileSystemType, LinkedPoint, OverwriteMode, SyncActions, SyncModel,
+        SyncOptions,
+    };
 
     mod file_system {
         use super::FileSystemType;
@@ -485,29 +490,120 @@ mod tests {
         }
     }
 
-    mod sync_op {
-        use super::{DirTree, OverwriteMode, SyncOptions};
+    mod sync_model {
+        use super::{DirTree, OverwriteMode, SyncActions, SyncModel, SyncOptions};
         use std::fs::{self, File};
         use tempfile;
 
         #[test]
-        fn test_sync_copy_single_dir() {
+        fn test_create_dir() {
+            let (src, dst) = (tmpdir!(), tmpdir!());
+            let tree = DirTree::new(src.path().into(), dst.path().into());
+            let actions = vec![SyncActions::CreateDir("a".into())];
             let options = SyncOptions::new(false, false, OverwriteMode::Force);
 
+            SyncModel::new(tree, actions, options).execute().unwrap();
+            assert!(tmppath!(dst, "a").exists());
+        }
+
+        #[test]
+        fn test_create_nested_dir() {
+            let (src, dst) = (tmpdir!(), tmpdir!());
+            let tree = DirTree::new(src.path().into(), dst.path().into());
+            let actions = vec![SyncActions::CreateDir("a/b".into())];
+            let options = SyncOptions::new(false, false, OverwriteMode::Force);
+
+            SyncModel::new(tree, actions, options).execute().unwrap();
+            assert!(tmppath!(dst, "a/b").exists());
+        }
+
+        #[test]
+        fn test_create_file() {
             let (src, dst) = (tmpdir!(), tmpdir!());
             create_file!(tmppath!(src, "a.txt"), "aaaa");
             create_file!(tmppath!(src, "b.txt"), "bbbb");
+            let tree = DirTree::new(src.path().into(), dst.path().into());
 
-            DirTree::new(src.path().into(), dst.path().into())
-                .sync(options)
-                .unwrap()
-                .execute()
-                .unwrap();
+            let actions = vec![
+                SyncActions::LinkFile("a.txt".into()),
+                SyncActions::LinkFile("b.txt".into()),
+            ];
+            let options = SyncOptions::new(false, false, OverwriteMode::Force);
 
+            SyncModel::new(tree, actions, options).execute().unwrap();
             assert!(tmppath!(dst, "a.txt").exists());
             assert!(tmppath!(dst, "b.txt").exists());
             assert_eq!(read_file!(tmppath!(dst, "a.txt")), "aaaa");
             assert_eq!(read_file!(tmppath!(dst, "b.txt")), "bbbb");
+        }
+
+        #[test]
+        fn test_create_file_symbolic() {
+            let (src, dst) = (tmpdir!(), tmpdir!());
+            create_file!(tmppath!(src, "a.txt"), "aaaa");
+            create_file!(tmppath!(src, "b.txt"), "bbbb");
+            let tree = DirTree::new(src.path().into(), dst.path().into());
+
+            let actions = vec![
+                SyncActions::LinkFile("a.txt".into()),
+                SyncActions::LinkFile("b.txt".into()),
+            ];
+            let mut options = SyncOptions::new(false, false, OverwriteMode::Force);
+            options.symbolic = true;
+
+            SyncModel::new(tree, actions, options).execute().unwrap();
+            assert!(tmppath!(dst, "a.txt").exists());
+            assert!(tmppath!(dst, "b.txt").exists());
+            assert_eq!(read_file!(tmppath!(dst, "a.txt")), "aaaa");
+            assert_eq!(read_file!(tmppath!(dst, "b.txt")), "bbbb");
+            assert!(symlink!(tmppath!(dst, "a.txt")));
+            assert!(symlink!(tmppath!(dst, "a.txt")));
+        }
+
+        #[test]
+        fn test_sync_model_mixed() {
+            let (src, dst) = (tmpdir!(), tmpdir!());
+            fs::create_dir(tmppath!(src, "a")).expect("Unable to create folder");
+            create_file!(tmppath!(src, "a/b.txt"), "bbbb");
+            let tree = DirTree::new(src.path().into(), dst.path().into());
+
+            let actions = vec![
+                SyncActions::CreateDir("a".into()),
+                SyncActions::LinkFile("a/b.txt".into()),
+            ];
+            let options = SyncOptions::new(false, false, OverwriteMode::Force);
+
+            SyncModel::new(tree, actions, options).execute().unwrap();
+            assert!(tmppath!(dst, "a").exists());
+            assert!(tmppath!(dst, "a/b.txt").exists());
+            assert_eq!(read_file!(tmppath!(dst, "a/b.txt")), "bbbb");
+        }
+    }
+
+    mod dir_tree {
+        use super::{DirTree, OverwriteMode, SyncActions, SyncOptions};
+        use std::fs::{self, File};
+        use tempfile;
+
+        #[test]
+        fn test_sync_copy_single_dir_model() {
+            let options = SyncOptions::new(false, false, OverwriteMode::Force);
+
+            let (src, dst) = (tmpdir!(), tmpdir!());
+            create_file!(tmppath!(src, "a.txt"));
+            create_file!(tmppath!(src, "b.txt"));
+
+            let model = DirTree::new(src.path().into(), dst.path().into())
+                .sync(options)
+                .unwrap();
+
+            assert_eq!(
+                model.actions,
+                vec![
+                    SyncActions::LinkFile("a.txt".into()),
+                    SyncActions::LinkFile("b.txt".into())
+                ]
+            );
         }
 
         #[test]
@@ -519,16 +615,19 @@ mod tests {
             create_file!(tmppath!(src, "a.txt"), "aaaa");
             create_file!(tmppath!(src, "b.txt"), "bbbb");
 
-            DirTree::new(src.path().into(), dst.path().into())
+            let model = DirTree::new(src.path().into(), dst.path().into())
                 .sync(options)
-                .unwrap()
-                .execute()
                 .unwrap();
 
-            assert!(tmppath!(dst, "a.txt").exists());
-            assert!(tmppath!(dst, "b.txt").exists());
-            assert!(symlink!(tmppath!(dst, "a.txt")));
-            assert!(symlink!(tmppath!(dst, "b.txt")));
+            assert_eq!(
+                model.actions,
+                vec![
+                    SyncActions::LinkFile("a.txt".into()),
+                    SyncActions::LinkFile("b.txt".into())
+                ]
+            );
+
+            assert!(model.symbolic);
         }
 
         #[test]
@@ -539,33 +638,17 @@ mod tests {
             fs::create_dir(tmppath!(src, "c")).expect("Unable to create folder");
             create_file!(tmppath!(src, "c/d.txt"), "dddd");
 
-            DirTree::new(src.path().into(), dst.path().into())
+            let model = DirTree::new(src.path().into(), dst.path().into())
                 .sync(options)
-                .unwrap()
-                .execute()
                 .unwrap();
 
-            assert!(tmppath!(dst, "c/d.txt").exists());
-            assert_eq!(read_file!(tmppath!(dst, "c/d.txt")), "dddd");
-        }
-
-        #[test]
-        fn test_sync_copy_symbolic_recursive() {
-            let mut options = SyncOptions::new(false, false, OverwriteMode::Force);
-            options.symbolic = true;
-
-            let (src, dst) = (tmpdir!(), tmpdir!());
-            fs::create_dir(tmppath!(src, "c")).expect("Unable to create folder");
-            create_file!(tmppath!(src, "c/d.txt"), "dddd");
-
-            DirTree::new(src.path().into(), dst.path().into())
-                .sync(options)
-                .unwrap()
-                .execute()
-                .unwrap();
-
-            assert!(dst.path().join("c/d.txt").exists());
-            assert!(symlink!(tmppath!(dst, "c/d.txt")));
+            assert_eq!(
+                model.actions,
+                vec![
+                    SyncActions::CreateDir("c".into()),
+                    SyncActions::LinkFile("c/d.txt".into())
+                ]
+            );
         }
     }
 }
