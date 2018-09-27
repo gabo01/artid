@@ -642,6 +642,56 @@ mod tests {
         }
 
         #[test]
+        fn test_folder_backup_double_remotion() {
+            let origin = tmpdir!();
+            create_file!(tmppath!(origin, "a.txt"), "aaaa");
+            create_file!(tmppath!(origin, "b.txt"), "bbbb");
+
+            let root = tmpdir!();
+
+            let stamp = Utc::now();
+            let options = BackupOptions::new(false);
+            let mut folder = Folder::new(
+                EnvPath::new("backup"),
+                EnvPath::new(origin.path().display().to_string()),
+                None,
+            );
+
+            folder
+                .backup(root.path(), stamp, options)
+                .expect("Unable to perform backup");
+
+            let mut backup = root.path().join("backup");
+            assert!(backup.exists());
+
+            backup.push(rfc3339!(stamp));
+
+            assert!(backup.exists());
+            assert!(backup.join("a.txt").exists());
+            assert!(backup.join("b.txt").exists());
+
+            assert_eq!(read_file!(backup.join("a.txt")), "aaaa");
+            assert_eq!(read_file!(backup.join("b.txt")), "bbbb");
+
+            thread::sleep(time::Duration::from_millis(2000));
+
+            // Delete a file in origin
+            fs::remove_file(tmppath!(origin, "a.txt")).unwrap();
+
+            let stamp = Utc::now();
+            folder
+                .backup(root.path(), stamp, options)
+                .expect("Unable to perform backup");
+
+            backup.pop();
+            backup.push(rfc3339!(stamp));
+
+            assert!(backup.exists());
+            assert!(!backup.join("a.txt").exists());
+            assert!(symlink!(backup.join("b.txt")));
+        }
+
+        #[test]
         fn test_folder_restore_single() {
             let (origin, root) = (tmpdir!(), tmpdir!());
             let stamp = Utc::now();

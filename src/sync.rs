@@ -578,6 +578,19 @@ mod tests {
             assert!(tmppath!(dst, "a/b.txt").exists());
             assert_eq!(read_file!(tmppath!(dst, "a/b.txt")), "bbbb");
         }
+
+        #[test]
+        fn test_cleanup_model() {
+            let (src, dst) = (tmpdir!(), tmpdir!());
+            create_file!(tmppath!(dst, "c.txt"), "cccc");
+            let tree = DirTree::new(src.path().into(), dst.path().into());
+
+            let actions = vec![SyncActions::DeleteDst("c.txt".into())];
+            let options = SyncOptions::new(false, false, OverwriteMode::Force);
+
+            SyncModel::new(tree, actions, options).execute().unwrap();
+            assert!(!tmppath!(dst, "c.txt").exists());
+        }
     }
 
     mod dir_tree {
@@ -649,6 +662,29 @@ mod tests {
                     SyncActions::LinkFile("c/d.txt".into())
                 ]
             );
+        }
+
+        #[test]
+        fn test_sync_clean() {
+            let options = SyncOptions::new(false, true, OverwriteMode::Force);
+
+            let (src, dst) = (tmpdir!(), tmpdir!());
+            create_file!(tmppath!(src, "a.txt"), "aaaa");
+            create_file!(tmppath!(src, "b.txt"), "bbbb");
+            create_file!(tmppath!(dst, "c.txt"), "cccc");
+
+            let model = DirTree::new(src.path().into(), dst.path().into())
+                .sync(options)
+                .unwrap();
+
+            assert_eq!(
+                model.actions,
+                vec![
+                    SyncActions::LinkFile("a.txt".into()),
+                    SyncActions::LinkFile("b.txt".into()),
+                    SyncActions::DeleteDst("c.txt".into())
+                ]
+            )
         }
     }
 }
