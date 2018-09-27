@@ -71,12 +71,15 @@ pub struct BackupOptions {
     /// In short words: (warn == true) => function will warn about errors instead of failing the
     /// backup operation
     pub warn: bool,
+    ///
+    /// 
+    pub run: bool
 }
 
 impl BackupOptions {
     /// Creates a new set of options for the backup operation.
-    pub fn new(warn: bool) -> Self {
-        Self { warn }
+    pub fn new(warn: bool, run: bool) -> Self {
+        Self { warn, run }
     }
 }
 
@@ -107,12 +110,16 @@ pub struct RestoreOptions {
     ///
     /// Setting (warn == true) will turn the error into a warning if (overwrite == false).
     overwrite: bool,
+    ///
+    /// 
+    /// 
+    run: bool
 }
 
 impl RestoreOptions {
     /// Creates a new set of options for the restore operation.
-    pub fn new(warn: bool, overwrite: bool) -> Self {
-        Self { warn, overwrite }
+    pub fn new(warn: bool, overwrite: bool, run: bool) -> Self {
+        Self { warn, overwrite, run }
     }
 }
 

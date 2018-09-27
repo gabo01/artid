@@ -85,7 +85,7 @@ impl<'a> App<'a> {
 }
 
 fn backup(matches: &ArgMatches) -> Result<DateTime<Utc>> {
-    let options = BackupOptions::new(matches.is_present("warn"));
+    let options = BackupOptions::new(matches.is_present("warn"), !matches.is_present("dry-run"));
     let mut path = curr_dir!();
 
     if let Some(val) = matches.value_of("path") {
@@ -98,7 +98,8 @@ fn backup(matches: &ArgMatches) -> Result<DateTime<Utc>> {
 }
 
 fn restore(matches: &ArgMatches) -> Result<()> {
-    let options = RestoreOptions::new(matches.is_present("warn"), matches.is_present("overwrite"));
+    let options = RestoreOptions::new(matches.is_present("warn"), matches.is_present("overwrite"),
+    !matches.is_present("dry-run"));
     let mut path = curr_dir!();
 
     if let Some(val) = matches.value_of("path") {
