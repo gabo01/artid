@@ -320,11 +320,15 @@ impl Folder {
             dirs.rel
                 .push(modified.to_rfc3339_opts(SecondsFormat::Nanos, true));
 
-            DirTree::new(dirs.rel, dirs.abs)
+            let model = DirTree::new(dirs.rel, dirs.abs)
                 .sync(options.into())
-                .context(AppErrorType::RestoreFolder)?
-                .execute()
                 .context(AppErrorType::RestoreFolder)?;
+
+            if options.run {
+                model.execute().context(AppErrorType::RestoreFolder)?;
+            } else {
+                model.log();
+            }
 
             Ok(())
         } else {
