@@ -105,8 +105,11 @@ fn backup(matches: &ArgMatches) -> Result<DateTime<Utc>> {
 }
 
 fn restore(matches: &ArgMatches) -> Result<()> {
-    let options = RestoreOptions::new(matches.is_present("warn"), matches.is_present("overwrite"),
-    !matches.is_present("dry-run"));
+    let options = RestoreOptions::new(
+        matches.is_present("warn"),
+        matches.is_present("overwrite"),
+        !matches.is_present("dry-run"),
+    );
     let mut path = curr_dir!();
 
     if let Some(val) = matches.value_of("path") {

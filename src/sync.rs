@@ -288,7 +288,11 @@ impl SyncModel {
     pub fn log(&self) {
         for action in &self.actions {
             if let SyncActions::LinkFile(ref dir) = action {
-                info!("Sync {} -> {}", pathlight(self.src.join(dir)), pathlight(self.dst.join(dir)));
+                info!(
+                    "Sync {} -> {}",
+                    pathlight(self.src.join(dir)),
+                    pathlight(self.dst.join(dir))
+                );
             }
         }
     }

@@ -72,8 +72,8 @@ pub struct BackupOptions {
     /// backup operation
     pub warn: bool,
     ///
-    /// 
-    pub run: bool
+    ///
+    pub run: bool,
 }
 
 impl BackupOptions {
@@ -111,15 +111,19 @@ pub struct RestoreOptions {
     /// Setting (warn == true) will turn the error into a warning if (overwrite == false).
     overwrite: bool,
     ///
-    /// 
-    /// 
-    run: bool
+    ///
+    ///
+    run: bool,
 }
 
 impl RestoreOptions {
     /// Creates a new set of options for the restore operation.
     pub fn new(warn: bool, overwrite: bool, run: bool) -> Self {
-        Self { warn, overwrite, run }
+        Self {
+            warn,
+            overwrite,
+            run,
+        }
     }
 }
 
