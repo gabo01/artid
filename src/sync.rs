@@ -284,6 +284,14 @@ impl SyncModel {
 
         Ok(())
     }
+
+    pub fn log(&self) {
+        for action in &self.actions {
+            if let SyncActions::LinkFile(ref dir) = action {
+                info!("Sync {} -> {}", pathlight(self.src.join(dir)), pathlight(self.dst.join(dir)));
+            }
+        }
+    }
 }
 
 /// Represents a link between two different paths points. The dst path is seen as the
