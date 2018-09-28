@@ -226,12 +226,14 @@ where
             }
         }
 
-        if let Err(err) = self.save() {
-            warn!(
-                "Unable to save on {} because of {}",
-                pathlight(self.dir.as_ref()),
-                err
-            );
+        if options.run {
+            if let Err(err) = self.save() {
+                warn!(
+                    "Unable to save on {} because of {}",
+                    pathlight(self.dir.as_ref()),
+                    err
+                );
+            }
         }
 
         match error {
@@ -382,9 +384,16 @@ impl Folder {
             .push(stamp.to_rfc3339_opts(SecondsFormat::Nanos, true));
         debug!("Starting backup of: {}", pathlight(&dirs.abs));
 
-        DirTree::new(dirs.abs, dirs.rel)
-            .sync(options.into())?
-            .execute()
+        let model = DirTree::new(dirs.abs, dirs.rel.clone()).sync(options.into())?;
+
+        if options.run {
+            model.execute()?;
+        } else {
+            model.log();
+            ::std::fs::remove_dir_all(dirs.rel).expect("Unable to remove tmp dir");
+        }
+
+        Ok(())
     }
 }
 

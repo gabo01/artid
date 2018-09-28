@@ -67,10 +67,17 @@ impl<'a> App<'a> {
         match self.matches.subcommand_name() {
             Some("update") => {
                 let stamp = backup(self.matches.subcommand_matches("update").unwrap())?;
-                info!(
-                    "Bakup timestamp in {}",
-                    highlight(stamp.to_rfc3339_opts(SecondsFormat::Nanos, true))
-                );
+                if !self
+                    .matches
+                    .subcommand_matches("update")
+                    .unwrap()
+                    .is_present("dry-run")
+                {
+                    info!(
+                        "Bakup timestamp in {}",
+                        highlight(stamp.to_rfc3339_opts(SecondsFormat::Nanos, true))
+                    );
+                }
             }
 
             Some("restore") => restore(self.matches.subcommand_matches("restore").unwrap())?,
