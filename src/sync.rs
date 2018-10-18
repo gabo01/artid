@@ -95,6 +95,63 @@ impl DirTree {
         Self { src, dst }
     }
 
+    ///
+    #[allow(dead_code)]
+    pub fn compare(&self) -> Result<Vec<Element>> {
+        let mut vec = vec![];
+        let src = Self::walk(&self.src, false)?;
+        let dst = Self::walk(&self.dst, false)?
+            .into_iter()
+            .filter(|x| !src.iter().any(|y| y.path == x.path))
+            .collect::<Vec<Entry<'_>>>();
+
+        for entry in &src {
+            if self.dst.join(&entry.path).exists() {
+                let link = {
+                    let forward = LinkedPoint::new(
+                        self.src.join(entry.path.clone()),
+                        self.dst.join(entry.path.clone()),
+                    ).synced();
+
+                    let backward = LinkedPoint::new(
+                        self.dst.join(entry.path.clone()),
+                        self.src.join(entry.path.clone()),
+                    ).synced();
+
+                    if forward {
+                        Link::Forward
+                    } else if backward {
+                        Link::Backward
+                    } else {
+                        Link::None
+                    }
+                };
+
+                vec.push(Element {
+                    path: entry.path.clone(),
+                    link,
+                    presence: Presence::Both,
+                })
+            } else {
+                vec.push(Element {
+                    path: entry.path.clone(),
+                    link: Link::None,
+                    presence: Presence::Src,
+                });
+            }
+        }
+
+        for entry in &dst {
+            vec.push(Element {
+                path: entry.path.clone(),
+                link: Link::None,
+                presence: Presence::Dst,
+            });
+        }
+
+        Ok(vec)
+    }
+
     /// Syncs the two trees. This function will fail if the two points aren't linked
     /// and it is unable to create the dst dir, the 'link' or if it is unable to
     /// read the contents of the src, the 'linked', dir.
@@ -200,6 +257,30 @@ impl<'a> Entry<'a> {
     pub fn full_path(&self) -> PathBuf {
         self.root.join(&self.path)
     }
+}
+
+///
+#[derive(Debug)]
+pub struct Element {
+    pub path: PathBuf,
+    pub link: Link,
+    pub presence: Presence,
+}
+
+///
+#[derive(Debug, Eq, PartialEq)]
+pub enum Link {
+    Forward,
+    Backward,
+    None,
+}
+
+///
+#[derive(Debug, Eq, PartialEq)]
+pub enum Presence {
+    Src,
+    Dst,
+    Both,
 }
 
 #[derive(Debug, PartialEq)]
