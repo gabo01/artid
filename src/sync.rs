@@ -1,9 +1,24 @@
+#![allow(dead_code)]
+
 use failure::{Fail, ResultExt};
 use logger::pathlight;
+use std::collections::HashMap;
+use std::ffi::OsString;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 use {AppError, FsError, Result};
+
+///
+macro_rules! read {
+    ($path:expr) => {
+        fs::read_dir($path)
+            .context(FsError::ReadFile($path.into()))?
+            .into_iter()
+            .filter_map(|e| e.ok())
+            .map(|e| (e.path(), e.file_name()))
+    };
+}
 
 /// Used to handle errors in the sync process.
 macro_rules! handle_errors {
@@ -71,6 +86,134 @@ pub enum OverwriteMode {
     /// The fuction will always overwrite the destination location regardless of the last
     /// modification date or any other parameter.
     Force,
+}
+
+#[derive(Debug)]
+pub struct NewDirTree {
+    src: PathBuf,
+    dst: PathBuf,
+    root: TreeNode,
+}
+
+impl NewDirTree {
+    pub fn new(src: PathBuf, dst: PathBuf) -> Result<Self> {
+        if !src.exists() || !dst.exists() {
+            panic!("Both points must exist");
+        }
+
+        let mut root = TreeNode::new("".into(), Presence::Both, FileSystemType::Dir);
+        root.read(&src, &dst)?;
+
+        Ok(Self { src, dst, root })
+    }
+}
+
+#[derive(Debug)]
+pub struct TreeNode {
+    path: PathBuf,
+    presence: Presence,
+    kind: FileSystemType,
+    children: Option<Vec<TreeNode>>,
+}
+
+impl TreeNode {
+    pub fn new(path: PathBuf, presence: Presence, kind: FileSystemType) -> Self {
+        Self {
+            path,
+            presence,
+            kind,
+            children: None,
+        }
+    }
+
+    pub fn read_recursive<T, P>(&mut self, src: T, dst: P) -> Result<()>
+    where
+        T: AsRef<Path>,
+        P: AsRef<Path>,
+    {
+        self.read(src.as_ref(), dst.as_ref())?;
+
+        if let Some(ref mut val) = self.children {
+            for child in val {
+                if child.kind == FileSystemType::Dir {
+                    child.read_recursive(src.as_ref(), dst.as_ref())?;
+                }
+            }
+        } else {
+            unreachable!();
+        }
+
+        Ok(())
+    }
+
+    pub fn read<T: AsRef<Path>, P: AsRef<Path>>(&mut self, src: T, dst: P) -> Result<()> {
+        let src = src.as_ref().join(&self.path);
+        let dst = dst.as_ref().join(&self.path);
+
+        match self.presence {
+            Presence::Both => {
+                self.children = Some(Self::compare(&self.path, read!(&src), read!(&dst))?);
+            }
+
+            Presence::Src => {
+                self.children = Some(
+                    read!(&src)
+                        .map(|(path, name)| {
+                            TreeNode::new(
+                                self.path.join(name),
+                                Presence::Src,
+                                FileSystemType::from(path),
+                            )
+                        }).collect(),
+                );
+            }
+
+            Presence::Dst => {
+                self.children = Some(
+                    read!(&dst)
+                        .map(|(path, name)| {
+                            TreeNode::new(
+                                self.path.join(name),
+                                Presence::Dst,
+                                FileSystemType::from(path),
+                            )
+                        }).collect(),
+                );
+            }
+        }
+
+        Ok(())
+    }
+
+    fn compare<P, T, U>(path: P, src: T, dst: U) -> Result<Vec<TreeNode>>
+    where
+        P: AsRef<Path>,
+        T: Iterator<Item = (PathBuf, OsString)>,
+        U: Iterator<Item = (PathBuf, OsString)>,
+    {
+        let mut table = HashMap::new();
+        let path = path.as_ref();
+
+        for entry in src {
+            table.insert(entry.1, (entry.0, Presence::Src));
+        }
+
+        for entry in dst {
+            let (path, name) = entry;
+            table
+                .entry(name)
+                .and_modify(|val| *val = (path.clone(), Presence::Both))
+                .or_insert((path, Presence::Dst));
+        }
+
+        let vec = table
+            .drain()
+            .map(|(key, value)| {
+                TreeNode::new(path.join(key), value.1, FileSystemType::from(value.0))
+            }).collect();
+
+        Ok(vec)
+    }
 }
 
 /// Represents two different linked directory trees. The dst path is seen as the 'link'
@@ -284,7 +427,7 @@ pub enum Presence {
 }
 
 #[derive(Debug, PartialEq)]
-enum FileSystemType {
+pub enum FileSystemType {
     File,
     Dir,
     Other,
