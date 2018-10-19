@@ -102,7 +102,7 @@ impl NewDirTree {
         }
 
         let mut root = TreeNode::new("".into(), Presence::Both, FileSystemType::Dir);
-        root.read(&src, &dst)?;
+        root.read_recursive(&src, &dst)?;
 
         Ok(Self { src, dst, root })
     }
