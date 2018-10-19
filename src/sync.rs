@@ -3,6 +3,7 @@
 use failure::{Fail, ResultExt};
 use logger::pathlight;
 use std::collections::HashMap;
+use std::collections::VecDeque;
 use std::ffi::OsString;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -105,6 +106,19 @@ impl NewDirTree {
         root.read_recursive(&src, &dst)?;
 
         Ok(Self { src, dst, root })
+    }
+
+    pub fn iter(&self) -> TreeIter<'_> {
+        TreeIter::new(self)
+    }
+}
+
+impl<'a> IntoIterator for &'a NewDirTree {
+    type Item = IterTreeNode<'a>;
+    type IntoIter = TreeIter<'a>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter()
     }
 }
 
@@ -213,6 +227,64 @@ impl TreeNode {
             }).collect();
 
         Ok(vec)
+    }
+}
+
+pub struct TreeIter<'a> {
+    tree: &'a NewDirTree,
+    elements: VecDeque<IterTreeNode<'a>>,
+}
+
+impl<'a> TreeIter<'a> {
+    pub fn new(tree: &'a NewDirTree) -> Self {
+        let mut elements = VecDeque::new();
+        if let Some(ref children) = tree.root.children {
+            elements.extend(
+                children
+                    .iter()
+                    .map(|e| IterTreeNode::new(&tree.src, &tree.dst, e)),
+            );
+        }
+
+        Self { tree, elements }
+    }
+}
+
+impl<'a> Iterator for TreeIter<'a> {
+    type Item = IterTreeNode<'a>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let next = self.elements.pop_front();
+
+        match next {
+            Some(val) => {
+                if val.node.kind == FileSystemType::Dir {
+                    if let Some(ref children) = val.node.children {
+                        self.elements.extend(
+                            children
+                                .iter()
+                                .map(|e| IterTreeNode::new(val.src, val.dst, e)),
+                        );
+                    }
+                }
+
+                Some(val)
+            }
+
+            None => None,
+        }
+    }
+}
+
+pub struct IterTreeNode<'a> {
+    pub src: &'a Path,
+    pub dst: &'a Path,
+    pub node: &'a TreeNode,
+}
+
+impl<'a> IterTreeNode<'a> {
+    pub fn new(src: &'a Path, dst: &'a Path, node: &'a TreeNode) -> Self {
+        Self { src, dst, node }
     }
 }
 
