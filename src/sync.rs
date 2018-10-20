@@ -90,14 +90,14 @@ pub enum OverwriteMode {
 }
 
 #[derive(Debug)]
-pub struct NewDirTree {
-    src: PathBuf,
-    dst: PathBuf,
+pub struct NewDirTree<'a> {
+    src: &'a Path,
+    dst: &'a Path,
     root: TreeNode,
 }
 
-impl NewDirTree {
-    pub fn new(src: PathBuf, dst: PathBuf) -> Result<Self> {
+impl<'a> NewDirTree<'a> {
+    pub fn new(src: &'a Path, dst: &'a Path) -> Result<Self> {
         if !src.exists() || !dst.exists() {
             panic!("Both points must exist");
         }
@@ -108,14 +108,17 @@ impl NewDirTree {
         Ok(Self { src, dst, root })
     }
 
-    pub fn iter(&self) -> TreeIter<'_> {
+    pub fn iter<'b>(&'b self) -> TreeIter<'a, 'b> {
         TreeIter::new(self)
     }
 }
 
-impl<'a> IntoIterator for &'a NewDirTree {
-    type Item = IterTreeNode<'a>;
-    type IntoIter = TreeIter<'a>;
+impl<'a, 'b> IntoIterator for &'b NewDirTree<'a>
+where
+    'a: 'b,
+{
+    type Item = IterTreeNode<'a, 'b>;
+    type IntoIter = TreeIter<'a, 'b>;
 
     fn into_iter(self) -> Self::IntoIter {
         self.iter()
@@ -230,13 +233,19 @@ impl TreeNode {
     }
 }
 
-pub struct TreeIter<'a> {
-    tree: &'a NewDirTree,
-    elements: VecDeque<IterTreeNode<'a>>,
+pub struct TreeIter<'a, 'b>
+where
+    'a: 'b,
+{
+    tree: &'b NewDirTree<'a>,
+    elements: VecDeque<IterTreeNode<'a, 'b>>,
 }
 
-impl<'a> TreeIter<'a> {
-    pub fn new(tree: &'a NewDirTree) -> Self {
+impl<'a, 'b> TreeIter<'a, 'b>
+where
+    'a: 'b,
+{
+    pub fn new(tree: &'b NewDirTree<'a>) -> Self {
         let mut elements = VecDeque::new();
         if let Some(ref children) = tree.root.children {
             elements.extend(
@@ -250,8 +259,11 @@ impl<'a> TreeIter<'a> {
     }
 }
 
-impl<'a> Iterator for TreeIter<'a> {
-    type Item = IterTreeNode<'a>;
+impl<'a, 'b> Iterator for TreeIter<'a, 'b>
+where
+    'a: 'b,
+{
+    type Item = IterTreeNode<'a, 'b>;
 
     fn next(&mut self) -> Option<Self::Item> {
         let next = self.elements.pop_front();
@@ -276,14 +288,14 @@ impl<'a> Iterator for TreeIter<'a> {
     }
 }
 
-pub struct IterTreeNode<'a> {
+pub struct IterTreeNode<'a, 'b> {
     pub src: &'a Path,
     pub dst: &'a Path,
-    pub node: &'a TreeNode,
+    pub node: &'b TreeNode,
 }
 
-impl<'a> IterTreeNode<'a> {
-    pub fn new(src: &'a Path, dst: &'a Path, node: &'a TreeNode) -> Self {
+impl<'a, 'b> IterTreeNode<'a, 'b> {
+    pub fn new(src: &'a Path, dst: &'a Path, node: &'b TreeNode) -> Self {
         Self { src, dst, node }
     }
 }
