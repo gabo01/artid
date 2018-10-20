@@ -540,6 +540,26 @@ impl TreeModel {
         Self { actions }
     }
 
+    pub fn execute(self) -> Result<()> {
+        for action in self.actions {
+            match action {
+                TreeModelActions::CreateDir { src, dst } => {
+                    LinkedPoint::new(src, dst).create_dir()?;
+                }
+
+                TreeModelActions::CopyFile { src, dst } => {
+                    LinkedPoint::new(src, dst).copy()?;
+                }
+
+                TreeModelActions::CopyLink { src, dst } => {
+                    LinkedPoint::new(src, dst).link()?;
+                }
+            }
+        }
+
+        Ok(())
+    }
+
     pub fn log(&self) {
         for action in &self.actions {
             if let TreeModelActions::CopyFile { ref src, ref dst } = action {
@@ -694,6 +714,30 @@ impl LinkedPoint {
         }
 
         false
+    }
+
+    pub fn create_dir(&self) -> Result<()> {
+        if !self.dst.exists() {
+            fs::create_dir(&self.dst).context(FsError::OpenFile((&self.dst).into()))?;
+        }
+
+        Ok(())
+    }
+
+    pub fn copy(&self) -> Result<()> {
+        if let Ok(metadata) = fs::symlink_metadata(&self.dst) {
+            if metadata.file_type().is_symlink() {
+                fs::remove_file(&self.dst).context(FsError::DeleteFile((&self.dst).into()))?;
+            }
+        }
+
+        fs::copy(&self.src, &self.dst).context(FsError::CreateFile((&self.dst).into()))?;
+        Ok(())
+    }
+
+    pub fn link(&self) -> Result<()> {
+        Self::symlink(&self.src, &self.dst).context(FsError::CreateFile((&self.dst).into()))?;
+        Ok(())
     }
 
     /// Syncs (or Links) the two points on the filesystem. The behaviour of this function
