@@ -248,13 +248,7 @@ where
 {
     pub fn new(tree: &'b NewDirTree<'a>) -> Self {
         let mut elements = VecDeque::new();
-        if let Some(ref children) = tree.root.children {
-            elements.extend(
-                children
-                    .iter()
-                    .map(|e| IterTreeNode::new(&tree.src, &tree.dst, e)),
-            );
-        }
+        elements.push_back(IterTreeNode::new(&tree.src, &tree.dst, &tree.root));
 
         Self { tree, elements }
     }
