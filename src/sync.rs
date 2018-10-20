@@ -99,11 +99,16 @@ pub struct NewDirTree<'a> {
 
 impl<'a> NewDirTree<'a> {
     pub fn new(src: &'a Path, dst: &'a Path) -> Result<Self> {
-        if !src.exists() || !dst.exists() {
-            panic!("Both points must exist");
-        }
+        let (srcexists, dstexists) = (src.exists(), dst.exists());
+        let presence = if srcexists && dstexists {
+            Presence::Both
+        } else if srcexists {
+            Presence::Src
+        } else {
+            Presence::Dst
+        };
 
-        let mut root = TreeNode::new("".into(), Presence::Both, FileSystemType::Dir);
+        let mut root = TreeNode::new("".into(), presence, FileSystemType::Dir);
         root.read_recursive(&src, &dst)?;
 
         Ok(Self { src, dst, root })
