@@ -298,6 +298,37 @@ impl<'a, 'b> IterTreeNode<'a, 'b> {
     pub fn new(src: &'a Path, dst: &'a Path, node: &'b TreeNode) -> Self {
         Self { src, dst, node }
     }
+
+    pub fn presence(&self) -> Presence {
+        self.node.presence
+    }
+
+    pub fn kind(&self) -> FileSystemType {
+        self.node.kind
+    }
+
+    pub fn path(&self) -> &Path {
+        &self.node.path
+    }
+
+    pub fn synced(&self, direction: Direction) -> bool {
+        match direction {
+            Direction::Forward => LinkedPoint::new(
+                self.src.join(&self.node.path),
+                self.dst.join(&self.node.path),
+            ).synced(),
+
+            Direction::Backward => LinkedPoint::new(
+                self.dst.join(&self.node.path),
+                self.src.join(&self.node.path),
+            ).synced(),
+        }
+    }
+}
+
+pub enum Direction {
+    Forward,
+    Backward,
 }
 
 /// Represents two different linked directory trees. The dst path is seen as the 'link'
@@ -503,14 +534,14 @@ pub enum Link {
 }
 
 ///
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum Presence {
     Src,
     Dst,
     Both,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub enum FileSystemType {
     File,
     Dir,

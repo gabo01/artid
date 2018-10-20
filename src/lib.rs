@@ -54,6 +54,13 @@ mod sync;
 pub use errors::{AppError, AppErrorType};
 use errors::{FsError, ParseError};
 use logger::pathlight;
+use sync::Direction;
+use sync::FileSystemType;
+use sync::Method;
+use sync::ModelItem;
+use sync::NewDirTree;
+use sync::Presence;
+use sync::TreeModel;
 use sync::{DirTree, OverwriteMode, SyncOptions};
 
 /// Alias for the Result type
@@ -311,9 +318,58 @@ impl Folder {
     where
         P: AsRef<Path>,
     {
-        self.push(&root, stamp, options)?;
-        self.sync(&root, stamp, options)?;
-        self.modified = Some(stamp);
+        let dirs = self.resolve(root);
+        let (base, old, new) = if let Some(modified) = self.modified {
+            (
+                dirs.abs,
+                Some(
+                    dirs.rel
+                        .join(modified.to_rfc3339_opts(SecondsFormat::Nanos, true)),
+                ),
+                dirs.rel
+                    .join(stamp.to_rfc3339_opts(SecondsFormat::Nanos, true)),
+            )
+        } else {
+            (
+                dirs.abs,
+                None,
+                dirs.rel
+                    .join(stamp.to_rfc3339_opts(SecondsFormat::Nanos, true)),
+            )
+        };
+
+        let model: TreeModel = if let Some(ref old) = old {
+            let tree = NewDirTree::new(&base, &old)?;
+            tree.iter()
+                .filter(|e| e.presence() != Presence::Dst)
+                .map(|e| {
+                    if e.kind() == FileSystemType::Dir {
+                        ModelItem::new(base.join(e.path()), new.join(e.path()), Method::Dir)
+                    } else if e.presence() == Presence::Src || !e.synced(Direction::Forward) {
+                        ModelItem::new(base.join(e.path()), new.join(e.path()), Method::Copy)
+                    } else {
+                        ModelItem::new(old.join(e.path()), new.join(e.path()), Method::Link)
+                    }
+                }).collect()
+        } else {
+            let tree = NewDirTree::new(&base, &new)?;
+            tree.iter()
+                .map(|e| {
+                    if e.kind() == FileSystemType::Dir {
+                        ModelItem::new(base.join(e.path()), new.join(e.path()), Method::Dir)
+                    } else {
+                        ModelItem::new(base.join(e.path()), new.join(e.path()), Method::Copy)
+                    }
+                }).collect()
+        };
+
+        if options.run {
+            model.execute()?;
+            self.modified = Some(stamp);
+        } else {
+            model.log();
+        }
+
         Ok(())
     }
 
@@ -350,54 +406,6 @@ impl Folder {
             rel: root.as_ref().join(self.path.as_ref()),
             abs: PathBuf::from(self.origin.as_ref()),
         }
-    }
-
-    /// Resolves only the link of the relative path.
-    fn resolve_rel<P: AsRef<Path>>(&self, root: P) -> PathBuf {
-        root.as_ref().join(self.path.as_ref())
-    }
-
-    /// Performs the sync between the backup and the previous one. The sync is performed
-    /// through symbolic links to avoid unnecessary file copies.
-    fn push<P>(&mut self, root: &P, stamp: DateTime<Utc>, options: BackupOptions) -> Result<()>
-    where
-        P: AsRef<Path>,
-    {
-        let dir = self.resolve_rel(root);
-        let (mut src, mut dst) = (dir.clone(), dir);
-        match self.modified {
-            Some(time) => src.push(time.to_rfc3339_opts(SecondsFormat::Nanos, true)),
-            None => return Ok(()),
-        };
-        dst.push(stamp.to_rfc3339_opts(SecondsFormat::Nanos, true));
-
-        let mut options: SyncOptions = options.into();
-        options.symbolic = true;
-
-        DirTree::new(src, dst).sync(options)?.execute()?;
-        Ok(())
-    }
-
-    /// Main sync operation, syncs the backup directory with the origin location.
-    fn sync<P>(&mut self, root: P, stamp: DateTime<Utc>, options: BackupOptions) -> Result<()>
-    where
-        P: AsRef<Path>,
-    {
-        let mut dirs = self.resolve(root);
-        dirs.rel
-            .push(stamp.to_rfc3339_opts(SecondsFormat::Nanos, true));
-        debug!("Starting backup of: {}", pathlight(&dirs.abs));
-
-        let model = DirTree::new(dirs.abs, dirs.rel.clone()).sync(options.into())?;
-
-        if options.run {
-            model.execute()?;
-        } else {
-            model.log();
-            ::std::fs::remove_dir_all(dirs.rel).expect("Unable to remove tmp dir");
-        }
-
-        Ok(())
     }
 }
 
