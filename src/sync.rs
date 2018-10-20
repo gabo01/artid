@@ -526,6 +526,7 @@ impl<P: AsRef<Path>> From<P> for FileSystemType {
 }
 
 pub enum TreeModelActions {
+    CreateDir { src: PathBuf, dst: PathBuf },
     CopyFile { src: PathBuf, dst: PathBuf },
     CopyLink { src: PathBuf, dst: PathBuf },
 }
@@ -552,18 +553,21 @@ impl FromIterator<ModelItem> for TreeModel {
     fn from_iter<I: IntoIterator<Item = ModelItem>>(iter: I) -> Self {
         TreeModel::new(
             iter.into_iter()
-                .map(|e| {
-                    if e.method == Method::Copy {
-                        TreeModelActions::CopyFile {
-                            src: e.src,
-                            dst: e.dst,
-                        }
-                    } else {
-                        TreeModelActions::CopyLink {
-                            src: e.src,
-                            dst: e.dst,
-                        }
-                    }
+                .map(|e| match e.method {
+                    Method::Dir => TreeModelActions::CreateDir {
+                        src: e.src,
+                        dst: e.dst,
+                    },
+
+                    Method::Copy => TreeModelActions::CopyFile {
+                        src: e.src,
+                        dst: e.dst,
+                    },
+
+                    Method::Link => TreeModelActions::CopyLink {
+                        src: e.src,
+                        dst: e.dst,
+                    },
                 }).collect(),
         )
     }
@@ -573,6 +577,7 @@ impl FromIterator<ModelItem> for TreeModel {
 pub enum Method {
     Copy,
     Link,
+    Dir,
 }
 
 pub struct ModelItem {
