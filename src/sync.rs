@@ -6,6 +6,7 @@ use std::collections::HashMap;
 use std::collections::VecDeque;
 use std::ffi::OsString;
 use std::fs;
+use std::iter::FromIterator;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 use {AppError, FsError, Result};
@@ -527,6 +528,68 @@ impl<P: AsRef<Path>> From<P> for FileSystemType {
         } else {
             FileSystemType::Other
         }
+    }
+}
+
+pub enum TreeModelActions {
+    CopyFile { src: PathBuf, dst: PathBuf },
+    CopyLink { src: PathBuf, dst: PathBuf },
+}
+
+pub struct TreeModel {
+    actions: Vec<TreeModelActions>,
+}
+
+impl TreeModel {
+    pub fn new(actions: Vec<TreeModelActions>) -> Self {
+        Self { actions }
+    }
+
+    pub fn log(&self) {
+        for action in &self.actions {
+            if let TreeModelActions::CopyFile { ref src, ref dst } = action {
+                info!("sync {} -> {}", pathlight(&src), pathlight(&dst))
+            }
+        }
+    }
+}
+
+impl FromIterator<ModelItem> for TreeModel {
+    fn from_iter<I: IntoIterator<Item = ModelItem>>(iter: I) -> Self {
+        TreeModel::new(
+            iter.into_iter()
+                .map(|e| {
+                    if e.method == Method::Copy {
+                        TreeModelActions::CopyFile {
+                            src: e.src,
+                            dst: e.dst,
+                        }
+                    } else {
+                        TreeModelActions::CopyLink {
+                            src: e.src,
+                            dst: e.dst,
+                        }
+                    }
+                }).collect(),
+        )
+    }
+}
+
+#[derive(Eq, PartialEq)]
+pub enum Method {
+    Copy,
+    Link,
+}
+
+pub struct ModelItem {
+    src: PathBuf,
+    dst: PathBuf,
+    method: Method,
+}
+
+impl ModelItem {
+    pub fn new(src: PathBuf, dst: PathBuf, method: Method) -> Self {
+        Self { src, dst, method }
     }
 }
 
