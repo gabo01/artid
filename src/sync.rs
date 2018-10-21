@@ -172,6 +172,7 @@ impl TreeNode {
     }
 }
 
+#[derive(Debug)]
 pub struct TreeIter<'a, 'b>
 where
     'a: 'b,
@@ -221,6 +222,7 @@ where
     }
 }
 
+#[derive(Debug)]
 pub struct IterTreeNode<'a, 'b> {
     pub src: &'a Path,
     pub dst: &'a Path,
@@ -259,6 +261,7 @@ impl<'a, 'b> IterTreeNode<'a, 'b> {
     }
 }
 
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum Direction {
     Forward,
     Backward,
@@ -272,7 +275,7 @@ pub enum Presence {
     Both,
 }
 
-#[derive(Copy, Clone, Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum FileSystemType {
     File,
     Dir,
