@@ -61,7 +61,7 @@ use sync::ModelItem;
 use sync::NewDirTree;
 use sync::Presence;
 use sync::TreeModel;
-use sync::{DirTree, OverwriteMode, SyncOptions};
+use sync::{OverwriteMode, SyncOptions};
 
 /// Alias for the Result type
 pub type Result<T> = ::std::result::Result<T, AppError>;
@@ -382,9 +382,29 @@ impl Folder {
             dirs.rel
                 .push(modified.to_rfc3339_opts(SecondsFormat::Nanos, true));
 
-            let model = DirTree::new(dirs.rel, dirs.abs)
-                .sync(options.into())
-                .context(AppErrorType::RestoreFolder)?;
+            let tree = NewDirTree::new(&dirs.abs, &dirs.rel)?;
+            let model: TreeModel = tree
+                .iter()
+                .filter(|e| {
+                    e.presence() == Presence::Dst
+                        || options.overwrite
+                            && e.presence() == Presence::Both
+                            && e.kind() != FileSystemType::Dir
+                }).map(|e| {
+                    if e.kind() == FileSystemType::Dir && e.presence() == Presence::Dst {
+                        ModelItem::new(
+                            dirs.rel.join(e.path()),
+                            dirs.abs.join(e.path()),
+                            Method::Dir,
+                        )
+                    } else {
+                        ModelItem::new(
+                            dirs.rel.join(e.path()),
+                            dirs.abs.join(e.path()),
+                            Method::Copy,
+                        )
+                    }
+                }).collect();
 
             if options.run {
                 model.execute().context(AppErrorType::RestoreFolder)?;
