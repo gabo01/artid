@@ -271,17 +271,27 @@ impl<'a, 'b> TreeIterNode<'a, 'b> {
     }
 
     pub fn synced(&self, direction: Direction) -> bool {
-        match direction {
-            Direction::Forward => LinkedPoint::new(
+        let (to_sync, to_be_synced) = match direction {
+            Direction::Forward => (
                 self.src.join(&self.node.path),
                 self.dst.join(&self.node.path),
-            ).synced(),
+            ),
 
-            Direction::Backward => LinkedPoint::new(
+            Direction::Backward => (
                 self.dst.join(&self.node.path),
                 self.src.join(&self.node.path),
-            ).synced(),
+            ),
+        };
+
+        if to_sync.exists() && to_be_synced.exists() {
+            if let Some(src) = modified(&to_sync) {
+                if let Some(dst) = modified(&to_be_synced) {
+                    return dst >= src;
+                }
+            }
         }
+
+        false
     }
 }
 
@@ -310,11 +320,17 @@ impl CopyModel {
                 }
 
                 CopyAction::CopyFile { src, dst } => {
-                    LinkedPoint::new(src, dst).copy()?;
+                    if let Ok(metadata) = fs::symlink_metadata(&dst) {
+                        if metadata.file_type().is_symlink() {
+                            fs::remove_file(&dst).context(FsError::DeleteFile((&dst).into()))?;
+                        }
+                    }
+
+                    fs::copy(&src, &dst).context(FsError::CreateFile((&dst).into()))?;
                 }
 
                 CopyAction::CopyLink { src, dst } => {
-                    LinkedPoint::new(src, dst).link()?;
+                    symlink(&src, &dst).context(FsError::CreateFile((&dst).into()))?;
                 }
             }
         }
@@ -334,51 +350,6 @@ impl CopyModel {
 impl FromIterator<CopyAction> for CopyModel {
     fn from_iter<I: IntoIterator<Item = CopyAction>>(iter: I) -> Self {
         CopyModel::new(iter.into_iter().collect())
-    }
-}
-
-/// Represents a link between two different paths points. The dst path is seen as the
-/// 'link's location while the src path is seen as the link's pointed place.
-#[derive(Debug)]
-struct LinkedPoint {
-    src: PathBuf,
-    dst: PathBuf,
-}
-
-impl LinkedPoint {
-    /// Creates a link representation of two different locations.
-    pub(self) fn new(src: PathBuf, dst: PathBuf) -> Self {
-        Self { src, dst }
-    }
-
-    /// Checks if the two points are already linked in the filesystem. Two points are linked
-    /// if they both exist and the modification date of origin is equal or newer than dest.
-    pub(self) fn synced(&self) -> bool {
-        if self.src.exists() && self.dst.exists() {
-            if let Some(linked) = modified(&self.src) {
-                if let Some(link) = modified(&self.dst) {
-                    return link >= linked;
-                }
-            }
-        }
-
-        false
-    }
-
-    pub fn copy(&self) -> Result<()> {
-        if let Ok(metadata) = fs::symlink_metadata(&self.dst) {
-            if metadata.file_type().is_symlink() {
-                fs::remove_file(&self.dst).context(FsError::DeleteFile((&self.dst).into()))?;
-            }
-        }
-
-        fs::copy(&self.src, &self.dst).context(FsError::CreateFile((&self.dst).into()))?;
-        Ok(())
-    }
-
-    pub fn link(&self) -> Result<()> {
-        symlink(&self.src, &self.dst).context(FsError::CreateFile((&self.dst).into()))?;
-        Ok(())
     }
 }
 
