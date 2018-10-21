@@ -24,13 +24,13 @@ macro_rules! read {
 }
 
 #[derive(Debug)]
-pub struct NewDirTree<'a> {
+pub struct DirTree<'a> {
     src: &'a Path,
     dst: &'a Path,
     root: TreeNode,
 }
 
-impl<'a> NewDirTree<'a> {
+impl<'a> DirTree<'a> {
     pub fn new(src: &'a Path, dst: &'a Path) -> Result<Self> {
         let (srcexists, dstexists) = (src.exists(), dst.exists());
         let presence = if srcexists && dstexists {
@@ -41,7 +41,7 @@ impl<'a> NewDirTree<'a> {
             Presence::Dst
         };
 
-        let mut root = TreeNode::new("".into(), presence, FileSystemType::Dir);
+        let mut root = TreeNode::new("".into(), presence, FileType::Dir);
         root.read_recursive(&src, &dst)?;
 
         Ok(Self { src, dst, root })
@@ -52,11 +52,11 @@ impl<'a> NewDirTree<'a> {
     }
 }
 
-impl<'a, 'b> IntoIterator for &'b NewDirTree<'a>
+impl<'a, 'b> IntoIterator for &'b DirTree<'a>
 where
     'a: 'b,
 {
-    type Item = IterTreeNode<'a, 'b>;
+    type Item = TreeIterNode<'a, 'b>;
     type IntoIter = TreeIter<'a, 'b>;
 
     fn into_iter(self) -> Self::IntoIter {
@@ -72,21 +72,21 @@ pub enum Presence {
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
-pub enum FileSystemType {
+pub enum FileType {
     File,
     Dir,
     Other,
 }
 
-impl<P: AsRef<Path>> From<P> for FileSystemType {
+impl<P: AsRef<Path>> From<P> for FileType {
     fn from(path: P) -> Self {
         let path = path.as_ref();
         if path.is_file() {
-            FileSystemType::File
+            FileType::File
         } else if path.is_dir() {
-            FileSystemType::Dir
+            FileType::Dir
         } else {
-            FileSystemType::Other
+            FileType::Other
         }
     }
 }
@@ -95,12 +95,12 @@ impl<P: AsRef<Path>> From<P> for FileSystemType {
 pub struct TreeNode {
     path: PathBuf,
     presence: Presence,
-    kind: FileSystemType,
+    kind: FileType,
     children: Option<Vec<TreeNode>>,
 }
 
 impl TreeNode {
-    pub fn new(path: PathBuf, presence: Presence, kind: FileSystemType) -> Self {
+    pub fn new(path: PathBuf, presence: Presence, kind: FileType) -> Self {
         Self {
             path,
             presence,
@@ -118,7 +118,7 @@ impl TreeNode {
 
         if let Some(ref mut val) = self.children {
             for child in val {
-                if child.kind == FileSystemType::Dir {
+                if child.kind == FileType::Dir {
                     child.read_recursive(src.as_ref(), dst.as_ref())?;
                 }
             }
@@ -142,11 +142,7 @@ impl TreeNode {
                 self.children = Some(
                     read!(&src)
                         .map(|(path, name)| {
-                            TreeNode::new(
-                                self.path.join(name),
-                                Presence::Src,
-                                FileSystemType::from(path),
-                            )
+                            TreeNode::new(self.path.join(name), Presence::Src, FileType::from(path))
                         }).collect(),
                 );
             }
@@ -155,11 +151,7 @@ impl TreeNode {
                 self.children = Some(
                     read!(&dst)
                         .map(|(path, name)| {
-                            TreeNode::new(
-                                self.path.join(name),
-                                Presence::Dst,
-                                FileSystemType::from(path),
-                            )
+                            TreeNode::new(self.path.join(name), Presence::Dst, FileType::from(path))
                         }).collect(),
                 );
             }
@@ -191,9 +183,8 @@ impl TreeNode {
 
         let vec = table
             .drain()
-            .map(|(key, value)| {
-                TreeNode::new(path.join(key), value.1, FileSystemType::from(value.0))
-            }).collect();
+            .map(|(key, value)| TreeNode::new(path.join(key), value.1, FileType::from(value.0)))
+            .collect();
 
         Ok(vec)
     }
@@ -204,17 +195,17 @@ pub struct TreeIter<'a, 'b>
 where
     'a: 'b,
 {
-    tree: &'b NewDirTree<'a>,
-    elements: VecDeque<IterTreeNode<'a, 'b>>,
+    tree: &'b DirTree<'a>,
+    elements: VecDeque<TreeIterNode<'a, 'b>>,
 }
 
 impl<'a, 'b> TreeIter<'a, 'b>
 where
     'a: 'b,
 {
-    pub fn new(tree: &'b NewDirTree<'a>) -> Self {
+    pub fn new(tree: &'b DirTree<'a>) -> Self {
         let mut elements = VecDeque::new();
-        elements.push_back(IterTreeNode::new(&tree.src, &tree.dst, &tree.root));
+        elements.push_back(TreeIterNode::new(&tree.src, &tree.dst, &tree.root));
 
         Self { tree, elements }
     }
@@ -224,19 +215,19 @@ impl<'a, 'b> Iterator for TreeIter<'a, 'b>
 where
     'a: 'b,
 {
-    type Item = IterTreeNode<'a, 'b>;
+    type Item = TreeIterNode<'a, 'b>;
 
     fn next(&mut self) -> Option<Self::Item> {
         let next = self.elements.pop_front();
 
         match next {
             Some(val) => {
-                if val.node.kind == FileSystemType::Dir {
+                if val.node.kind == FileType::Dir {
                     if let Some(ref children) = val.node.children {
                         self.elements.extend(
                             children
                                 .iter()
-                                .map(|e| IterTreeNode::new(val.src, val.dst, e)),
+                                .map(|e| TreeIterNode::new(val.src, val.dst, e)),
                         );
                     }
                 }
@@ -256,13 +247,13 @@ pub enum Direction {
 }
 
 #[derive(Debug)]
-pub struct IterTreeNode<'a, 'b> {
+pub struct TreeIterNode<'a, 'b> {
     pub src: &'a Path,
     pub dst: &'a Path,
     pub node: &'b TreeNode,
 }
 
-impl<'a, 'b> IterTreeNode<'a, 'b> {
+impl<'a, 'b> TreeIterNode<'a, 'b> {
     pub fn new(src: &'a Path, dst: &'a Path, node: &'b TreeNode) -> Self {
         Self { src, dst, node }
     }
@@ -271,7 +262,7 @@ impl<'a, 'b> IterTreeNode<'a, 'b> {
         self.node.presence
     }
 
-    pub fn kind(&self) -> FileSystemType {
+    pub fn kind(&self) -> FileType {
         self.node.kind
     }
 
@@ -294,7 +285,7 @@ impl<'a, 'b> IterTreeNode<'a, 'b> {
     }
 }
 
-pub enum TreeModelActions {
+pub enum CopyAction {
     CreateDir { src: PathBuf, dst: PathBuf },
     CopyFile { src: PathBuf, dst: PathBuf },
     CopyLink { src: PathBuf, dst: PathBuf },
@@ -319,27 +310,27 @@ impl ModelItem {
     }
 }
 
-pub struct TreeModel {
-    actions: Vec<TreeModelActions>,
+pub struct CopyModel {
+    actions: Vec<CopyAction>,
 }
 
-impl TreeModel {
-    pub fn new(actions: Vec<TreeModelActions>) -> Self {
+impl CopyModel {
+    pub fn new(actions: Vec<CopyAction>) -> Self {
         Self { actions }
     }
 
     pub fn execute(self) -> Result<()> {
         for action in self.actions {
             match action {
-                TreeModelActions::CreateDir { src, dst } => {
+                CopyAction::CreateDir { src, dst } => {
                     LinkedPoint::new(src, dst).create_dir()?;
                 }
 
-                TreeModelActions::CopyFile { src, dst } => {
+                CopyAction::CopyFile { src, dst } => {
                     LinkedPoint::new(src, dst).copy()?;
                 }
 
-                TreeModelActions::CopyLink { src, dst } => {
+                CopyAction::CopyLink { src, dst } => {
                     LinkedPoint::new(src, dst).link()?;
                 }
             }
@@ -350,29 +341,29 @@ impl TreeModel {
 
     pub fn log(&self) {
         for action in &self.actions {
-            if let TreeModelActions::CopyFile { ref src, ref dst } = action {
+            if let CopyAction::CopyFile { ref src, ref dst } = action {
                 info!("sync {} -> {}", pathlight(&src), pathlight(&dst))
             }
         }
     }
 }
 
-impl FromIterator<ModelItem> for TreeModel {
+impl FromIterator<ModelItem> for CopyModel {
     fn from_iter<I: IntoIterator<Item = ModelItem>>(iter: I) -> Self {
-        TreeModel::new(
+        CopyModel::new(
             iter.into_iter()
                 .map(|e| match e.method {
-                    Method::Dir => TreeModelActions::CreateDir {
+                    Method::Dir => CopyAction::CreateDir {
                         src: e.src,
                         dst: e.dst,
                     },
 
-                    Method::Copy => TreeModelActions::CopyFile {
+                    Method::Copy => CopyAction::CopyFile {
                         src: e.src,
                         dst: e.dst,
                     },
 
-                    Method::Link => TreeModelActions::CopyLink {
+                    Method::Link => CopyAction::CopyLink {
                         src: e.src,
                         dst: e.dst,
                     },

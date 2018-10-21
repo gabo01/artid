@@ -39,7 +39,7 @@ mod sync;
 pub use errors::{AppError, AppErrorType};
 use errors::{FsError, ParseError};
 use logger::pathlight;
-use sync::{Direction, FileSystemType, Method, ModelItem, NewDirTree, Presence, TreeModel};
+use sync::{Direction, FileType, Method, ModelItem, DirTree, Presence, CopyModel};
 
 /// Alias for the Result type
 pub type Result<T> = ::std::result::Result<T, AppError>;
@@ -276,12 +276,12 @@ impl Folder {
             )
         };
 
-        let model: TreeModel = if let Some(ref old) = old {
-            let tree = NewDirTree::new(&base, &old)?;
+        let model: CopyModel = if let Some(ref old) = old {
+            let tree = DirTree::new(&base, &old)?;
             tree.iter()
                 .filter(|e| e.presence() != Presence::Dst)
                 .map(|e| {
-                    if e.kind() == FileSystemType::Dir {
+                    if e.kind() == FileType::Dir {
                         ModelItem::new(base.join(e.path()), new.join(e.path()), Method::Dir)
                     } else if e.presence() == Presence::Src || !e.synced(Direction::Forward) {
                         ModelItem::new(base.join(e.path()), new.join(e.path()), Method::Copy)
@@ -290,10 +290,10 @@ impl Folder {
                     }
                 }).collect()
         } else {
-            let tree = NewDirTree::new(&base, &new)?;
+            let tree = DirTree::new(&base, &new)?;
             tree.iter()
                 .map(|e| {
-                    if e.kind() == FileSystemType::Dir {
+                    if e.kind() == FileType::Dir {
                         ModelItem::new(base.join(e.path()), new.join(e.path()), Method::Dir)
                     } else {
                         ModelItem::new(base.join(e.path()), new.join(e.path()), Method::Copy)
@@ -320,16 +320,16 @@ impl Folder {
             dirs.rel
                 .push(modified.to_rfc3339_opts(SecondsFormat::Nanos, true));
 
-            let tree = NewDirTree::new(&dirs.abs, &dirs.rel)?;
-            let model: TreeModel = tree
+            let tree = DirTree::new(&dirs.abs, &dirs.rel)?;
+            let model: CopyModel = tree
                 .iter()
                 .filter(|e| {
                     e.presence() == Presence::Dst
                         || options.overwrite
                             && e.presence() == Presence::Both
-                            && e.kind() != FileSystemType::Dir
+                            && e.kind() != FileType::Dir
                 }).map(|e| {
-                    if e.kind() == FileSystemType::Dir && e.presence() == Presence::Dst {
+                    if e.kind() == FileType::Dir && e.presence() == Presence::Dst {
                         ModelItem::new(
                             dirs.rel.join(e.path()),
                             dirs.abs.join(e.path()),
