@@ -39,7 +39,7 @@ mod sync;
 pub use errors::{AppError, AppErrorType};
 use errors::{FsError, ParseError};
 use logger::pathlight;
-use sync::{Direction, FileType, Method, ModelItem, DirTree, Presence, CopyModel};
+use sync::{CopyAction, CopyModel, DirTree, Direction, FileType, Presence};
 
 /// Alias for the Result type
 pub type Result<T> = ::std::result::Result<T, AppError>;
@@ -282,11 +282,19 @@ impl Folder {
                 .filter(|e| e.presence() != Presence::Dst)
                 .map(|e| {
                     if e.kind() == FileType::Dir {
-                        ModelItem::new(base.join(e.path()), new.join(e.path()), Method::Dir)
+                        CopyAction::CreateDir {
+                            target: new.join(e.path()),
+                        }
                     } else if e.presence() == Presence::Src || !e.synced(Direction::Forward) {
-                        ModelItem::new(base.join(e.path()), new.join(e.path()), Method::Copy)
+                        CopyAction::CopyFile {
+                            src: base.join(e.path()),
+                            dst: new.join(e.path()),
+                        }
                     } else {
-                        ModelItem::new(old.join(e.path()), new.join(e.path()), Method::Link)
+                        CopyAction::CopyLink {
+                            src: old.join(e.path()),
+                            dst: new.join(e.path()),
+                        }
                     }
                 }).collect()
         } else {
@@ -294,9 +302,14 @@ impl Folder {
             tree.iter()
                 .map(|e| {
                     if e.kind() == FileType::Dir {
-                        ModelItem::new(base.join(e.path()), new.join(e.path()), Method::Dir)
+                        CopyAction::CreateDir {
+                            target: new.join(e.path()),
+                        }
                     } else {
-                        ModelItem::new(base.join(e.path()), new.join(e.path()), Method::Copy)
+                        CopyAction::CopyFile {
+                            src: base.join(e.path()),
+                            dst: new.join(e.path()),
+                        }
                     }
                 }).collect()
         };
@@ -330,17 +343,14 @@ impl Folder {
                             && e.kind() != FileType::Dir
                 }).map(|e| {
                     if e.kind() == FileType::Dir && e.presence() == Presence::Dst {
-                        ModelItem::new(
-                            dirs.rel.join(e.path()),
-                            dirs.abs.join(e.path()),
-                            Method::Dir,
-                        )
+                        CopyAction::CreateDir {
+                            target: dirs.abs.join(e.path()),
+                        }
                     } else {
-                        ModelItem::new(
-                            dirs.rel.join(e.path()),
-                            dirs.abs.join(e.path()),
-                            Method::Copy,
-                        )
+                        CopyAction::CopyFile {
+                            src: dirs.rel.join(e.path()),
+                            dst: dirs.abs.join(e.path()),
+                        }
                     }
                 }).collect();
 

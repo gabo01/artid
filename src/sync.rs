@@ -286,28 +286,9 @@ impl<'a, 'b> TreeIterNode<'a, 'b> {
 }
 
 pub enum CopyAction {
-    CreateDir { src: PathBuf, dst: PathBuf },
+    CreateDir { target: PathBuf },
     CopyFile { src: PathBuf, dst: PathBuf },
     CopyLink { src: PathBuf, dst: PathBuf },
-}
-
-#[derive(Eq, PartialEq)]
-pub enum Method {
-    Copy,
-    Link,
-    Dir,
-}
-
-pub struct ModelItem {
-    src: PathBuf,
-    dst: PathBuf,
-    method: Method,
-}
-
-impl ModelItem {
-    pub fn new(src: PathBuf, dst: PathBuf, method: Method) -> Self {
-        Self { src, dst, method }
-    }
 }
 
 pub struct CopyModel {
@@ -322,8 +303,10 @@ impl CopyModel {
     pub fn execute(self) -> Result<()> {
         for action in self.actions {
             match action {
-                CopyAction::CreateDir { src, dst } => {
-                    LinkedPoint::new(src, dst).create_dir()?;
+                CopyAction::CreateDir { target } => {
+                    if !target.exists() {
+                        fs::create_dir(&target).context(FsError::OpenFile((&target).into()))?;
+                    }
                 }
 
                 CopyAction::CopyFile { src, dst } => {
@@ -348,27 +331,9 @@ impl CopyModel {
     }
 }
 
-impl FromIterator<ModelItem> for CopyModel {
-    fn from_iter<I: IntoIterator<Item = ModelItem>>(iter: I) -> Self {
-        CopyModel::new(
-            iter.into_iter()
-                .map(|e| match e.method {
-                    Method::Dir => CopyAction::CreateDir {
-                        src: e.src,
-                        dst: e.dst,
-                    },
-
-                    Method::Copy => CopyAction::CopyFile {
-                        src: e.src,
-                        dst: e.dst,
-                    },
-
-                    Method::Link => CopyAction::CopyLink {
-                        src: e.src,
-                        dst: e.dst,
-                    },
-                }).collect(),
-        )
+impl FromIterator<CopyAction> for CopyModel {
+    fn from_iter<I: IntoIterator<Item = CopyAction>>(iter: I) -> Self {
+        CopyModel::new(iter.into_iter().collect())
     }
 }
 
@@ -398,14 +363,6 @@ impl LinkedPoint {
         }
 
         false
-    }
-
-    pub fn create_dir(&self) -> Result<()> {
-        if !self.dst.exists() {
-            fs::create_dir(&self.dst).context(FsError::OpenFile((&self.dst).into()))?;
-        }
-
-        Ok(())
     }
 
     pub fn copy(&self) -> Result<()> {
