@@ -64,6 +64,33 @@ where
     }
 }
 
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum Presence {
+    Src,
+    Dst,
+    Both,
+}
+
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum FileSystemType {
+    File,
+    Dir,
+    Other,
+}
+
+impl<P: AsRef<Path>> From<P> for FileSystemType {
+    fn from(path: P) -> Self {
+        let path = path.as_ref();
+        if path.is_file() {
+            FileSystemType::File
+        } else if path.is_dir() {
+            FileSystemType::Dir
+        } else {
+            FileSystemType::Other
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct TreeNode {
     path: PathBuf,
@@ -222,6 +249,12 @@ where
     }
 }
 
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum Direction {
+    Forward,
+    Backward,
+}
+
 #[derive(Debug)]
 pub struct IterTreeNode<'a, 'b> {
     pub src: &'a Path,
@@ -261,44 +294,29 @@ impl<'a, 'b> IterTreeNode<'a, 'b> {
     }
 }
 
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
-pub enum Direction {
-    Forward,
-    Backward,
-}
-
-///
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
-pub enum Presence {
-    Src,
-    Dst,
-    Both,
-}
-
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
-pub enum FileSystemType {
-    File,
-    Dir,
-    Other,
-}
-
-impl<P: AsRef<Path>> From<P> for FileSystemType {
-    fn from(path: P) -> Self {
-        let path = path.as_ref();
-        if path.is_file() {
-            FileSystemType::File
-        } else if path.is_dir() {
-            FileSystemType::Dir
-        } else {
-            FileSystemType::Other
-        }
-    }
-}
-
 pub enum TreeModelActions {
     CreateDir { src: PathBuf, dst: PathBuf },
     CopyFile { src: PathBuf, dst: PathBuf },
     CopyLink { src: PathBuf, dst: PathBuf },
+}
+
+#[derive(Eq, PartialEq)]
+pub enum Method {
+    Copy,
+    Link,
+    Dir,
+}
+
+pub struct ModelItem {
+    src: PathBuf,
+    dst: PathBuf,
+    method: Method,
+}
+
+impl ModelItem {
+    pub fn new(src: PathBuf, dst: PathBuf, method: Method) -> Self {
+        Self { src, dst, method }
+    }
 }
 
 pub struct TreeModel {
@@ -360,25 +378,6 @@ impl FromIterator<ModelItem> for TreeModel {
                     },
                 }).collect(),
         )
-    }
-}
-
-#[derive(Eq, PartialEq)]
-pub enum Method {
-    Copy,
-    Link,
-    Dir,
-}
-
-pub struct ModelItem {
-    src: PathBuf,
-    dst: PathBuf,
-    method: Method,
-}
-
-impl ModelItem {
-    pub fn new(src: PathBuf, dst: PathBuf, method: Method) -> Self {
-        Self { src, dst, method }
     }
 }
 
