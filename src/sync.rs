@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-use failure::{Fail, ResultExt};
+use failure::ResultExt;
 use logger::pathlight;
 use std::collections::HashMap;
 use std::collections::VecDeque;
@@ -22,34 +22,10 @@ macro_rules! read {
     };
 }
 
-/// Used to handle errors in the sync process.
-macro_rules! handle_errors {
-    ($warn:expr, $err:expr, $($msg:tt)*) => {
-        if $warn {
-            warn!($($msg)*);
-            if cfg!(debug_assertions) {
-                for cause in $err.causes() {
-                    trace!("{}", cause);
-                }
-            }
-        } else {
-            fail!($err);
-        }
-    };
-}
-
 /// Modifier options for the sync process in a DirTree. Check the properties to see which
 /// behaviour they control.
 #[derive(Debug, Copy, Clone)]
 pub struct SyncOptions {
-    /// Enables/Disables warnings on the sync process. If an error is raises while processing
-    /// the sync: a folder can't be read from (excluding the main folders), the user does not
-    /// have permissions for accessing a file, the function will emit a warning instead of
-    /// exiting with an error.
-    ///
-    /// In short words: (warn == true) => function will warn about errors instead of failing the
-    /// backup operation.
-    pub warn: bool,
     /// Enables/Disables cleanup of files. If a file is present on the location to be written
     /// on but does not exist in it's supposed original location, the file will be deleted from
     /// the backup. This avoids generating garbage files on a backup dir.
@@ -64,9 +40,8 @@ pub struct SyncOptions {
 
 impl SyncOptions {
     /// Creates a new set of options for the sync process.
-    pub fn new(warn: bool, clean: bool, overwrite: OverwriteMode) -> Self {
+    pub fn new(clean: bool, overwrite: OverwriteMode) -> Self {
         Self {
-            warn,
             clean,
             overwrite,
             symbolic: false,
@@ -357,8 +332,8 @@ impl DirTree {
     #[allow(dead_code)]
     pub fn compare(&self) -> Result<Vec<Element>> {
         let mut vec = vec![];
-        let src = Self::walk(&self.src, false)?;
-        let dst = Self::walk(&self.dst, false)?
+        let src = Self::walk(&self.src)?;
+        let dst = Self::walk(&self.dst)?
             .into_iter()
             .filter(|x| !src.iter().any(|y| y.path == x.path))
             .collect::<Vec<Entry<'_>>>();
@@ -420,7 +395,7 @@ impl DirTree {
     pub fn sync(self, options: SyncOptions) -> Result<(SyncModel)> {
         let mut actions = vec![];
 
-        for entry in Self::walk(&self.src, options.warn)? {
+        for entry in Self::walk(&self.src)? {
             match entry.kind() {
                 FileSystemType::Dir => {
                     if !self.dst.join(&entry.path).exists() {
@@ -437,7 +412,7 @@ impl DirTree {
         }
 
         if options.clean && self.dst.exists() {
-            for entry in Self::walk(&self.dst, options.warn)? {
+            for entry in Self::walk(&self.dst)? {
                 match entry.kind() {
                     FileSystemType::Dir | FileSystemType::File => {
                         if !self.src.join(&entry.path).exists() {
@@ -455,14 +430,14 @@ impl DirTree {
         Ok(SyncModel::new(self, actions, options))
     }
 
-    fn walk(dir: &Path, warn: bool) -> Result<Vec<Entry<'_>>> {
+    fn walk(dir: &Path) -> Result<Vec<Entry<'_>>> {
         let mut entries = vec![Entry::new(dir, "".into(), 0)];
-        let mut walked = Self::walk_recursive(&entries[0], warn)?;
+        let mut walked = Self::walk_recursive(&entries[0])?;
         entries.append(&mut walked);
         Ok(entries)
     }
 
-    fn walk_recursive<'a>(entry: &Entry<'a>, warn: bool) -> Result<Vec<Entry<'a>>> {
+    fn walk_recursive<'a>(entry: &Entry<'a>) -> Result<Vec<Entry<'a>>> {
         let mut entries = vec![];
 
         for element in fs::read_dir(entry.full_path())
@@ -477,15 +452,8 @@ impl DirTree {
             ));
 
             if let FileSystemType::Dir = FileSystemType::from(element.path()) {
-                match Self::walk_recursive(&entries.last().unwrap(), warn) {
-                    Ok(mut walked) => entries.append(&mut walked),
-                    Err(err) => handle_errors!(
-                        warn,
-                        err,
-                        "Unable to read {}",
-                        pathlight(entries.last().unwrap().full_path())
-                    ),
-                }
+                let mut walked = Self::walk_recursive(&entries.last().unwrap())?;
+                entries.append(&mut walked);
             }
         }
 

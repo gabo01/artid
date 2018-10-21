@@ -70,14 +70,6 @@ pub type Result<T> = ::std::result::Result<T, AppError>;
 /// behaviour they control
 #[derive(Debug, Copy, Clone)]
 pub struct BackupOptions {
-    /// Enables/Disables warnings on the backup process. If an error is raises while processing
-    /// the backup: a folder can't be read from (excluding the main folders), the user does not
-    /// have permissions for accessing a file, the function will emit a warning instead of
-    /// exiting with an error.
-    ///
-    /// In short words: (warn == true) => function will warn about errors instead of failing the
-    /// backup operation
-    pub warn: bool,
     ///
     ///
     pub run: bool,
@@ -85,14 +77,14 @@ pub struct BackupOptions {
 
 impl BackupOptions {
     /// Creates a new set of options for the backup operation.
-    pub fn new(warn: bool, run: bool) -> Self {
-        Self { warn, run }
+    pub fn new(run: bool) -> Self {
+        Self { run }
     }
 }
 
 impl From<BackupOptions> for SyncOptions {
-    fn from(options: BackupOptions) -> Self {
-        SyncOptions::new(options.warn, true, OverwriteMode::Allow)
+    fn from(_options: BackupOptions) -> Self {
+        SyncOptions::new(true, OverwriteMode::Allow)
     }
 }
 
@@ -100,14 +92,6 @@ impl From<BackupOptions> for SyncOptions {
 /// behaviour they control
 #[derive(Debug, Copy, Clone)]
 pub struct RestoreOptions {
-    /// Enables/Disables warnings on the restore process. If an error is raised while processing
-    /// the restore: a folder can't be read from (excluding the main folders), the user does not
-    /// have permissions for accessing a file, the function will emit a warning instead of
-    /// exiting with an error.
-    ///
-    /// In short words: (warn == true) => function will warn about errors instead of failing the
-    /// backup operation.
-    warn: bool,
     /// Enables/Disables overwrite on the original locations during the restore. If the original
     /// location of the file backed up already exists this function will overwrite the location
     /// with the file backed up instead of exiting with an error.
@@ -125,9 +109,8 @@ pub struct RestoreOptions {
 
 impl RestoreOptions {
     /// Creates a new set of options for the restore operation.
-    pub fn new(warn: bool, overwrite: bool, run: bool) -> Self {
+    pub fn new(overwrite: bool, run: bool) -> Self {
         Self {
-            warn,
             overwrite,
             run,
         }
@@ -137,7 +120,6 @@ impl RestoreOptions {
 impl From<RestoreOptions> for SyncOptions {
     fn from(options: RestoreOptions) -> Self {
         SyncOptions::new(
-            options.warn,
             false,
             if options.overwrite {
                 OverwriteMode::Force

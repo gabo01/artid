@@ -19,9 +19,6 @@ subcommands:
                 long: dir
                 value_name: DIR
                 takes_value: true
-            - warn:
-                help: Warns instead of exiting if an error is found in a subcomponent
-                long: warn
             - dry-run:
                 help: Prints the all the changes for the operation without making them
                 long: dry-run
@@ -36,9 +33,6 @@ subcommands:
                 long: dir
                 value_name: DIR
                 takes_value: true
-            - warn:
-                help: Warns instead of exiting if an error is found in a subcomponent
-                long: warn
             - overwrite:
                 help: Allows overwriting files during restoration process
                 long: overwrite
