@@ -28,21 +28,6 @@ use std::fs::File;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
-/// Represents a failure in the execution of a function.
-macro_rules! fail {
-    ($x:expr) => {
-        return Err($x);
-    };
-}
-
-/// Used to build an error and then fail the current function execution with the builded
-/// error.
-macro_rules! err {
-    ($x:expr) => {
-        fail!(AppError::from($x))
-    };
-}
-
 #[cfg(test)]
 #[macro_use]
 mod tools;
@@ -54,14 +39,7 @@ mod sync;
 pub use errors::{AppError, AppErrorType};
 use errors::{FsError, ParseError};
 use logger::pathlight;
-use sync::Direction;
-use sync::FileSystemType;
-use sync::Method;
-use sync::ModelItem;
-use sync::NewDirTree;
-use sync::Presence;
-use sync::TreeModel;
-use sync::{OverwriteMode, SyncOptions};
+use sync::{Direction, FileSystemType, Method, ModelItem, NewDirTree, Presence, TreeModel};
 
 /// Alias for the Result type
 pub type Result<T> = ::std::result::Result<T, AppError>;
@@ -79,12 +57,6 @@ impl BackupOptions {
     /// Creates a new set of options for the backup operation.
     pub fn new(run: bool) -> Self {
         Self { run }
-    }
-}
-
-impl From<BackupOptions> for SyncOptions {
-    fn from(_options: BackupOptions) -> Self {
-        SyncOptions::new(true, OverwriteMode::Allow)
     }
 }
 
@@ -110,23 +82,7 @@ pub struct RestoreOptions {
 impl RestoreOptions {
     /// Creates a new set of options for the restore operation.
     pub fn new(overwrite: bool, run: bool) -> Self {
-        Self {
-            overwrite,
-            run,
-        }
-    }
-}
-
-impl From<RestoreOptions> for SyncOptions {
-    fn from(options: RestoreOptions) -> Self {
-        SyncOptions::new(
-            false,
-            if options.overwrite {
-                OverwriteMode::Force
-            } else {
-                OverwriteMode::Disallow
-            },
-        )
+        Self { overwrite, run }
     }
 }
 

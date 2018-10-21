@@ -1,15 +1,16 @@
-#![allow(dead_code)]
-
 use failure::ResultExt;
 use logger::pathlight;
-use std::collections::HashMap;
-use std::collections::VecDeque;
+use std::collections::{HashMap, VecDeque};
 use std::ffi::OsString;
 use std::fs;
 use std::iter::FromIterator;
+#[cfg(unix)]
+use std::os::unix::fs::symlink;
+#[cfg(windows)]
+use std::os::windows::fs::symlink_file as symlink;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
-use {AppError, FsError, Result};
+use {FsError, Result};
 
 ///
 macro_rules! read {
@@ -20,49 +21,6 @@ macro_rules! read {
             .filter_map(|e| e.ok())
             .map(|e| (e.path(), e.file_name()))
     };
-}
-
-/// Modifier options for the sync process in a DirTree. Check the properties to see which
-/// behaviour they control.
-#[derive(Debug, Copy, Clone)]
-pub struct SyncOptions {
-    /// Enables/Disables cleanup of files. If a file is present on the location to be written
-    /// on but does not exist in it's supposed original location, the file will be deleted from
-    /// the backup. This avoids generating garbage files on a backup dir.
-    pub clean: bool,
-    /// Controls how to handle if a location to be written on already exists. See OverwriteMode
-    /// docs for more info on how this setting behaves.
-    pub overwrite: OverwriteMode,
-    /// Enables/Disables sync through symbolic links. If set to true a symbolic link will be
-    /// created in the destination instead of copying the whole file.
-    pub symbolic: bool,
-}
-
-impl SyncOptions {
-    /// Creates a new set of options for the sync process.
-    pub fn new(clean: bool, overwrite: OverwriteMode) -> Self {
-        Self {
-            clean,
-            overwrite,
-            symbolic: false,
-        }
-    }
-}
-
-/// Sets the mode for handling the case in which a file would be overwritten by the sync
-/// operation.
-#[derive(Debug, Copy, Clone, PartialEq)]
-pub enum OverwriteMode {
-    /// The function will raise an error if the location where it tries to write already
-    /// exists.
-    Disallow,
-    /// The function will compare both locations last modification date. If the location
-    /// to be written on is older than the location whose contents will be copied the
-    /// location will be overwritten.
-    Allow,
-    /// The fuction will always overwrite the destination location regardless of the last
-    /// modification date or any other parameter.
-    Force,
 }
 
 #[derive(Debug)]
@@ -306,201 +264,6 @@ pub enum Direction {
     Backward,
 }
 
-/// Represents two different linked directory trees. The dst path is seen as the 'link'
-/// and the src path is seen as the 'linked place'. This means that syncing the link is making
-/// a copy of all files in src to dst.
-///
-/// The idea behind this type is to be able to walk the dest path and mimic it's structure on
-/// the origin path.
-///
-/// Creation of this type won't fail even if the given path's aren't valid. You can check if the
-/// given path's are correct by calling .valid(). If the path's are not correct the sync function
-/// will fail and return an appropiate error.
-#[derive(Debug)]
-pub struct DirTree {
-    src: PathBuf,
-    dst: PathBuf,
-}
-
-impl DirTree {
-    /// Creates a new link representation for two different trees.
-    pub fn new(src: PathBuf, dst: PathBuf) -> Self {
-        Self { src, dst }
-    }
-
-    ///
-    #[allow(dead_code)]
-    pub fn compare(&self) -> Result<Vec<Element>> {
-        let mut vec = vec![];
-        let src = Self::walk(&self.src)?;
-        let dst = Self::walk(&self.dst)?
-            .into_iter()
-            .filter(|x| !src.iter().any(|y| y.path == x.path))
-            .collect::<Vec<Entry<'_>>>();
-
-        for entry in &src {
-            if self.dst.join(&entry.path).exists() {
-                let link = {
-                    let forward = LinkedPoint::new(
-                        self.src.join(entry.path.clone()),
-                        self.dst.join(entry.path.clone()),
-                    ).synced();
-
-                    let backward = LinkedPoint::new(
-                        self.dst.join(entry.path.clone()),
-                        self.src.join(entry.path.clone()),
-                    ).synced();
-
-                    if forward {
-                        Link::Forward
-                    } else if backward {
-                        Link::Backward
-                    } else {
-                        Link::None
-                    }
-                };
-
-                vec.push(Element {
-                    path: entry.path.clone(),
-                    link,
-                    presence: Presence::Both,
-                })
-            } else {
-                vec.push(Element {
-                    path: entry.path.clone(),
-                    link: Link::None,
-                    presence: Presence::Src,
-                });
-            }
-        }
-
-        for entry in &dst {
-            vec.push(Element {
-                path: entry.path.clone(),
-                link: Link::None,
-                presence: Presence::Dst,
-            });
-        }
-
-        Ok(vec)
-    }
-
-    /// Syncs the two trees. This function will fail if the two points aren't linked
-    /// and it is unable to create the dst dir, the 'link' or if it is unable to
-    /// read the contents of the src, the 'linked', dir.
-    ///
-    /// Behaviour of these function can be controlled through the options sent for things such
-    /// as file clashes, errors while processing a file or a subdirectory and other things. See
-    /// SyncOptions docs for more info on these topic.
-    pub fn sync(self, options: SyncOptions) -> Result<(SyncModel)> {
-        let mut actions = vec![];
-
-        for entry in Self::walk(&self.src)? {
-            match entry.kind() {
-                FileSystemType::Dir => {
-                    if !self.dst.join(&entry.path).exists() {
-                        actions.push(SyncActions::CreateDir(entry.path))
-                    }
-                }
-
-                FileSystemType::File => actions.push(SyncActions::LinkFile(entry.path)),
-
-                FileSystemType::Other => {
-                    warn!("Unable to process {}", pathlight(entry.full_path()))
-                }
-            }
-        }
-
-        if options.clean && self.dst.exists() {
-            for entry in Self::walk(&self.dst)? {
-                match entry.kind() {
-                    FileSystemType::Dir | FileSystemType::File => {
-                        if !self.src.join(&entry.path).exists() {
-                            actions.push(SyncActions::DeleteDst(entry.path))
-                        }
-                    }
-
-                    FileSystemType::Other => {
-                        warn!("Unable to process {}", pathlight(entry.full_path()))
-                    }
-                }
-            }
-        }
-
-        Ok(SyncModel::new(self, actions, options))
-    }
-
-    fn walk(dir: &Path) -> Result<Vec<Entry<'_>>> {
-        let mut entries = vec![Entry::new(dir, "".into(), 0)];
-        let mut walked = Self::walk_recursive(&entries[0])?;
-        entries.append(&mut walked);
-        Ok(entries)
-    }
-
-    fn walk_recursive<'a>(entry: &Entry<'a>) -> Result<Vec<Entry<'a>>> {
-        let mut entries = vec![];
-
-        for element in fs::read_dir(entry.full_path())
-            .context(FsError::ReadFile(entry.full_path().into()))?
-            .into_iter()
-            .filter_map(|e| e.ok())
-        {
-            entries.push(Entry::new(
-                entry.root,
-                entry.path.join(element.file_name()),
-                entry.deepness + 1,
-            ));
-
-            if let FileSystemType::Dir = FileSystemType::from(element.path()) {
-                let mut walked = Self::walk_recursive(&entries.last().unwrap())?;
-                entries.append(&mut walked);
-            }
-        }
-
-        Ok(entries)
-    }
-}
-
-struct Entry<'a> {
-    root: &'a Path,
-    path: PathBuf,
-    deepness: u8,
-}
-
-impl<'a> Entry<'a> {
-    pub fn new(root: &'a Path, path: PathBuf, deepness: u8) -> Self {
-        Self {
-            root,
-            path,
-            deepness,
-        }
-    }
-
-    pub fn kind(&self) -> FileSystemType {
-        FileSystemType::from(self.root.join(&self.path))
-    }
-
-    pub fn full_path(&self) -> PathBuf {
-        self.root.join(&self.path)
-    }
-}
-
-///
-#[derive(Debug)]
-pub struct Element {
-    pub path: PathBuf,
-    pub link: Link,
-    pub presence: Presence,
-}
-
-///
-#[derive(Debug, Eq, PartialEq)]
-pub enum Link {
-    Forward,
-    Backward,
-    None,
-}
-
 ///
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum Presence {
@@ -616,82 +379,6 @@ impl ModelItem {
     }
 }
 
-#[derive(Debug, Eq, PartialEq)]
-pub enum SyncActions {
-    CreateDir(PathBuf),
-    LinkFile(PathBuf),
-    DeleteDst(PathBuf),
-}
-
-#[derive(Debug)]
-pub struct SyncModel {
-    src: PathBuf,
-    dst: PathBuf,
-    actions: Vec<SyncActions>,
-    overwrite: OverwriteMode,
-    symbolic: bool,
-}
-
-impl SyncModel {
-    pub fn new(tree: DirTree, actions: Vec<SyncActions>, options: SyncOptions) -> Self {
-        Self {
-            src: tree.src,
-            dst: tree.dst,
-            actions,
-            overwrite: options.overwrite,
-            symbolic: options.symbolic,
-        }
-    }
-
-    pub fn execute(self) -> Result<()> {
-        for action in self.actions {
-            match action {
-                SyncActions::CreateDir(dir) => fs::create_dir_all(self.dst.join(dir))
-                    .context(FsError::OpenFile((&self.dst).into()))?,
-
-                SyncActions::LinkFile(ref link) => {
-                    LinkedPoint::new(self.src.join(link), self.dst.join(link))
-                        .mirror(self.overwrite, self.symbolic)?;
-                }
-
-                SyncActions::DeleteDst(ref path) => {
-                    let full_path = self.dst.join(path);
-
-                    match FileSystemType::from(&full_path) {
-                        FileSystemType::Dir => {
-                            fs::remove_dir_all(&full_path)
-                                .context(FsError::DeleteFile(full_path.into()))?;
-                        }
-
-                        FileSystemType::File => {
-                            fs::remove_file(&full_path)
-                                .context(FsError::DeleteFile(full_path.into()))?;
-                        }
-
-                        FileSystemType::Other => {
-                            warn!("Unable to identify {}", pathlight(full_path))
-                        }
-                    }
-                }
-            }
-        }
-
-        Ok(())
-    }
-
-    pub fn log(&self) {
-        for action in &self.actions {
-            if let SyncActions::LinkFile(ref dir) = action {
-                info!(
-                    "Sync {} -> {}",
-                    pathlight(self.src.join(dir)),
-                    pathlight(self.dst.join(dir))
-                );
-            }
-        }
-    }
-}
-
 /// Represents a link between two different paths points. The dst path is seen as the
 /// 'link's location while the src path is seen as the link's pointed place.
 #[derive(Debug)]
@@ -740,58 +427,8 @@ impl LinkedPoint {
     }
 
     pub fn link(&self) -> Result<()> {
-        Self::symlink(&self.src, &self.dst).context(FsError::CreateFile((&self.dst).into()))?;
+        symlink(&self.src, &self.dst).context(FsError::CreateFile((&self.dst).into()))?;
         Ok(())
-    }
-
-    /// Syncs (or Links) the two points on the filesystem. The behaviour of this function
-    /// for making the sync is controlled by the overwrite option. See the docs for
-    /// OverwriteMode to get more info.
-    ///
-    /// The behaviour is also controlled by the symbolic parameter. If set to true the
-    /// function will create a symbolic link instead of copying the file.
-    pub(self) fn mirror(&self, overwrite: OverwriteMode, symbolic: bool) -> Result<()> {
-        if overwrite == OverwriteMode::Disallow && self.dst.exists() {
-            err!(FsError::PathExists((&self.dst).into()));
-        }
-
-        if overwrite == OverwriteMode::Allow && self.synced() {
-            return Ok(());
-        }
-
-        if !symbolic {
-            if let Ok(metadata) = fs::symlink_metadata(&self.dst) {
-                if metadata.file_type().is_symlink() {
-                    fs::remove_file(&self.dst).context(FsError::DeleteFile((&self.dst).into()))?;
-                }
-            }
-
-            fs::copy(&self.src, &self.dst).context(FsError::CreateFile((&self.dst).into()))?;
-        } else {
-            Self::symlink(&self.src, &self.dst).context(FsError::CreateFile((&self.dst).into()))?;
-        }
-
-        info!(
-            "synced: {} -> {}",
-            pathlight(&self.src),
-            pathlight(&self.dst)
-        );
-
-        Ok(())
-    }
-
-    /// Intended to create a symlink on Unix operating systems
-    #[cfg(unix)]
-    fn symlink<P: AsRef<Path>, T: AsRef<Path>>(src: P, dst: T) -> ::std::io::Result<()> {
-        use std::os::unix::fs::symlink;
-        symlink(src, dst)
-    }
-
-    /// Intended to create a symlink on Windows operating systems
-    #[cfg(windows)]
-    fn symlink<P: AsRef<Path>, T: AsRef<Path>>(src: P, dst: T) -> ::std::io::Result<()> {
-        use std::os::windows::fs::symlink_file as symlink;
-        symlink(src, dst)
     }
 }
 
