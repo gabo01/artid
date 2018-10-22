@@ -5,7 +5,6 @@ rust:
   - beta
   - nightly
 os:
-  - windows
   - linux
   - osx
 matrix:
