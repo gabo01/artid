@@ -641,7 +641,7 @@ mod tests {
         use std::path::PathBuf;
         use tempfile;
 
-        fn generate_tree<'a>() -> (tempfile::TempDir, tempfile::TempDir) {
+        fn generate_tree() -> (tempfile::TempDir, tempfile::TempDir) {
             let (src, dst) = (tmpdir!(), tmpdir!());
 
             // source tree
