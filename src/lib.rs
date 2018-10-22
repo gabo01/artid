@@ -28,21 +28,6 @@ use std::fs::File;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
-/// Represents a failure in the execution of a function.
-macro_rules! fail {
-    ($x:expr) => {
-        return Err($x);
-    };
-}
-
-/// Used to build an error and then fail the current function execution with the builded
-/// error.
-macro_rules! err {
-    ($x:expr) => {
-        fail!(AppError::from($x))
-    };
-}
-
 #[cfg(test)]
 #[macro_use]
 mod tools;
@@ -54,7 +39,7 @@ mod sync;
 pub use errors::{AppError, AppErrorType};
 use errors::{FsError, ParseError};
 use logger::pathlight;
-use sync::{DirTree, OverwriteMode, SyncOptions};
+use sync::{CopyAction, CopyModel, DirTree, Direction, FileType, Presence};
 
 /// Alias for the Result type
 pub type Result<T> = ::std::result::Result<T, AppError>;
@@ -63,14 +48,6 @@ pub type Result<T> = ::std::result::Result<T, AppError>;
 /// behaviour they control
 #[derive(Debug, Copy, Clone)]
 pub struct BackupOptions {
-    /// Enables/Disables warnings on the backup process. If an error is raises while processing
-    /// the backup: a folder can't be read from (excluding the main folders), the user does not
-    /// have permissions for accessing a file, the function will emit a warning instead of
-    /// exiting with an error.
-    ///
-    /// In short words: (warn == true) => function will warn about errors instead of failing the
-    /// backup operation
-    pub warn: bool,
     ///
     ///
     pub run: bool,
@@ -78,14 +55,8 @@ pub struct BackupOptions {
 
 impl BackupOptions {
     /// Creates a new set of options for the backup operation.
-    pub fn new(warn: bool, run: bool) -> Self {
-        Self { warn, run }
-    }
-}
-
-impl From<BackupOptions> for SyncOptions {
-    fn from(options: BackupOptions) -> Self {
-        SyncOptions::new(options.warn, true, OverwriteMode::Allow)
+    pub fn new(run: bool) -> Self {
+        Self { run }
     }
 }
 
@@ -93,14 +64,6 @@ impl From<BackupOptions> for SyncOptions {
 /// behaviour they control
 #[derive(Debug, Copy, Clone)]
 pub struct RestoreOptions {
-    /// Enables/Disables warnings on the restore process. If an error is raised while processing
-    /// the restore: a folder can't be read from (excluding the main folders), the user does not
-    /// have permissions for accessing a file, the function will emit a warning instead of
-    /// exiting with an error.
-    ///
-    /// In short words: (warn == true) => function will warn about errors instead of failing the
-    /// backup operation.
-    warn: bool,
     /// Enables/Disables overwrite on the original locations during the restore. If the original
     /// location of the file backed up already exists this function will overwrite the location
     /// with the file backed up instead of exiting with an error.
@@ -118,26 +81,8 @@ pub struct RestoreOptions {
 
 impl RestoreOptions {
     /// Creates a new set of options for the restore operation.
-    pub fn new(warn: bool, overwrite: bool, run: bool) -> Self {
-        Self {
-            warn,
-            overwrite,
-            run,
-        }
-    }
-}
-
-impl From<RestoreOptions> for SyncOptions {
-    fn from(options: RestoreOptions) -> Self {
-        SyncOptions::new(
-            options.warn,
-            false,
-            if options.overwrite {
-                OverwriteMode::Force
-            } else {
-                OverwriteMode::Disallow
-            },
-        )
+    pub fn new(overwrite: bool, run: bool) -> Self {
+        Self { overwrite, run }
     }
 }
 
@@ -311,9 +256,71 @@ impl Folder {
     where
         P: AsRef<Path>,
     {
-        self.push(&root, stamp, options)?;
-        self.sync(&root, stamp, options)?;
-        self.modified = Some(stamp);
+        let dirs = self.resolve(root);
+        let (base, old, new) = if let Some(modified) = self.modified {
+            (
+                dirs.abs,
+                Some(
+                    dirs.rel
+                        .join(modified.to_rfc3339_opts(SecondsFormat::Nanos, true)),
+                ),
+                dirs.rel
+                    .join(stamp.to_rfc3339_opts(SecondsFormat::Nanos, true)),
+            )
+        } else {
+            (
+                dirs.abs,
+                None,
+                dirs.rel
+                    .join(stamp.to_rfc3339_opts(SecondsFormat::Nanos, true)),
+            )
+        };
+
+        let model: CopyModel = if let Some(ref old) = old {
+            let tree = DirTree::new(&base, &old)?;
+            tree.iter()
+                .filter(|e| e.presence() != Presence::Dst)
+                .map(|e| {
+                    if e.kind() == FileType::Dir {
+                        CopyAction::CreateDir {
+                            target: new.join(e.path()),
+                        }
+                    } else if e.presence() == Presence::Src || !e.synced(Direction::Forward) {
+                        CopyAction::CopyFile {
+                            src: base.join(e.path()),
+                            dst: new.join(e.path()),
+                        }
+                    } else {
+                        CopyAction::CopyLink {
+                            src: old.join(e.path()),
+                            dst: new.join(e.path()),
+                        }
+                    }
+                }).collect()
+        } else {
+            let tree = DirTree::new(&base, &new)?;
+            tree.iter()
+                .map(|e| {
+                    if e.kind() == FileType::Dir {
+                        CopyAction::CreateDir {
+                            target: new.join(e.path()),
+                        }
+                    } else {
+                        CopyAction::CopyFile {
+                            src: base.join(e.path()),
+                            dst: new.join(e.path()),
+                        }
+                    }
+                }).collect()
+        };
+
+        if options.run {
+            model.execute()?;
+            self.modified = Some(stamp);
+        } else {
+            model.log();
+        }
+
         Ok(())
     }
 
@@ -326,9 +333,26 @@ impl Folder {
             dirs.rel
                 .push(modified.to_rfc3339_opts(SecondsFormat::Nanos, true));
 
-            let model = DirTree::new(dirs.rel, dirs.abs)
-                .sync(options.into())
-                .context(AppErrorType::RestoreFolder)?;
+            let tree = DirTree::new(&dirs.abs, &dirs.rel)?;
+            let model: CopyModel = tree
+                .iter()
+                .filter(|e| {
+                    e.presence() == Presence::Dst
+                        || options.overwrite
+                            && e.presence() == Presence::Both
+                            && e.kind() != FileType::Dir
+                }).map(|e| {
+                    if e.kind() == FileType::Dir && e.presence() == Presence::Dst {
+                        CopyAction::CreateDir {
+                            target: dirs.abs.join(e.path()),
+                        }
+                    } else {
+                        CopyAction::CopyFile {
+                            src: dirs.rel.join(e.path()),
+                            dst: dirs.abs.join(e.path()),
+                        }
+                    }
+                }).collect();
 
             if options.run {
                 model.execute().context(AppErrorType::RestoreFolder)?;
@@ -351,97 +375,17 @@ impl Folder {
             abs: PathBuf::from(self.origin.as_ref()),
         }
     }
-
-    /// Resolves only the link of the relative path.
-    fn resolve_rel<P: AsRef<Path>>(&self, root: P) -> PathBuf {
-        root.as_ref().join(self.path.as_ref())
-    }
-
-    /// Performs the sync between the backup and the previous one. The sync is performed
-    /// through symbolic links to avoid unnecessary file copies.
-    fn push<P>(&mut self, root: &P, stamp: DateTime<Utc>, options: BackupOptions) -> Result<()>
-    where
-        P: AsRef<Path>,
-    {
-        let dir = self.resolve_rel(root);
-        let (mut src, mut dst) = (dir.clone(), dir);
-        match self.modified {
-            Some(time) => src.push(time.to_rfc3339_opts(SecondsFormat::Nanos, true)),
-            None => return Ok(()),
-        };
-        dst.push(stamp.to_rfc3339_opts(SecondsFormat::Nanos, true));
-
-        let mut options: SyncOptions = options.into();
-        options.symbolic = true;
-
-        DirTree::new(src, dst).sync(options)?.execute()?;
-        Ok(())
-    }
-
-    /// Main sync operation, syncs the backup directory with the origin location.
-    fn sync<P>(&mut self, root: P, stamp: DateTime<Utc>, options: BackupOptions) -> Result<()>
-    where
-        P: AsRef<Path>,
-    {
-        let mut dirs = self.resolve(root);
-        dirs.rel
-            .push(stamp.to_rfc3339_opts(SecondsFormat::Nanos, true));
-        debug!("Starting backup of: {}", pathlight(&dirs.abs));
-
-        let model = DirTree::new(dirs.abs, dirs.rel.clone()).sync(options.into())?;
-
-        if options.run {
-            model.execute()?;
-        } else {
-            model.log();
-            ::std::fs::remove_dir_all(dirs.rel).expect("Unable to remove tmp dir");
-        }
-
-        Ok(())
-    }
 }
 
 #[cfg(test)]
 mod tests {
-    use {sync, BackupOptions, ConfigFile, Folder, RestoreOptions};
+    use {BackupOptions, ConfigFile, Folder, RestoreOptions};
 
     macro_rules! rfc3339 {
         ($stamp:expr) => {{
             use chrono::SecondsFormat;
             $stamp.to_rfc3339_opts(SecondsFormat::Nanos, true)
         }};
-    }
-
-    mod options {
-        use super::{
-            sync::{OverwriteMode, SyncOptions},
-            BackupOptions, RestoreOptions,
-        };
-
-        #[test]
-        fn test_backup_sync_options() {
-            let backup = BackupOptions::new(true, true);
-            let sync: SyncOptions = backup.clone().into();
-
-            assert_eq!(sync.warn, backup.warn);
-            assert!(sync.clean);
-            assert_eq!(sync.overwrite, OverwriteMode::Allow);
-        }
-
-        #[test]
-        fn test_restore_sync_options() {
-            let restore = RestoreOptions::new(true, true, true);
-            let sync: SyncOptions = restore.clone().into();
-
-            assert_eq!(sync.warn, restore.warn);
-            assert!(!sync.clean);
-            assert_eq!(sync.overwrite, OverwriteMode::Force);
-
-            let restore = RestoreOptions::new(true, false, true);
-            let sync: SyncOptions = restore.clone().into();
-
-            assert_eq!(sync.overwrite, OverwriteMode::Disallow);
-        }
     }
 
     mod folder {
@@ -488,7 +432,7 @@ mod tests {
             let root = tmpdir!();
 
             let stamp = Utc::now();
-            let options = BackupOptions::new(false, true);
+            let options = BackupOptions::new(true);
 
             Folder::new(
                 EnvPath::new("backup"),
@@ -519,7 +463,7 @@ mod tests {
             let root = tmpdir!();
 
             let stamp = Utc::now();
-            let options = BackupOptions::new(false, true);
+            let options = BackupOptions::new(true);
             let mut folder = Folder::new(
                 EnvPath::new("backup"),
                 EnvPath::new(origin.path().display().to_string()),
@@ -565,7 +509,7 @@ mod tests {
             let root = tmpdir!();
 
             let stamp = Utc::now();
-            let options = BackupOptions::new(false, true);
+            let options = BackupOptions::new(true);
             let mut folder = Folder::new(
                 EnvPath::new("backup"),
                 EnvPath::new(origin.path().display().to_string()),
@@ -619,7 +563,7 @@ mod tests {
             let root = tmpdir!();
 
             let stamp = Utc::now();
-            let options = BackupOptions::new(false, true);
+            let options = BackupOptions::new(true);
             let mut folder = Folder::new(
                 EnvPath::new("backup"),
                 EnvPath::new(origin.path().display().to_string()),
@@ -677,7 +621,7 @@ mod tests {
             let root = tmpdir!();
 
             let stamp = Utc::now();
-            let options = BackupOptions::new(false, true);
+            let options = BackupOptions::new(true);
             let mut folder = Folder::new(
                 EnvPath::new("backup"),
                 EnvPath::new(origin.path().display().to_string()),
@@ -736,7 +680,7 @@ mod tests {
             );
 
             folder
-                .restore(root.path(), RestoreOptions::new(false, true, true))
+                .restore(root.path(), RestoreOptions::new(true, true))
                 .expect("Unable to perform restore");
 
             assert!(tmppath!(origin, "a.txt").exists());
@@ -778,7 +722,7 @@ mod tests {
             );
 
             folder
-                .restore(root.path(), RestoreOptions::new(false, true, true))
+                .restore(root.path(), RestoreOptions::new(true, true))
                 .expect("Unable to perform restore");
 
             assert!(tmppath!(origin, "a.txt").exists());
@@ -960,7 +904,7 @@ mod tests {
 
             let mut config = ConfigFile::load(&backup).expect("Unable to load file");
             let stamp = config
-                .backup(BackupOptions::new(false, true))
+                .backup(BackupOptions::new(true))
                 .expect("Unable to perform backup");
 
             assert!(backup.join(format!("backup/{}", rfc3339!(stamp))).exists());
@@ -995,7 +939,7 @@ mod tests {
 
             let config = ConfigFile::load(root.path()).expect("Unable to load file");
             config
-                .restore(RestoreOptions::new(false, true, true))
+                .restore(RestoreOptions::new(true, true))
                 .expect("Unable to perform restore");
 
             assert!(tmppath!(origin, "a.txt").exists());
