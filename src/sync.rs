@@ -383,7 +383,8 @@ impl<'a, 'b> TreeIterNode<'a, 'b> {
 /// making it.
 pub enum CopyAction {
     /// Creates a directory on the target location, this is expected to be done if a tree node
-    /// is present in one location but not in the other.
+    /// is present in one location but not in the other. This action creates the target dir and
+    /// any path ancestor not present already on the file system.
     CreateDir { target: PathBuf },
     /// Performs a full copy of the file from src to dst, a thing to notice is that in complex
     /// operations, src and dst may not exactly match the result of taking src and dst + the node
@@ -422,7 +423,7 @@ impl CopyModel {
             match action {
                 CopyAction::CreateDir { target } => {
                     if !target.exists() {
-                        fs::create_dir(&target).context(FsError::OpenFile((&target).into()))?;
+                        fs::create_dir_all(&target).context(FsError::OpenFile((&target).into()))?;
                     }
                 }
 
@@ -532,6 +533,19 @@ mod tests {
             model.execute().expect("Unable to execute model");
             assert!(tmppath!(dir, "asd").exists());
             assert!(tmppath!(dir, "asd").is_dir());
+        }
+
+        #[test]
+        fn test_create_nested_dir() {
+            let dir = tmpdir!();
+            let action = CopyAction::CreateDir {
+                target: dir.path().join("asd/as"),
+            };
+
+            let model = vec![action].into_iter().collect::<CopyModel>();
+            model.execute().expect("Unable to execute model");
+            assert!(tmppath!(dir, "asd/as").exists());
+            assert!(tmppath!(dir, "asd/as").is_dir());
         }
 
         #[test]
