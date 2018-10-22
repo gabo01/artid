@@ -480,5 +480,142 @@ fn modified<P: AsRef<Path>>(file: P) -> Option<SystemTime> {
 
 #[cfg(test)]
 mod tests {
+    use super::{CopyAction, CopyModel, Direction, FileType, Presence, TreeIterNode, TreeNode};
+    use std::fs::File;
+    use tempfile;
 
+    #[test]
+    fn test_linked() {
+        let (src, dst) = (tmpdir!(), tmpdir!());
+        create_file!(tmppath!(src, "a.txt"));
+        create_file!(tmppath!(dst, "a.txt"));
+        let node = TreeNode::new("".into(), Presence::Both, FileType::File);
+
+        assert!(TreeIterNode::new(src.path(), dst.path(), &node).synced(Direction::Forward));
+        assert!(TreeIterNode::new(dst.path(), src.path(), &node).synced(Direction::Backward))
+    }
+
+    mod file_system {
+        use super::FileType;
+        use std::fs::File;
+        use tempfile;
+
+        #[test]
+        fn test_system_dir() {
+            let dir = tmpdir!();
+            assert_eq!(FileType::from(dir.path()), FileType::Dir);
+        }
+
+        #[test]
+        fn test_system_file() {
+            let dir = tmpdir!();
+            let path = create_file!(tmppath!(dir, "a.txt"));
+            assert_eq!(FileType::from(path), FileType::File);
+        }
+    }
+
+    mod copy_model {
+        use super::{CopyAction, CopyModel};
+        use std::fs::File;
+        use tempfile;
+
+        #[test]
+        fn test_create_dir() {
+            let dir = tmpdir!();
+            let action = CopyAction::CreateDir {
+                target: dir.path().join("asd"),
+            };
+
+            let model = vec![action].into_iter().collect::<CopyModel>();
+            model.execute().expect("Unable to execute model");
+            assert!(tmppath!(dir, "asd").exists());
+            assert!(tmppath!(dir, "asd").is_dir());
+        }
+
+        #[test]
+        fn test_create_file() {
+            let (src, dst) = (tmpdir!(), tmpdir!());
+            let a_path = create_file!(tmppath!(src, "a.txt"), "aaaa");
+            let b_path = create_file!(tmppath!(src, "b.txt"), "bbbb");
+
+            let actions = vec![
+                CopyAction::CopyFile {
+                    src: a_path.clone(),
+                    dst: tmppath!(dst, "a.txt"),
+                },
+                CopyAction::CopyFile {
+                    src: b_path.clone(),
+                    dst: tmppath!(dst, "b.txt"),
+                },
+            ];
+
+            let model = actions.into_iter().collect::<CopyModel>();
+            model.execute().expect("Unable to execute model");
+
+            assert!(tmppath!(dst, "a.txt").exists());
+            assert!(tmppath!(dst, "b.txt").exists());
+            assert_eq!(read_file!(tmppath!(dst, "a.txt")), "aaaa");
+            assert_eq!(read_file!(tmppath!(dst, "b.txt")), "bbbb");
+        }
+
+        #[test]
+        fn test_create_file_symbolic() {
+            let (src, dst) = (tmpdir!(), tmpdir!());
+            let a_path = create_file!(tmppath!(src, "a.txt"), "aaaa");
+            let b_path = create_file!(tmppath!(src, "b.txt"), "bbbb");
+
+            let actions = vec![
+                CopyAction::CopyLink {
+                    src: a_path.clone(),
+                    dst: tmppath!(dst, "a.txt"),
+                },
+                CopyAction::CopyLink {
+                    src: b_path.clone(),
+                    dst: tmppath!(dst, "b.txt"),
+                },
+            ];
+
+            let model = actions.into_iter().collect::<CopyModel>();
+            model.execute().expect("Unable to execute model");
+
+            assert!(tmppath!(dst, "a.txt").exists());
+            assert!(tmppath!(dst, "b.txt").exists());
+            assert_eq!(read_file!(tmppath!(dst, "a.txt")), "aaaa");
+            assert_eq!(read_file!(tmppath!(dst, "b.txt")), "bbbb");
+            assert!(symlink!(tmppath!(dst, "a.txt")));
+            assert!(symlink!(tmppath!(dst, "a.txt")));
+        }
+
+        #[test]
+        fn test_mixed_model() {
+            let src = tmpdir!();
+            let dst = tmppath!(src, "target");
+            let a_path = create_file!(tmppath!(src, "a.txt"), "aaaa");
+            let b_path = create_file!(tmppath!(src, "b.txt"), "bbbb");
+
+            let actions = vec![
+                CopyAction::CreateDir {
+                    target: dst.clone(),
+                },
+                CopyAction::CopyFile {
+                    src: a_path,
+                    dst: dst.join("a.txt"),
+                },
+                CopyAction::CopyLink {
+                    src: b_path,
+                    dst: dst.join("b.txt"),
+                },
+            ];
+
+            let model = actions.into_iter().collect::<CopyModel>();
+            model.execute().expect("Unable to execute model");
+
+            assert!(tmppath!(src, "target").exists());
+            assert!(tmppath!(src, "target").is_dir());
+            assert!(tmppath!(src, "target/a.txt").exists());
+            assert_eq!(read_file!(tmppath!(src, "target/a.txt")), "aaaa");
+            assert!(tmppath!(src, "target/b.txt").exists());
+            assert!(symlink!(tmppath!(src, "target/b.txt")));
+        }
+    }
 }
