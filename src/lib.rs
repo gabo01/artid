@@ -379,45 +379,13 @@ impl Folder {
 
 #[cfg(test)]
 mod tests {
-    use {sync, BackupOptions, ConfigFile, Folder, RestoreOptions};
+    use {BackupOptions, ConfigFile, Folder, RestoreOptions};
 
     macro_rules! rfc3339 {
         ($stamp:expr) => {{
             use chrono::SecondsFormat;
             $stamp.to_rfc3339_opts(SecondsFormat::Nanos, true)
         }};
-    }
-
-    mod options {
-        use super::{
-            sync::{OverwriteMode, SyncOptions},
-            BackupOptions, RestoreOptions,
-        };
-
-        #[test]
-        fn test_backup_sync_options() {
-            let backup = BackupOptions::new(true, true);
-            let sync: SyncOptions = backup.clone().into();
-
-            assert_eq!(sync.warn, backup.warn);
-            assert!(sync.clean);
-            assert_eq!(sync.overwrite, OverwriteMode::Allow);
-        }
-
-        #[test]
-        fn test_restore_sync_options() {
-            let restore = RestoreOptions::new(true, true, true);
-            let sync: SyncOptions = restore.clone().into();
-
-            assert_eq!(sync.warn, restore.warn);
-            assert!(!sync.clean);
-            assert_eq!(sync.overwrite, OverwriteMode::Force);
-
-            let restore = RestoreOptions::new(true, false, true);
-            let sync: SyncOptions = restore.clone().into();
-
-            assert_eq!(sync.overwrite, OverwriteMode::Disallow);
-        }
     }
 
     mod folder {
@@ -464,7 +432,7 @@ mod tests {
             let root = tmpdir!();
 
             let stamp = Utc::now();
-            let options = BackupOptions::new(false, true);
+            let options = BackupOptions::new(true);
 
             Folder::new(
                 EnvPath::new("backup"),
@@ -495,7 +463,7 @@ mod tests {
             let root = tmpdir!();
 
             let stamp = Utc::now();
-            let options = BackupOptions::new(false, true);
+            let options = BackupOptions::new(true);
             let mut folder = Folder::new(
                 EnvPath::new("backup"),
                 EnvPath::new(origin.path().display().to_string()),
@@ -541,7 +509,7 @@ mod tests {
             let root = tmpdir!();
 
             let stamp = Utc::now();
-            let options = BackupOptions::new(false, true);
+            let options = BackupOptions::new(true);
             let mut folder = Folder::new(
                 EnvPath::new("backup"),
                 EnvPath::new(origin.path().display().to_string()),
@@ -595,7 +563,7 @@ mod tests {
             let root = tmpdir!();
 
             let stamp = Utc::now();
-            let options = BackupOptions::new(false, true);
+            let options = BackupOptions::new(true);
             let mut folder = Folder::new(
                 EnvPath::new("backup"),
                 EnvPath::new(origin.path().display().to_string()),
@@ -653,7 +621,7 @@ mod tests {
             let root = tmpdir!();
 
             let stamp = Utc::now();
-            let options = BackupOptions::new(false, true);
+            let options = BackupOptions::new(true);
             let mut folder = Folder::new(
                 EnvPath::new("backup"),
                 EnvPath::new(origin.path().display().to_string()),
@@ -712,7 +680,7 @@ mod tests {
             );
 
             folder
-                .restore(root.path(), RestoreOptions::new(false, true, true))
+                .restore(root.path(), RestoreOptions::new(true, true))
                 .expect("Unable to perform restore");
 
             assert!(tmppath!(origin, "a.txt").exists());
@@ -754,7 +722,7 @@ mod tests {
             );
 
             folder
-                .restore(root.path(), RestoreOptions::new(false, true, true))
+                .restore(root.path(), RestoreOptions::new(true, true))
                 .expect("Unable to perform restore");
 
             assert!(tmppath!(origin, "a.txt").exists());
@@ -936,7 +904,7 @@ mod tests {
 
             let mut config = ConfigFile::load(&backup).expect("Unable to load file");
             let stamp = config
-                .backup(BackupOptions::new(false, true))
+                .backup(BackupOptions::new(true))
                 .expect("Unable to perform backup");
 
             assert!(backup.join(format!("backup/{}", rfc3339!(stamp))).exists());
@@ -971,7 +939,7 @@ mod tests {
 
             let config = ConfigFile::load(root.path()).expect("Unable to load file");
             config
-                .restore(RestoreOptions::new(false, true, true))
+                .restore(RestoreOptions::new(true, true))
                 .expect("Unable to perform restore");
 
             assert!(tmppath!(origin, "a.txt").exists());
