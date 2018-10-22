@@ -4,6 +4,7 @@ rust:
   - stable
   - beta
   - nightly
+  - 1.27.1
 os:
   - linux
   - osx
@@ -12,6 +13,7 @@ matrix:
     - rust: 
       - nightly
       - beta
+before_script:
+  - bash scripts/config.sh
 script:
-  - cargo build
-  - cargo test --all
+  - bash scripts/ci.sh
