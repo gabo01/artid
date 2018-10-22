@@ -116,7 +116,7 @@ impl<P: AsRef<Path>> From<P> for FileType {
 /// and the kind of node it represents. The kind of node it represents is subject to change since,
 /// right now, it is undefined behaviour what happens if a path is a kind of node in the source and
 /// another kind on the destination.
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq)]
 pub struct TreeNode {
     path: PathBuf,
     presence: Presence,
@@ -480,7 +480,9 @@ fn modified<P: AsRef<Path>>(file: P) -> Option<SystemTime> {
 
 #[cfg(test)]
 mod tests {
-    use super::{CopyAction, CopyModel, Direction, FileType, Presence, TreeIterNode, TreeNode};
+    use super::{
+        CopyAction, CopyModel, DirTree, Direction, FileType, Presence, TreeIterNode, TreeNode,
+    };
     use std::fs::File;
     use tempfile;
 
@@ -616,6 +618,245 @@ mod tests {
             assert_eq!(read_file!(tmppath!(src, "target/a.txt")), "aaaa");
             assert!(tmppath!(src, "target/b.txt").exists());
             assert!(symlink!(tmppath!(src, "target/b.txt")));
+        }
+    }
+
+    mod tree {
+        use super::{DirTree, FileType, Presence, TreeNode};
+        use std::fs::{self, File};
+        use std::path::PathBuf;
+        use tempfile;
+
+        fn generate_tree<'a>() -> (tempfile::TempDir, tempfile::TempDir) {
+            let (src, dst) = (tmpdir!(), tmpdir!());
+
+            // source tree
+            create_file!(tmppath!(src, "a.txt"));
+            create_file!(tmppath!(src, "b.txt"));
+            fs::create_dir_all(tmppath!(src, "bin")).expect("Unable to create dir");
+            create_file!(tmppath!(src, "bin/c.txt"));
+            create_file!(tmppath!(src, "bin/d.txt"));
+
+            // destination tree
+            create_file!(tmppath!(dst, "a.txt"));
+            fs::create_dir_all(tmppath!(dst, "bin")).expect("Unable to create dir");
+            create_file!(tmppath!(dst, "bin/c.txt"));
+            create_file!(tmppath!(dst, "bin/d.txt"));
+            create_file!(tmppath!(dst, "e.txt"));
+            fs::create_dir_all(tmppath!(dst, "target")).expect("Unable to create dir");
+
+            (src, dst)
+        }
+
+        fn sort(node: &mut TreeNode) {
+            if let Some(ref mut children) = node.children {
+                children.sort_unstable_by(|a, b| a.path.cmp(&b.path));
+
+                for mut child in children {
+                    sort(&mut child);
+                }
+            }
+        }
+
+        #[test]
+        fn test_dir_root() {
+            let (src, dst) = (tmpdir!(), tmpdir!());
+            let unexistant = src.path().join("unexistant");
+
+            // test with an unexistant dst
+            let tree = DirTree::new(src.path(), &unexistant).expect("Failed on tree creation");
+            assert_eq!(tree.root.presence, Presence::Src);
+
+            // test with an unexistant src
+            let tree = DirTree::new(&unexistant, dst.path()).expect("Failed on tree creation");
+            assert_eq!(tree.root.presence, Presence::Dst);
+
+            // test with both points
+            let tree = DirTree::new(src.path(), dst.path()).expect("Failed on tree creation");
+            assert_eq!(tree.root.presence, Presence::Both);
+        }
+
+        #[test]
+        fn test_node_read_empty() {
+            let (src, dst) = (tmpdir!(), tmpdir!());
+            let unexistant = dst.path().join("unexistant");
+
+            let mut node = TreeNode::new("".into(), Presence::Src, FileType::Dir);
+            node.read(src.path(), &unexistant)
+                .expect("Unable to read the directory");
+
+            assert!(node.children.is_some());
+        }
+
+        #[test]
+        fn test_node_read() {
+            let (src, dst) = (tmpdir!(), tmpdir!());
+            let unexistant = dst.path().join("unexistant");
+
+            create_file!(tmppath!(src, "a.txt"));
+            create_file!(tmppath!(src, "b.txt"));
+            fs::create_dir_all(tmppath!(src, "c")).expect("Unable to create dir");
+            create_file!(tmppath!(src, "c/d.txt"));
+
+            let mut node = TreeNode::new("".into(), Presence::Src, FileType::Dir);
+            node.read(src.path(), &unexistant)
+                .expect("Unable to read the directory");
+
+            assert!(node.children.is_some());
+            assert_eq!(
+                node.children.unwrap(),
+                vec![
+                    TreeNode {
+                        path: PathBuf::from("a.txt"),
+                        presence: Presence::Src,
+                        kind: FileType::File,
+                        children: None
+                    },
+                    TreeNode {
+                        path: PathBuf::from("b.txt"),
+                        presence: Presence::Src,
+                        kind: FileType::File,
+                        children: None
+                    },
+                    TreeNode {
+                        path: PathBuf::from("c"),
+                        presence: Presence::Src,
+                        kind: FileType::Dir,
+                        children: None
+                    }
+                ]
+            );
+        }
+
+        #[test]
+        fn test_node_read_recursive() {
+            let (src, dst) = (tmpdir!(), tmpdir!());
+            let unexistant = dst.path().join("unexistant");
+
+            create_file!(tmppath!(src, "a.txt"));
+            create_file!(tmppath!(src, "b.txt"));
+            fs::create_dir_all(tmppath!(src, "c")).expect("Unable to create dir");
+            create_file!(tmppath!(src, "c/d.txt"));
+
+            let mut node = TreeNode::new("".into(), Presence::Src, FileType::Dir);
+            node.read_recursive(src.path(), &unexistant)
+                .expect("Unable to read the directory");
+
+            assert!(node.children.is_some());
+            assert_eq!(
+                node.children.unwrap(),
+                vec![
+                    TreeNode {
+                        path: PathBuf::from("a.txt"),
+                        presence: Presence::Src,
+                        kind: FileType::File,
+                        children: None
+                    },
+                    TreeNode {
+                        path: PathBuf::from("b.txt"),
+                        presence: Presence::Src,
+                        kind: FileType::File,
+                        children: None
+                    },
+                    TreeNode {
+                        path: PathBuf::from("c"),
+                        presence: Presence::Src,
+                        kind: FileType::Dir,
+                        children: Some(vec![TreeNode {
+                            path: PathBuf::from("c/d.txt"),
+                            presence: Presence::Src,
+                            kind: FileType::File,
+                            children: None
+                        }])
+                    }
+                ]
+            );
+        }
+
+        #[test]
+        fn test_tree_generation() {
+            let (src, dst) = generate_tree();
+
+            let mut tree = DirTree::new(src.path(), dst.path()).expect("Unable to create tree");
+            sort(&mut tree.root);
+
+            assert_eq!(
+                tree.root,
+                TreeNode {
+                    path: PathBuf::from(""),
+                    presence: Presence::Both,
+                    kind: FileType::Dir,
+                    children: Some(vec![
+                        TreeNode {
+                            path: PathBuf::from("a.txt"),
+                            presence: Presence::Both,
+                            kind: FileType::File,
+                            children: None
+                        },
+                        TreeNode {
+                            path: PathBuf::from("b.txt"),
+                            presence: Presence::Src,
+                            kind: FileType::File,
+                            children: None
+                        },
+                        TreeNode {
+                            path: PathBuf::from("bin"),
+                            presence: Presence::Both,
+                            kind: FileType::Dir,
+                            children: Some(vec![
+                                TreeNode {
+                                    path: PathBuf::from("bin/c.txt"),
+                                    presence: Presence::Both,
+                                    kind: FileType::File,
+                                    children: None
+                                },
+                                TreeNode {
+                                    path: PathBuf::from("bin/d.txt"),
+                                    presence: Presence::Both,
+                                    kind: FileType::File,
+                                    children: None
+                                },
+                            ])
+                        },
+                        TreeNode {
+                            path: PathBuf::from("e.txt"),
+                            presence: Presence::Dst,
+                            kind: FileType::File,
+                            children: None
+                        },
+                        TreeNode {
+                            path: PathBuf::from("target"),
+                            presence: Presence::Dst,
+                            kind: FileType::Dir,
+                            children: Some(vec![])
+                        },
+                    ])
+                }
+            )
+        }
+
+        #[test]
+        fn test_tree_iteration() {
+            let (src, dst) = generate_tree();
+
+            let mut tree = DirTree::new(src.path(), dst.path()).expect("Unable to create tree");
+            sort(&mut tree.root);
+
+            assert_eq!(
+                tree.iter()
+                    .map(|e| e.node.path.display().to_string())
+                    .collect::<Vec<String>>(),
+                vec![
+                    "",
+                    "a.txt",
+                    "b.txt",
+                    "bin",
+                    "e.txt",
+                    "target",
+                    "bin/c.txt",
+                    "bin/d.txt"
+                ]
+            )
         }
     }
 }
