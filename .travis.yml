@@ -10,9 +10,8 @@ os:
   - osx
 matrix:
   allow_failures:
-    - rust: 
-      - nightly
-      - beta
+    - rust: nightly
+    - rust: beta
 before_script:
   - bash scripts/config.sh
 script:
