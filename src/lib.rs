@@ -109,6 +109,21 @@ where
     /// Represents the relative path to the configuration file from a given root directory
     const RESTORE: &'static str = ".backup/config.json";
 
+    /// Manually create a new ConfigFile object. Usually, you would load (see load method) the
+    /// configuration file from disk, but in certain cases like directory initialization it can
+    /// be useful to create the file manually
+    pub fn new(dir: P) -> Self {
+        Self {
+            dir,
+            folders: vec![],
+        }
+    }
+
+    /// Returns a reference to the folders in the configuration file
+    pub fn folders(&self) -> &[Folder] {
+        &self.folders
+    }
+
     /// Loads the data present in the configuration file. Currently this function receives
     /// a directory and looks for the config file in the subpath .backup/config.json.
     pub fn load(dir: P) -> Result<Self> {
@@ -216,7 +231,7 @@ where
 /// Aside from the link, the modified field represents the last time the contents from
 /// the two folders where synced
 #[derive(Debug, Serialize, Deserialize)]
-struct Folder {
+pub struct Folder {
     /// Link path. If thinked as a link, this is where the symbolic link is
     path: EnvPath,
     /// Path of origin. If thinked as a link, this is the place the link points to
@@ -228,15 +243,14 @@ struct Folder {
 /// Represents the two dirs connected in a folder object once a root is given. Created
 /// when a folder link gets 'resolved' by adding a root to the 'path' or 'link'
 #[derive(Debug)]
-struct Dirs {
+pub struct Dirs {
     rel: PathBuf,
     abs: PathBuf,
 }
 
 impl Folder {
     /// Creates a new folder from the options specified
-    #[cfg(test)]
-    pub(self) fn new(path: EnvPath, origin: EnvPath, modified: Option<DateTime<Utc>>) -> Self {
+    pub fn new(path: EnvPath, origin: EnvPath, modified: Option<DateTime<Utc>>) -> Self {
         Self {
             path,
             origin,
@@ -247,12 +261,7 @@ impl Folder {
     /// Performs the backup of a specified folder entry. Given a root, the function checks
     /// for a previous backup and links all the files from the previous location, after
     /// that performs a sync operation between the folder and the origin location.
-    pub(self) fn backup<P>(
-        &mut self,
-        root: P,
-        stamp: DateTime<Utc>,
-        options: BackupOptions,
-    ) -> Result<()>
+    fn backup<P>(&mut self, root: P, stamp: DateTime<Utc>, options: BackupOptions) -> Result<()>
     where
         P: AsRef<Path>,
     {
@@ -326,7 +335,7 @@ impl Folder {
 
     /// Performs the restore of the folder entry. Given a root, the function looks for the
     /// backup folder with the latest timestamp and performs the restore from there.
-    pub(self) fn restore<P: AsRef<Path>>(&self, root: P, options: RestoreOptions) -> Result<()> {
+    fn restore<P: AsRef<Path>>(&self, root: P, options: RestoreOptions) -> Result<()> {
         let mut dirs = self.resolve(root);
         if let Some(modified) = self.modified {
             debug!("Starting restore of: {}", pathlight(&dirs.rel));
