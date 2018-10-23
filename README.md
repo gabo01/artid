@@ -1,9 +1,19 @@
-# Rust Backup [![Build Status](https://travis-ci.org/gabo01/rust-backup.svg?branch=master)](https://travis-ci.org/gabo01/rust-backup)
+# Rust Backup
 
-A light client to backup your files. It's purpouse is to make easier to make and organize backups
+[![Build Status][t1]][t2] [![Lines of code][l1]][l2]
+
+[t1]: https://travis-ci.org/gabo01/rust-backup.svg?branch=master
+[t2]: https://travis-ci.org/gabo01/rust-backup
+[l1]: https://tokei.rs/b1/github/gabo01/rust-backup
+[l2]: https://github.com/gabo01/rust-backup
+
+A light client to backup your files. It's purpose is to make easier to make and organize backups
 by specifying a configuration file and letting the program take care of the rest.
 
 ## Getting started
+
+Right now, the only way to use the project is to compile it yourself. Once it reaches maturity,
+precompiled binaries will be made available in the releases section.
 
 ### Prerequisites
 
@@ -30,8 +40,8 @@ use the following links:
 
 [Setting a rust developing env](https://hoverbear.org/2017/03/03/setting-up-a-rust-devenv/)
 
-During the debug process the debug folder contents will change, this changes are not to be
-submitted to the repo. To avoid tracking this changes on your local copy run the following
+During the debug process the debug folder contents will change, these changes are not to be
+submitted to the repo. To avoid tracking these changes on your local copy run the following
 command on your local repo:
 
 ```bash
@@ -40,12 +50,15 @@ git update-index --assume-unchanged debug/**/
 
 ## Features
 
-- [x] Command line client (Unstable)
-- [x] Versioned backups (Unstable)
+- [x] Command line client
+- [x] Versioned backups
 - [ ] Zip the backups made
 - [ ] GUI client
 - [ ] Integration with Mega, Dropbox and Google Drive
 - [ ] Encryption of sensible files
+
+**Disclaimer:** The features checked are not stable yet and won't be as long as the application
+version does not reach 1.0.0
 
 ## Usage from CLI
 
