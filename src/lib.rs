@@ -464,6 +464,7 @@ mod tests {
         }
 
         #[test]
+        #[ignore]
         fn test_folder_backup_double() {
             let origin = tmpdir!();
             create_file!(tmppath!(origin, "a.txt"), "aaaa");
@@ -510,6 +511,7 @@ mod tests {
         }
 
         #[test]
+        #[ignore]
         fn test_folder_backup_double_addition() {
             let origin = tmpdir!();
             create_file!(tmppath!(origin, "a.txt"), "aaaa");
@@ -622,6 +624,7 @@ mod tests {
         }
 
         #[test]
+        #[ignore]
         fn test_folder_backup_double_remotion() {
             let origin = tmpdir!();
             create_file!(tmppath!(origin, "a.txt"), "aaaa");
@@ -700,6 +703,7 @@ mod tests {
         }
 
         #[test]
+        #[ignore]
         fn test_folder_restore_with_symlinks() {
             let (origin, root) = (tmpdir!(), tmpdir!());
             let stamp = Utc::now();
