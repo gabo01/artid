@@ -7,7 +7,7 @@ accepted.
 You can also help solving existing issues. In order to do that go to the issue and tell you want
 to take care of it to avoid multiple people working on the same thing.
 
-[i1]: https://github.com/gabo01/rust-backup/issues
+[i1]: https://github.com/gabo01/artid/issues
 
 ## Bug Reports
 

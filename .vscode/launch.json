@@ -4,13 +4,13 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug update",
+            "name": "Debug backup",
             "cwd": "${workspaceRoot}",
             "env": {"PWD": "${workspaceRoot}"},
-            "args": ["--backtrace", "update", "--dir", "${workspaceRoot}/debug/backup"],
+            "args": ["--backtrace", "backup", "--dir", "${workspaceRoot}/debug/backup"],
             "preLaunchTask": "builder",
             "sourceLanguages": ["rust"],
-            "program": "${workspaceRoot}/target/debug/backup-rs"
+            "program": "${workspaceRoot}/target/debug/artid"
         }
     ]
 }

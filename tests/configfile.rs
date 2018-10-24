@@ -1,4 +1,4 @@
-extern crate backup_rs as app;
+extern crate artid as app;
 extern crate chrono;
 extern crate serde_json as json;
 extern crate tempfile;

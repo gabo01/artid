@@ -1,5 +1,5 @@
-name: backup-rs
-version: "0.1.0"
+name: artid
+version: "0.2.0"
 author: Gabriel Dos Ramos <dosramosgabriel@gmail.com>
 about: Light client to backup your data
 args:
@@ -8,9 +8,9 @@ args:
         short: b
         long: backtrace
 subcommands:
-    - update:
+    - backup:
         about: Updates the current backup or makes a new one if it does not exist
-        version: "0.1.0"
+        version: "0.2.0"
         author: Gabriel Dos Ramos <dosramosgabriel@gmail.com>
         args:
             - path:
@@ -24,7 +24,7 @@ subcommands:
                 long: dry-run
     - restore:
         about: Restores all files of the backup to their original locations
-        version: "0.1.0"
+        version: "0.2.0"
         author: Gabriel Dos Ramos <dosramosgabriel@gmail.com>
         args:
             - path:

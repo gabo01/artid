@@ -4,8 +4,8 @@ members = [
 ]
 
 [package]
-name = "backup-rs"
-version = "0.1.0"
+name = "artid"
+version = "0.2.0"
 authors = ["Gabriel Dos Ramos Albo <dosramosgabriel@gmail.com>"]
 
 [dependencies]

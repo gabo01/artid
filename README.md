@@ -1,11 +1,11 @@
-# Rust Backup
+# Artid
 
 [![Build Status][t1]][t2] [![Lines of code][l1]][l2]
 
-[t1]: https://travis-ci.org/gabo01/rust-backup.svg?branch=master
-[t2]: https://travis-ci.org/gabo01/rust-backup
-[l1]: https://tokei.rs/b1/github/gabo01/rust-backup
-[l2]: https://github.com/gabo01/rust-backup
+[t1]: https://travis-ci.org/gabo01/artid.svg?branch=master
+[t2]: https://travis-ci.org/gabo01/artid
+[l1]: https://tokei.rs/b1/github/gabo01/artid
+[l2]: https://github.com/gabo01/artid
 
 A light client to backup your files. It's purpose is to make easier to make and organize backups
 by specifying a configuration file and letting the program take care of the rest.
@@ -47,12 +47,12 @@ version does not reach 1.0.0
 ## Usage from CLI
 
 ```bash
-backup-rs 0.1.0
+artid 0.1.0
 Gabriel Dos Ramos <dosramosgabriel@gmail.com>
 Light client to backup your data
 
 USAGE:
-    backup-rs [FLAGS] [SUBCOMMAND]
+    artid [FLAGS] [SUBCOMMAND]
 
 FLAGS:
     -b, --backtrace    Prints the complete error backtrace if an error is found

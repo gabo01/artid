@@ -7,7 +7,7 @@ extern crate failure;
 extern crate libc;
 #[macro_use]
 extern crate log;
-extern crate backup_rs as app;
+extern crate artid as app;
 
 use app::logger::{self, highlight, pathlight};
 use app::{BackupOptions, ConfigFile, RestoreOptions, Result};
