@@ -8,7 +8,7 @@
             "cwd": "${workspaceRoot}",
             "env": {"PWD": "${workspaceRoot}"},
             "args": ["--backtrace", "update", "--dir", "${workspaceRoot}/debug/backup"],
-            "preLaunchTask": "cargo",
+            "preLaunchTask": "builder",
             "sourceLanguages": ["rust"],
             "program": "${workspaceRoot}/target/debug/backup-rs"
         }
