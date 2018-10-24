@@ -73,6 +73,16 @@ on code, tests and commit messages.
 Any contributions you make will be automatically licensed under the MIT License unless told
 otherwise.
 
+## Code of Conduct
+
+Contribution to the project is organized under the terms of the Contributor Covenant, the
+maintainers promise to intervene to uphold that code of conduct.
+
+A copy of the code of conduct can be found locally [here][c1] or [online][c2].
+
+[c1]: .github/CODE_OF_CONDUCT.md
+[c2]: https://www.contributor-covenant.org/version/1/4/code-of-conduct.html
+
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details
