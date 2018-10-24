@@ -32,22 +32,6 @@ or just
 cargo run -- [ARGS]
 ```
 
-### Debugging
-
-The debug folder + the .vscode folder contain a basic configuration for debugging the
-the program using vscode built-in debugger. In order to set the debugger for rust code
-use the following links:
-
-[Setting a rust developing env](https://hoverbear.org/2017/03/03/setting-up-a-rust-devenv/)
-
-During the debug process the debug folder contents will change, these changes are not to be
-submitted to the repo. To avoid tracking these changes on your local copy run the following
-command on your local repo:
-
-```bash
-git update-index --assume-unchanged debug/**/
-```
-
 ## Features
 
 - [x] Command line client
@@ -80,6 +64,14 @@ SUBCOMMANDS:
     restore    Restores all files of the backup to their original locations
     update     Updates the current backup or makes a new one if it does not exist
 ```
+
+## Contributing
+
+Please see [CONTRIBUTING](.github/CONTRIBUTING.md) for a reference about the style guide, conventions
+on code, tests and commit messages.
+
+Any contributions you make will be automatically licensed under the MIT License unless told
+otherwise.
 
 ## License
 
