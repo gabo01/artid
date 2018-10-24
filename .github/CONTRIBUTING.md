@@ -75,3 +75,15 @@ merged until it is well formatted.
 The verions of clippy and rustfmt that the CI uses are those corresponding to the latest stable
 release of rust. This means that for developing you will need the latest version of the stable
 compiler to check formatting and lints.
+
+### Commit messages
+
+Our commit messages follow a [convetional changelog][cclog] format and we aim to use [clog][cl]
+to auto generate a preliminary changelog of our changes. Having a standard commit format helps
+understanding what changes were introduced by a commit and also helps to locate where an issue
+was introduced by splitting commits that change logic from the others.
+
+We do not enforce this rule, but following it will be highly appreciated.
+
+[cclog]: https://github.com/conventional-changelog/conventional-changelog
+[cl]: https://github.com/clog-tool/clog-cli
