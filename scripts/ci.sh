@@ -1,12 +1,27 @@
 #! /bin/bash
 
-if cargo build --verbose && cargo test --all --verbose; then
+cargo build --verbose
+build=$?
+
+cargo test --all --verbose
+tests=$?
+
+cargo test --all --verbose -- --ignored
+ignored=$?
+
+if [ "$build" = "0" ] && [ $tests = "0" ] && [ "$ignored" = "0" ]; then
     echo "Build passed"
 
-    if [ "$TRAVIS_RUST_VERSION" = "stable" ]; then
+    if [ "$TRAVIS_RUST_VERSION" = "stable" ] && [ "$TRAVIS_TAG" = "" ]; then
         echo "Style checks to be made"
 
-        if cargo fmt --all -- --check && cargo clippy --all-targets --all-features -- -D warnings; then
+        cargo fmt --all -- --check
+        fmt=$?
+
+        cargo clippy --all-targets --all-features -- -D warnings
+        clippy=$?
+
+        if [ "$fmt" = "0" ] && [ "$clippy" = "0" ]; then
             echo "Style checks passed"
         else
             exit 1
