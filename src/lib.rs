@@ -109,6 +109,21 @@ where
     /// Represents the relative path to the configuration file from a given root directory
     const RESTORE: &'static str = ".backup/config.json";
 
+    /// Manually create a new ConfigFile object. Usually, you would load (see load method) the
+    /// configuration file from disk, but in certain cases like directory initialization it can
+    /// be useful to create the file manually
+    pub fn new(dir: P) -> Self {
+        Self {
+            dir,
+            folders: vec![],
+        }
+    }
+
+    /// Returns a reference to the folders in the configuration file
+    pub fn folders(&self) -> &[Folder] {
+        &self.folders
+    }
+
     /// Loads the data present in the configuration file. Currently this function receives
     /// a directory and looks for the config file in the subpath .backup/config.json.
     pub fn load(dir: P) -> Result<Self> {
@@ -216,7 +231,7 @@ where
 /// Aside from the link, the modified field represents the last time the contents from
 /// the two folders where synced
 #[derive(Debug, Serialize, Deserialize)]
-struct Folder {
+pub struct Folder {
     /// Link path. If thinked as a link, this is where the symbolic link is
     path: EnvPath,
     /// Path of origin. If thinked as a link, this is the place the link points to
@@ -228,15 +243,14 @@ struct Folder {
 /// Represents the two dirs connected in a folder object once a root is given. Created
 /// when a folder link gets 'resolved' by adding a root to the 'path' or 'link'
 #[derive(Debug)]
-struct Dirs {
+pub struct Dirs {
     rel: PathBuf,
     abs: PathBuf,
 }
 
 impl Folder {
     /// Creates a new folder from the options specified
-    #[cfg(test)]
-    pub(self) fn new(path: EnvPath, origin: EnvPath, modified: Option<DateTime<Utc>>) -> Self {
+    pub fn new(path: EnvPath, origin: EnvPath, modified: Option<DateTime<Utc>>) -> Self {
         Self {
             path,
             origin,
@@ -247,12 +261,7 @@ impl Folder {
     /// Performs the backup of a specified folder entry. Given a root, the function checks
     /// for a previous backup and links all the files from the previous location, after
     /// that performs a sync operation between the folder and the origin location.
-    pub(self) fn backup<P>(
-        &mut self,
-        root: P,
-        stamp: DateTime<Utc>,
-        options: BackupOptions,
-    ) -> Result<()>
+    fn backup<P>(&mut self, root: P, stamp: DateTime<Utc>, options: BackupOptions) -> Result<()>
     where
         P: AsRef<Path>,
     {
@@ -326,7 +335,7 @@ impl Folder {
 
     /// Performs the restore of the folder entry. Given a root, the function looks for the
     /// backup folder with the latest timestamp and performs the restore from there.
-    pub(self) fn restore<P: AsRef<Path>>(&self, root: P, options: RestoreOptions) -> Result<()> {
+    fn restore<P: AsRef<Path>>(&self, root: P, options: RestoreOptions) -> Result<()> {
         let mut dirs = self.resolve(root);
         if let Some(modified) = self.modified {
             debug!("Starting restore of: {}", pathlight(&dirs.rel));
@@ -379,7 +388,7 @@ impl Folder {
 
 #[cfg(test)]
 mod tests {
-    use {BackupOptions, ConfigFile, Folder, RestoreOptions};
+    use {BackupOptions, Folder, RestoreOptions};
 
     macro_rules! rfc3339 {
         ($stamp:expr) => {{
@@ -455,6 +464,7 @@ mod tests {
         }
 
         #[test]
+        #[ignore]
         fn test_folder_backup_double() {
             let origin = tmpdir!();
             create_file!(tmppath!(origin, "a.txt"), "aaaa");
@@ -501,6 +511,7 @@ mod tests {
         }
 
         #[test]
+        #[ignore]
         fn test_folder_backup_double_addition() {
             let origin = tmpdir!();
             create_file!(tmppath!(origin, "a.txt"), "aaaa");
@@ -613,6 +624,7 @@ mod tests {
         }
 
         #[test]
+        #[ignore]
         fn test_folder_backup_double_remotion() {
             let origin = tmpdir!();
             create_file!(tmppath!(origin, "a.txt"), "aaaa");
@@ -691,6 +703,7 @@ mod tests {
         }
 
         #[test]
+        #[ignore]
         fn test_folder_restore_with_symlinks() {
             let (origin, root) = (tmpdir!(), tmpdir!());
             let stamp = Utc::now();
@@ -730,220 +743,6 @@ mod tests {
 
             assert_eq!(read_file!(tmppath!(origin, "a.txt")), "aaaa");
             assert_eq!(read_file!(tmppath!(origin, "b.txt")), "bbbb");
-        }
-    }
-
-    mod config_file {
-        use super::{BackupOptions, ConfigFile, RestoreOptions};
-        use chrono::offset::Utc;
-        use std::fs::{self, File};
-        use std::io::Write;
-        use {json, tempfile};
-
-        #[test]
-        fn test_config_file_load_valid() {
-            let dir = tmpdir!();
-            create_file!(
-                tmppath!(dir, "config.json"),
-                "[
-                {{
-                    \"path\": \"asd\", 
-                    \"origin\": \"$HOME\", 
-                    \"modified\": null
-                }}
-            ]"
-            );
-            assert!(ConfigFile::load_from(dir, "config.json").is_ok());
-        }
-
-        #[test]
-        fn test_config_file_load_invalid() {
-            let dir = tmpdir!();
-            create_file!(
-                tmppath!(dir, "config.json"),
-                "[
-                {{
-                    \"path\": \"asd, 
-                    \"origin\": \"$HOME\", 
-                    \"modified\": null
-                }}
-            ]"
-            );
-            assert!(ConfigFile::load_from(dir, "config.json").is_err());
-        }
-
-        #[test]
-        fn test_config_load() {
-            let tmp = tmpdir!();
-            fs::create_dir(tmppath!(tmp, ".backup")).expect("Unable to create folder");
-            create_file!(
-                tmppath!(tmp, ".backup/config.json"),
-                "[
-                {{
-                    \"path\": \"backup\",
-                    \"origin\": \"{}\",
-                    \"modified\": null
-                }}
-            ]",
-                tmppath!(tmp, "origin").display().to_string()
-            );
-            assert!(ConfigFile::load(tmp.path()).is_ok());
-        }
-
-        #[test]
-        fn test_config_load_from() {
-            let tmp = tempfile::tempdir().unwrap();
-
-            let mut file = File::create(tmp.path().join("config.json")).unwrap();
-            write!(
-                file,
-                "[
-                {{
-                    \"path\": \"backup\",
-                    \"origin\": \"{}\",
-                    \"modified\": null
-                }}
-            ]",
-                tmp.path().join("origin").display().to_string()
-            ).unwrap();
-
-            let _config = ConfigFile::load_from(tmp.path(), "config.json").unwrap();
-        }
-
-        #[test]
-        fn test_config_file_save_exists() {
-            let dir = tmpdir!();
-            assert!(create_file!(tmppath!(dir, "config.json")).exists());
-
-            let config = ConfigFile {
-                dir: dir.path(),
-                folders: vec![],
-            };
-
-            assert!(config.save_to("config.json").is_ok());
-        }
-
-        #[test]
-        fn test_config_file_save_unexistant() {
-            let dir = tmpdir!();
-
-            let config = ConfigFile {
-                dir: dir.path(),
-                folders: vec![],
-            };
-
-            assert!(config.save_to("config.json").is_ok());
-        }
-
-        #[test]
-        fn test_config_save_to_format() {
-            let tmp = tmpdir!();
-            create_file!(
-                tmppath!(tmp, "config.json"),
-                "[
-                {{
-                    \"path\": \"backup\",
-                    \"origin\": \"{}\",
-                    \"modified\": null
-                }}
-            ]",
-                tmppath!(tmp, "origin").display().to_string()
-            );
-
-            let config =
-                ConfigFile::load_from(tmp.path(), "config.json").expect("Unable to load file");
-            config
-                .save_to("config2.json")
-                .expect("Unable to save the file");
-
-            assert_eq!(
-                read_file!(tmppath!(tmp, "config2.json")),
-                json::to_string_pretty(&config.folders).expect("Unable to serialize")
-            );
-        }
-
-        #[test]
-        fn test_config_save() {
-            let tmp = tmpdir!();
-            fs::create_dir(tmppath!(tmp, ".backup")).expect("Unable to create folder");
-
-            let config = ConfigFile {
-                dir: tmp.path(),
-                folders: vec![],
-            };
-            config.save().expect("Unable to save");
-
-            assert!(tmppath!(tmp, ".backup/config.json").exists());
-        }
-
-        #[test]
-        fn test_config_backup() {
-            let tmp = tmpdir!();
-            let backup = tmppath!(tmp, "backup");
-
-            fs::create_dir(tmppath!(tmp, "origin")).expect("Unable to create path");
-            fs::create_dir_all(backup.join(".backup")).expect("Unable to create path");
-
-            create_file!(
-                backup.join(".backup/config.json"),
-                "[
-                {{
-                    \"path\": \"backup\",
-                    \"origin\": \"{origin}\",
-                    \"modified\": null
-                }},
-
-                {{
-                    \"path\": \"other\",
-                    \"origin\": \"{origin}\",
-                    \"modified\": null
-                }}
-            ]",
-                origin = tmppath!(tmp, "origin").display().to_string()
-            );
-
-            let mut config = ConfigFile::load(&backup).expect("Unable to load file");
-            let stamp = config
-                .backup(BackupOptions::new(true))
-                .expect("Unable to perform backup");
-
-            assert!(backup.join(format!("backup/{}", rfc3339!(stamp))).exists());
-            assert!(backup.join(format!("other/{}", rfc3339!(stamp))).exists());
-        }
-
-        #[test]
-        fn test_config_restore() {
-            let (origin, root) = (tmpdir!(), tmpdir!());
-            let stamp = Utc::now();
-
-            // Create the config file
-            fs::create_dir(tmppath!(root, ".backup")).expect("Unable to create path");
-            create_file!(
-                tmppath!(root, ".backup/config.json"),
-                "[
-                {{
-                    \"path\": \"backup\",
-                    \"origin\": \"{}\",
-                    \"modified\": \"{}\"
-                }}
-            ]",
-                origin.path().display().to_string(),
-                rfc3339!(stamp)
-            );
-
-            // Create some files on the backup
-            let backup = tmppath!(root, format!("backup/{}", rfc3339!(stamp)));
-            fs::create_dir_all(&backup).expect("Unable to create path");
-            create_file!(backup.join("a.txt"));
-            create_file!(backup.join("b.txt"));
-
-            let config = ConfigFile::load(root.path()).expect("Unable to load file");
-            config
-                .restore(RestoreOptions::new(true, true))
-                .expect("Unable to perform restore");
-
-            assert!(tmppath!(origin, "a.txt").exists());
-            assert!(tmppath!(origin, "b.txt").exists());
         }
     }
 }
