@@ -47,7 +47,7 @@ version does not reach 1.0.0
 ## Usage from CLI
 
 ```bash
-artid 0.2.0
+artid 0.2.1
 Gabriel Dos Ramos <dosramosgabriel@gmail.com>
 Light client to backup your data
 
