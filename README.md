@@ -47,7 +47,7 @@ version does not reach 1.0.0
 ## Usage from CLI
 
 ```bash
-artid 0.1.0
+artid 0.2.0
 Gabriel Dos Ramos <dosramosgabriel@gmail.com>
 Light client to backup your data
 
@@ -60,9 +60,9 @@ FLAGS:
     -V, --version      Prints version information
 
 SUBCOMMANDS:
+    backup     Updates the current backup or makes a new one if it does not exist
     help       Prints this message or the help of the given subcommand(s)
     restore    Restores all files of the backup to their original locations
-    update     Updates the current backup or makes a new one if it does not exist
 ```
 
 ## Contributing
