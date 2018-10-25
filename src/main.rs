@@ -65,11 +65,11 @@ impl<'a> App<'a> {
 
     pub fn run(&mut self) -> Result<()> {
         match self.matches.subcommand_name() {
-            Some("update") => {
-                let stamp = backup(self.matches.subcommand_matches("update").unwrap())?;
+            Some(e @ "backup") => {
+                let stamp = backup(self.matches.subcommand_matches(e).unwrap())?;
                 if !self
                     .matches
-                    .subcommand_matches("update")
+                    .subcommand_matches(e)
                     .unwrap()
                     .is_present("dry-run")
                 {
@@ -80,7 +80,7 @@ impl<'a> App<'a> {
                 }
             }
 
-            Some("restore") => restore(self.matches.subcommand_matches("restore").unwrap())?,
+            Some(e @ "restore") => restore(self.matches.subcommand_matches(e).unwrap())?,
             _ => {
                 self.app.print_long_help().unwrap();
                 println!();
