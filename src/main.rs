@@ -12,7 +12,7 @@ extern crate artid as app;
 use app::logger::{self, highlight, pathlight};
 use app::{BackupOptions, ConfigFile, RestoreOptions, Result};
 use chrono::{offset::Utc, DateTime, SecondsFormat};
-use clap::ArgMatches;
+use clap::{App, ArgMatches};
 use failure::Fail;
 use libc::EXIT_FAILURE;
 use std::process::exit;
@@ -30,10 +30,14 @@ fn main() {
     }
 
     let yaml = load_yaml!("cli.yml");
-    let mut app = App::new(clap::App::from(yaml));
+    let matches = App::from_yaml(yaml)
+        .author(crate_authors!())
+        .version(crate_version!())
+        .about(crate_description!())
+        .get_matches();
 
-    if let Err(err) = app.run() {
-        if app.backtrace {
+    if let Err(err) = run(&matches) {
+        if matches.is_present("backtrace") {
             for cause in err.causes() {
                 error!("{}", cause);
             }
@@ -45,50 +49,27 @@ fn main() {
     }
 }
 
-struct App<'a> {
-    app: clap::App<'a, 'a>,
-    matches: ArgMatches<'a>,
-    backtrace: bool,
-}
-
-impl<'a> App<'a> {
-    pub fn new(app: clap::App<'a, 'a>) -> Self {
-        let matches = app.clone().get_matches();
-        let backtrace = matches.is_present("backtrace");
-
-        App {
-            app,
-            matches,
-            backtrace,
-        }
-    }
-
-    pub fn run(&mut self) -> Result<()> {
-        match self.matches.subcommand_name() {
-            Some(e @ "backup") => {
-                let stamp = backup(self.matches.subcommand_matches(e).unwrap())?;
-                if !self
-                    .matches
-                    .subcommand_matches(e)
-                    .unwrap()
-                    .is_present("dry-run")
-                {
-                    info!(
-                        "Bakup timestamp in {}",
-                        highlight(stamp.to_rfc3339_opts(SecondsFormat::Nanos, true))
-                    );
-                }
-            }
-
-            Some(e @ "restore") => restore(self.matches.subcommand_matches(e).unwrap())?,
-            _ => {
-                self.app.print_long_help().unwrap();
-                println!();
+fn run(matches: &ArgMatches<'_>) -> Result<()> {
+    match matches.subcommand_name() {
+        Some(e @ "backup") => {
+            let stamp = backup(matches.subcommand_matches(e).unwrap())?;
+            if !matches
+                .subcommand_matches(e)
+                .unwrap()
+                .is_present("dry-run")
+            {
+                info!(
+                    "Bakup timestamp in {}",
+                    highlight(stamp.to_rfc3339_opts(SecondsFormat::Nanos, true))
+                );
             }
         }
 
-        Ok(())
+        Some(e @ "restore") => restore(matches.subcommand_matches(e).unwrap())?,
+        _ => unreachable!()
     }
+
+    Ok(())
 }
 
 fn backup(matches: &ArgMatches) -> Result<DateTime<Utc>> {

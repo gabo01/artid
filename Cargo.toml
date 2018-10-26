@@ -7,6 +7,7 @@ members = [
 name = "artid"
 version = "0.2.1"
 authors = ["Gabriel Dos Ramos Albo <dosramosgabriel@gmail.com>"]
+description = "Light client to backup your data"
 
 [dependencies]
 atty = "0.2.11"

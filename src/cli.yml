@@ -1,7 +1,6 @@
 name: artid
-version: "0.2.1"
-author: Gabriel Dos Ramos <dosramosgabriel@gmail.com>
-about: Light client to backup your data
+settings:
+    - SubcommandRequiredElseHelp
 args:
     - backtrace:
         help: Prints the complete error backtrace if an error is found
