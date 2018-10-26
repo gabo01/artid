@@ -53,11 +53,7 @@ fn run(matches: &ArgMatches<'_>) -> Result<()> {
     match matches.subcommand_name() {
         Some(e @ "backup") => {
             let stamp = backup(matches.subcommand_matches(e).unwrap())?;
-            if !matches
-                .subcommand_matches(e)
-                .unwrap()
-                .is_present("dry-run")
-            {
+            if !matches.subcommand_matches(e).unwrap().is_present("dry-run") {
                 info!(
                     "Bakup timestamp in {}",
                     highlight(stamp.to_rfc3339_opts(SecondsFormat::Nanos, true))
@@ -66,7 +62,7 @@ fn run(matches: &ArgMatches<'_>) -> Result<()> {
         }
 
         Some(e @ "restore") => restore(matches.subcommand_matches(e).unwrap())?,
-        _ => unreachable!()
+        _ => unreachable!(),
     }
 
     Ok(())
