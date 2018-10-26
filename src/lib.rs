@@ -237,14 +237,6 @@ pub struct Folder {
     modified: Option<DateTime<Utc>>,
 }
 
-/// Represents the two dirs connected in a folder object once a root is given. Created
-/// when a folder link gets 'resolved' by adding a root to the 'path' or 'link'
-#[derive(Debug)]
-pub struct Dirs {
-    rel: PathBuf,
-    abs: PathBuf,
-}
-
 impl Folder {
     /// Creates a new folder from the options specified
     pub fn new(path: EnvPath, origin: EnvPath, modified: Option<DateTime<Utc>>) -> Self {
@@ -262,23 +254,18 @@ impl Folder {
     where
         P: AsRef<Path>,
     {
-        let dirs = self.resolve(root);
+        let (rel, abs) = self.resolve(root);
         let (base, old, new) = if let Some(modified) = self.modified {
             (
-                dirs.abs,
-                Some(
-                    dirs.rel
-                        .join(modified.to_rfc3339_opts(SecondsFormat::Nanos, true)),
-                ),
-                dirs.rel
-                    .join(stamp.to_rfc3339_opts(SecondsFormat::Nanos, true)),
+                abs,
+                Some(rel.join(modified.to_rfc3339_opts(SecondsFormat::Nanos, true))),
+                rel.join(stamp.to_rfc3339_opts(SecondsFormat::Nanos, true)),
             )
         } else {
             (
-                dirs.abs,
+                abs,
                 None,
-                dirs.rel
-                    .join(stamp.to_rfc3339_opts(SecondsFormat::Nanos, true)),
+                rel.join(stamp.to_rfc3339_opts(SecondsFormat::Nanos, true)),
             )
         };
 
@@ -333,13 +320,12 @@ impl Folder {
     /// Performs the restore of the folder entry. Given a root, the function looks for the
     /// backup folder with the latest timestamp and performs the restore from there.
     fn restore<P: AsRef<Path>>(&self, root: P, options: RestoreOptions) -> Result<()> {
-        let mut dirs = self.resolve(root);
+        let (mut rel, abs) = self.resolve(root);
         if let Some(modified) = self.modified {
-            debug!("Starting restore of: {}", pathlight(&dirs.rel));
-            dirs.rel
-                .push(modified.to_rfc3339_opts(SecondsFormat::Nanos, true));
+            debug!("Starting restore of: {}", pathlight(&rel));
+            rel.push(modified.to_rfc3339_opts(SecondsFormat::Nanos, true));
 
-            let tree = DirTree::new(&dirs.abs, &dirs.rel)?;
+            let tree = DirTree::new(&abs, &rel)?;
             let model: CopyModel = tree
                 .iter()
                 .filter(|e| {
@@ -350,12 +336,12 @@ impl Folder {
                 }).map(|e| {
                     if e.kind() == FileType::Dir && e.presence() == Presence::Dst {
                         CopyAction::CreateDir {
-                            target: dirs.abs.join(e.path()),
+                            target: abs.join(e.path()),
                         }
                     } else {
                         CopyAction::CopyFile {
-                            src: dirs.rel.join(e.path()),
-                            dst: dirs.abs.join(e.path()),
+                            src: rel.join(e.path()),
+                            dst: abs.join(e.path()),
                         }
                     }
                 }).collect();
@@ -368,18 +354,21 @@ impl Folder {
 
             Ok(())
         } else {
-            info!("Restore not needed for {}", pathlight(&dirs.rel));
+            info!("Restore not needed for {}", pathlight(&rel));
             Ok(())
         }
     }
 
     /// Resolves the link between the two elements in a folder. In order to do so a root
     /// must be given to the relative path.
-    fn resolve<P: AsRef<Path>>(&self, root: P) -> Dirs {
-        Dirs {
-            rel: root.as_ref().join(self.path.as_ref()),
-            abs: PathBuf::from(self.origin.as_ref()),
-        }
+    ///
+    /// The returned elements are the backup path and the origin path respectively. Can also
+    /// be seen as the resolved relative path and the absolute path
+    fn resolve<P: AsRef<Path>>(&self, root: P) -> (PathBuf, PathBuf) {
+        (
+            root.as_ref().join(self.path.as_ref()),
+            PathBuf::from(self.origin.as_ref()),
+        )
     }
 }
 
@@ -413,10 +402,10 @@ mod tests {
                 modified: None,
             };
 
-            let dirs = folder.resolve(user.clone());
+            let (rel, abs) = folder.resolve(user.clone());
 
             assert_eq!(
-                dirs.rel.display().to_string(),
+                rel.display().to_string(),
                 PathBuf::from(user.clone())
                     .join("config")
                     .display()
@@ -424,7 +413,7 @@ mod tests {
             );
 
             assert_eq!(
-                dirs.abs.display().to_string(),
+                abs.display().to_string(),
                 PathBuf::from(home.clone()).display().to_string()
             );
         }
