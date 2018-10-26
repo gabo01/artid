@@ -20,13 +20,20 @@ extern crate yansi;
 extern crate env_path;
 
 use chrono::offset::Utc;
-use chrono::{DateTime, SecondsFormat};
+use chrono::DateTime;
 use env_path::EnvPath;
 use failure::ResultExt;
 use std::fmt::Debug;
 use std::fs::File;
 use std::io::Write;
 use std::path::{Path, PathBuf};
+
+macro_rules! rfc3339 {
+    ($stamp:expr) => {{
+        use chrono::SecondsFormat;
+        $stamp.to_rfc3339_opts(SecondsFormat::Nanos, true)
+    }};
+}
 
 #[cfg(test)]
 #[macro_use]
@@ -258,15 +265,11 @@ impl Folder {
         let (base, old, new) = if let Some(modified) = self.modified {
             (
                 abs,
-                Some(rel.join(modified.to_rfc3339_opts(SecondsFormat::Nanos, true))),
-                rel.join(stamp.to_rfc3339_opts(SecondsFormat::Nanos, true)),
+                Some(rel.join(rfc3339!(modified))),
+                rel.join(rfc3339!(stamp)),
             )
         } else {
-            (
-                abs,
-                None,
-                rel.join(stamp.to_rfc3339_opts(SecondsFormat::Nanos, true)),
-            )
+            (abs, None, rel.join(rfc3339!(stamp)))
         };
 
         let model: CopyModel = if let Some(ref old) = old {
@@ -323,7 +326,7 @@ impl Folder {
         let (mut rel, abs) = self.resolve(root);
         if let Some(modified) = self.modified {
             debug!("Starting restore of: {}", pathlight(&rel));
-            rel.push(modified.to_rfc3339_opts(SecondsFormat::Nanos, true));
+            rel.push(rfc3339!(modified));
 
             let tree = DirTree::new(&abs, &rel)?;
             let model: CopyModel = tree
@@ -375,13 +378,6 @@ impl Folder {
 #[cfg(test)]
 mod tests {
     use {BackupOptions, Folder, RestoreOptions};
-
-    macro_rules! rfc3339 {
-        ($stamp:expr) => {{
-            use chrono::SecondsFormat;
-            $stamp.to_rfc3339_opts(SecondsFormat::Nanos, true)
-        }};
-    }
 
     mod folder {
         use super::{BackupOptions, Folder, RestoreOptions};
