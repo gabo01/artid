@@ -14,14 +14,12 @@ macro_rules! tmpdir {
     };
 }
 
-#[macro_export]
 macro_rules! tmppath {
     ($dir:expr, $path:expr) => {
         $dir.path().join($path)
     };
 }
 
-#[macro_export]
 macro_rules! create_file {
     ($path:expr) => {
         {
@@ -41,7 +39,6 @@ macro_rules! create_file {
     }
 }
 
-#[macro_export]
 macro_rules! read_file {
     ($file:expr) => {{
         use std::io::Read;
