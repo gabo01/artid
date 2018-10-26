@@ -48,8 +48,8 @@ pub type Result<T> = ::std::result::Result<T, AppError>;
 /// behaviour they control
 #[derive(Debug, Copy, Clone)]
 pub struct BackupOptions {
-    ///
-    ///
+    /// Controls if the model should be ran or not. In case the model does not run, the
+    /// intended actions will be logged into the screen
     pub run: bool,
 }
 
@@ -70,12 +70,9 @@ pub struct RestoreOptions {
     ///
     /// In short words: (overwrite == true) => function wil overwrite files on the original
     /// locations.
-    ///
-    /// Setting (warn == true) will turn the error into a warning if (overwrite == false).
     overwrite: bool,
-    ///
-    ///
-    ///
+    /// Controls if the model should be ran or not. In case the model does not run, the
+    /// intended actions will be logged into the screen
     run: bool,
 }
 
