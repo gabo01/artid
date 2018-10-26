@@ -715,6 +715,7 @@ mod tests {
             let mut node = TreeNode::new("".into(), Presence::Src, FileType::Dir);
             node.read(src.path(), &unexistant)
                 .expect("Unable to read the directory");
+            sort(&mut node);
 
             assert!(node.children.is_some());
             assert_eq!(
@@ -755,6 +756,7 @@ mod tests {
             let mut node = TreeNode::new("".into(), Presence::Src, FileType::Dir);
             node.read_recursive(src.path(), &unexistant)
                 .expect("Unable to read the directory");
+            sort(&mut node);
 
             assert!(node.children.is_some());
             assert_eq!(
