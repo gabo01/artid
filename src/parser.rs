@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 
 // Internal imports
 use app::logger::{highlight, pathlight};
-use app::{BackupOptions, ConfigFile, RestoreOptions};
+use app::prelude::*;
 use errors::AppError;
 
 macro_rules! curr_dir {

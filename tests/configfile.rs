@@ -3,7 +3,7 @@ extern crate chrono;
 extern crate serde_json as json;
 extern crate tempfile;
 
-use app::{BackupOptions, ConfigFile, RestoreOptions};
+use app::prelude::{BackupOptions, ConfigFile, RestoreOptions};
 use chrono::offset::Utc;
 use std::fs::{self, File};
 use std::io::Write;
