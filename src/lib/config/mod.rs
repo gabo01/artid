@@ -1,94 +1,22 @@
-#![allow(deprecated)]
-
-extern crate atty;
-extern crate chrono;
-extern crate env_logger;
-extern crate failure;
-#[macro_use]
-extern crate failure_derive;
-extern crate libc;
-#[macro_use]
-extern crate log;
-extern crate serde;
-#[macro_use]
-extern crate serde_derive;
-extern crate serde_json as json;
-#[cfg(test)]
-extern crate tempfile;
-extern crate yansi;
-
-extern crate env_path;
-
 use chrono::offset::Utc;
 use chrono::DateTime;
 use env_path::EnvPath;
 use failure::ResultExt;
+use json;
 use std::fmt::Debug;
 use std::fs::File;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
-macro_rules! rfc3339 {
-    ($stamp:expr) => {{
-        use chrono::SecondsFormat;
-        $stamp.to_rfc3339_opts(SecondsFormat::Nanos, true)
-    }};
-}
-
-#[cfg(test)]
-#[macro_use]
-mod tools;
-
-pub mod errors;
-pub mod logger;
-mod sync;
-
-pub use errors::{AppError, AppErrorType};
-use errors::{FsError, ParseError};
 use logger::pathlight;
-use sync::{CopyAction, CopyModel, DirTree, Direction, FileType, Presence};
+use ops::{
+    Backup, BackupError, BackupErrorType, BackupOptions, Restore, RestoreError, RestoreErrorType,
+    RestoreOptions,
+};
 
-/// Alias for the Result type
-pub type Result<T> = ::std::result::Result<T, AppError>;
-
-/// Modifier options for the backup action on ConfigFile. Check the properties to see which
-/// behaviour they control
-#[derive(Debug, Copy, Clone)]
-pub struct BackupOptions {
-    /// Controls if the model should be ran or not. In case the model does not run, the
-    /// intended actions will be logged into the screen
-    pub run: bool,
-}
-
-impl BackupOptions {
-    /// Creates a new set of options for the backup operation.
-    pub fn new(run: bool) -> Self {
-        Self { run }
-    }
-}
-
-/// Modified options for the restore action on ConfigFile. Check the properties to see which
-/// behaviour they control
-#[derive(Debug, Copy, Clone)]
-pub struct RestoreOptions {
-    /// Enables/Disables overwrite on the original locations during the restore. If the original
-    /// location of the file backed up already exists this function will overwrite the location
-    /// with the file backed up instead of exiting with an error.
-    ///
-    /// In short words: (overwrite == true) => function wil overwrite files on the original
-    /// locations.
-    overwrite: bool,
-    /// Controls if the model should be ran or not. In case the model does not run, the
-    /// intended actions will be logged into the screen
-    run: bool,
-}
-
-impl RestoreOptions {
-    /// Creates a new set of options for the restore operation.
-    pub fn new(overwrite: bool, run: bool) -> Self {
-        Self { overwrite, run }
-    }
-}
+mod errors;
+pub use self::errors::{LoadError, SaveError};
+use self::errors::{LoadErrorType, SaveErrorType};
 
 /// Represents a configuration file in json format. A valid json config file is composed
 /// by an array of folder structs. The config file has to be stored in a subpath of the
@@ -130,16 +58,19 @@ where
 
     /// Loads the data present in the configuration file. Currently this function receives
     /// a directory and looks for the config file in the subpath .backup/config.json.
-    pub fn load(dir: P) -> Result<Self> {
+    pub fn load(dir: P) -> Result<Self, LoadError> {
         Self::load_from(dir, Self::RESTORE)
     }
 
-    pub fn load_from<T: AsRef<Path>>(dir: P, path: T) -> Result<Self> {
+    pub fn load_from<T: AsRef<Path>>(dir: P, path: T) -> Result<Self, LoadError> {
         let file = dir.as_ref().join(path);
+
         debug!("Config file location: {}", pathlight(&file));
-        let reader = File::open(&file).context(FsError::OpenFile((&file).into()))?;
-        let folders = json::from_reader(reader).context(ParseError::JsonParse((&file).into()))?;
-        trace!("{:?}", folders);
+
+        let reader = File::open(&file).context(LoadErrorType::File(file.display().to_string()))?;
+        let folders =
+            json::from_reader(reader).context(LoadErrorType::Parse(file.display().to_string()))?;
+        trace!("{:#?}", folders);
 
         Ok(ConfigFile { dir, folders })
     }
@@ -149,21 +80,23 @@ where
     ///
     /// This function uses the directory saved on the ConfigFile and looks for the
     /// config.json file inside .backup/config.json.
-    pub fn save(&self) -> Result<()> {
+    pub fn save(&self) -> Result<(), SaveError> {
         self.save_to(Self::RESTORE)
     }
 
     /// Saves the changes made to the path specified in 'to'. The 'to' path is relative to
     /// the master directory of ConfigFile. All the parent components of 'to' must exist
     /// in order for this function to suceed.
-    pub fn save_to<T: AsRef<Path>>(&self, to: T) -> Result<()> {
+    pub fn save_to<T: AsRef<Path>>(&self, to: T) -> Result<(), SaveError> {
         let file = self.dir.as_ref().join(to);
+
         debug!("Config file location: {}", pathlight(&file));
+
         write!(
-            File::create(&file).context(FsError::CreateFile((&file).into()))?,
+            File::create(&file).context(SaveErrorType::File(file.display().to_string()))?,
             "{}",
             json::to_string_pretty(&self.folders).expect("ConfigFile cannot fail serialization")
-        ).context(FsError::ReadFile((&file).into()))?;
+        ).context(SaveErrorType::File(file.display().to_string()))?;
 
         info!("Config file saved on {}", pathlight(file));
         Ok(())
@@ -180,15 +113,12 @@ where
     ///
     /// Also, this function will delete files present in the backup that have been removed from
     /// their original locations and fail it cannot delete a file.
-    pub fn backup(&mut self, options: BackupOptions) -> Result<DateTime<Utc>> {
+    pub fn backup(&mut self, options: BackupOptions) -> Result<DateTime<Utc>, BackupError> {
         let stamp = Utc::now();
 
         let mut error = None;
         for folder in &mut self.folders {
-            if let Err(err) = folder
-                .backup(&self.dir, stamp, options)
-                .context(AppErrorType::UpdateFolder)
-            {
+            if let Err(err) = folder.backup(&self.dir, stamp, options) {
                 error = Some(err);
                 break;
             }
@@ -205,7 +135,7 @@ where
         }
 
         match error {
-            Some(err) => Err(err.into()),
+            Some(err) => Err(err),
             None => Ok(stamp),
         }
     }
@@ -215,11 +145,9 @@ where
     ///
     /// The behaviour of this function can be customized through the options provided. Check
     /// RestoreOptions to see what things can be modified.
-    pub fn restore(self, options: RestoreOptions) -> Result<()> {
+    pub fn restore(self, options: RestoreOptions) -> Result<(), RestoreError> {
         for folder in &self.folders {
-            folder
-                .restore(&self.dir, options)
-                .context(AppErrorType::RestoreFolder)?;
+            folder.restore(&self.dir, options)?;
         }
 
         Ok(())
@@ -257,61 +185,26 @@ impl Folder {
     /// Performs the backup of a specified folder entry. Given a root, the function checks
     /// for a previous backup and links all the files from the previous location, after
     /// that performs a sync operation between the folder and the origin location.
-    fn backup<P>(&mut self, root: P, stamp: DateTime<Utc>, options: BackupOptions) -> Result<()>
+    fn backup<P>(
+        &mut self,
+        root: P,
+        stamp: DateTime<Utc>,
+        options: BackupOptions,
+    ) -> Result<(), BackupError>
     where
         P: AsRef<Path>,
     {
         let (rel, abs) = self.resolve(root);
-        let (base, old, new) = if let Some(modified) = self.modified {
-            (
-                abs,
-                Some(rel.join(rfc3339!(modified))),
-                rel.join(rfc3339!(stamp)),
-            )
-        } else {
-            (abs, None, rel.join(rfc3339!(stamp)))
-        };
 
-        let model: CopyModel = if let Some(ref old) = old {
-            let tree = DirTree::new(&base, &old)?;
-            tree.iter()
-                .filter(|e| e.presence() != Presence::Dst)
-                .map(|e| {
-                    if e.kind() == FileType::Dir {
-                        CopyAction::CreateDir {
-                            target: new.join(e.path()),
-                        }
-                    } else if e.presence() == Presence::Src || !e.synced(Direction::Forward) {
-                        CopyAction::CopyFile {
-                            src: base.join(e.path()),
-                            dst: new.join(e.path()),
-                        }
-                    } else {
-                        CopyAction::CopyLink {
-                            src: old.join(e.path()),
-                            dst: new.join(e.path()),
-                        }
-                    }
-                }).collect()
+        let model = if let Some(modified) = self.modified {
+            let (old, new) = (rel.join(rfc3339!(modified)), rel.join(rfc3339!(stamp)));
+            Backup::with_previous(&abs, &old, &new)?
         } else {
-            let tree = DirTree::new(&base, &new)?;
-            tree.iter()
-                .map(|e| {
-                    if e.kind() == FileType::Dir {
-                        CopyAction::CreateDir {
-                            target: new.join(e.path()),
-                        }
-                    } else {
-                        CopyAction::CopyFile {
-                            src: base.join(e.path()),
-                            dst: new.join(e.path()),
-                        }
-                    }
-                }).collect()
+            Backup::from_scratch(&abs, &rel.join(rfc3339!(stamp)))?
         };
 
         if options.run {
-            model.execute()?;
+            model.execute().context(BackupErrorType::Execute)?;
             self.modified = Some(stamp);
         } else {
             model.log();
@@ -322,35 +215,20 @@ impl Folder {
 
     /// Performs the restore of the folder entry. Given a root, the function looks for the
     /// backup folder with the latest timestamp and performs the restore from there.
-    fn restore<P: AsRef<Path>>(&self, root: P, options: RestoreOptions) -> Result<()> {
+    fn restore<P: AsRef<Path>>(
+        &self,
+        root: P,
+        options: RestoreOptions,
+    ) -> Result<(), RestoreError> {
         let (mut rel, abs) = self.resolve(root);
         if let Some(modified) = self.modified {
             debug!("Starting restore of: {}", pathlight(&rel));
             rel.push(rfc3339!(modified));
 
-            let tree = DirTree::new(&abs, &rel)?;
-            let model: CopyModel = tree
-                .iter()
-                .filter(|e| {
-                    e.presence() == Presence::Dst
-                        || options.overwrite
-                            && e.presence() == Presence::Both
-                            && e.kind() != FileType::Dir
-                }).map(|e| {
-                    if e.kind() == FileType::Dir && e.presence() == Presence::Dst {
-                        CopyAction::CreateDir {
-                            target: abs.join(e.path()),
-                        }
-                    } else {
-                        CopyAction::CopyFile {
-                            src: rel.join(e.path()),
-                            dst: abs.join(e.path()),
-                        }
-                    }
-                }).collect();
+            let model = Restore::from_point(&abs, &rel, options.overwrite)?;
 
             if options.run {
-                model.execute().context(AppErrorType::RestoreFolder)?;
+                model.execute().context(RestoreErrorType::Execute)?;
             } else {
                 model.log();
             }
@@ -377,7 +255,7 @@ impl Folder {
 
 #[cfg(test)]
 mod tests {
-    use {BackupOptions, Folder, RestoreOptions};
+    use prelude::{BackupOptions, Folder, RestoreOptions};
 
     mod folder {
         use super::{BackupOptions, Folder, RestoreOptions};

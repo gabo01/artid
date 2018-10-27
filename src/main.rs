@@ -1,4 +1,5 @@
 #![allow(deprecated)]
+#![allow(unused_imports)]
 
 #[macro_use]
 extern crate clap;
@@ -7,21 +8,22 @@ extern crate failure;
 extern crate libc;
 #[macro_use]
 extern crate log;
-extern crate artid as app;
+#[macro_use]
+extern crate failure_derive;
 
-use app::logger::{self, highlight, pathlight};
-use app::{BackupOptions, ConfigFile, RestoreOptions, Result};
-use chrono::{offset::Utc, DateTime, SecondsFormat};
-use clap::{App, ArgMatches};
+extern crate artid as app; // Application library
+
+use clap::App;
 use failure::Fail;
 use libc::EXIT_FAILURE;
 use std::process::exit;
 
-macro_rules! curr_dir {
-    () => {
-        std::env::current_dir().expect("Unable to retrieve current work directory")
-    };
-}
+use app::logger;
+
+mod errors;
+mod parser;
+
+use parser::Instance;
 
 fn main() {
     if logger::init("info").is_err() {
@@ -36,63 +38,14 @@ fn main() {
         .about(crate_description!())
         .get_matches();
 
-    if let Err(err) = run(&matches) {
-        if matches.is_present("backtrace") {
-            for cause in err.causes() {
-                error!("{}", cause);
-            }
+    let instance = Instance::new(&matches);
+    if let Err(err) = instance.run() {
+        if instance.backtrace() {
+            err.causes().for_each(|cause| error!("{}", cause));
         } else {
             error!("{}", err);
         }
 
         exit(EXIT_FAILURE);
     }
-}
-
-fn run(matches: &ArgMatches<'_>) -> Result<()> {
-    match matches.subcommand_name() {
-        Some(e @ "backup") => {
-            let stamp = backup(matches.subcommand_matches(e).unwrap())?;
-            if !matches.subcommand_matches(e).unwrap().is_present("dry-run") {
-                info!(
-                    "Bakup timestamp in {}",
-                    highlight(stamp.to_rfc3339_opts(SecondsFormat::Nanos, true))
-                );
-            }
-        }
-
-        Some(e @ "restore") => restore(matches.subcommand_matches(e).unwrap())?,
-        _ => unreachable!(),
-    }
-
-    Ok(())
-}
-
-fn backup(matches: &ArgMatches) -> Result<DateTime<Utc>> {
-    let options = BackupOptions::new(!matches.is_present("dry-run"));
-    let mut path = curr_dir!();
-
-    if let Some(val) = matches.value_of("path") {
-        path.push(val);
-        debug!("Working directory set to {}", pathlight(&path));
-    }
-
-    info!("Starting backup on {}", path.display());
-    ConfigFile::load(&path)?.backup(options)
-}
-
-fn restore(matches: &ArgMatches) -> Result<()> {
-    let options = RestoreOptions::new(
-        matches.is_present("overwrite"),
-        !matches.is_present("dry-run"),
-    );
-    let mut path = curr_dir!();
-
-    if let Some(val) = matches.value_of("path") {
-        path.push(val);
-        debug!("Working directory set to {}", pathlight(&path));
-    }
-
-    info!("Starting restore of {}", path.display());
-    ConfigFile::load(&path)?.restore(options)
 }

@@ -1,4 +1,3 @@
-use failure::ResultExt;
 use logger::pathlight;
 use std::collections::{HashMap, VecDeque};
 use std::ffi::OsString;
@@ -10,13 +9,11 @@ use std::os::unix::fs::symlink;
 use std::os::windows::fs::symlink_file as symlink;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
-use {FsError, Result};
 
 /// Reduce the boilerplate when reading a directory
 macro_rules! read {
     ($path:expr) => {
-        fs::read_dir($path)
-            .context(FsError::ReadFile($path.into()))?
+        fs::read_dir($path)?
             .into_iter()
             .filter_map(|e| e.ok())
             .map(|e| (e.path(), e.file_name()))
@@ -39,7 +36,7 @@ pub struct DirTree<'a> {
 impl<'a> DirTree<'a> {
     /// Creates a new comparison DirTree from two path references. As told in the type level
     /// documentation, creation of this tree may fail.
-    pub fn new(src: &'a Path, dst: &'a Path) -> Result<Self> {
+    pub fn new(src: &'a Path, dst: &'a Path) -> ::std::io::Result<Self> {
         let (srcexists, dstexists) = (src.exists(), dst.exists());
         let presence = if srcexists && dstexists {
             Presence::Both
@@ -143,7 +140,7 @@ impl TreeNode {
     /// Performs the read in search of the children of the node (see read function docs). The only
     /// difference is that these function will be also applied to the children found in order to
     /// build a full tree with this node as the root.
-    pub fn read_recursive<T, P>(&mut self, src: T, dst: P) -> Result<()>
+    pub fn read_recursive<T, P>(&mut self, src: T, dst: P) -> ::std::io::Result<()>
     where
         T: AsRef<Path>,
         P: AsRef<Path>,
@@ -167,13 +164,17 @@ impl TreeNode {
     /// it makes no sense. To get the children, a source and destination, these are the source
     /// and destination paths of the tree, must be provided. Every element found during
     /// the read process will be added to as children of this node.
-    pub fn read<T: AsRef<Path>, P: AsRef<Path>>(&mut self, src: T, dst: P) -> Result<()> {
+    pub fn read<T: AsRef<Path>, P: AsRef<Path>>(
+        &mut self,
+        src: T,
+        dst: P,
+    ) -> ::std::io::Result<()> {
         let src = src.as_ref().join(&self.path);
         let dst = dst.as_ref().join(&self.path);
 
         match self.presence {
             Presence::Both => {
-                self.children = Some(Self::compare(&self.path, read!(&src), read!(&dst))?);
+                self.children = Some(Self::compare(&self.path, read!(&src), read!(&dst)));
             }
 
             Presence::Src => {
@@ -206,7 +207,7 @@ impl TreeNode {
     ///     This function works using a hash table to properly map the elements to the third
     ///     list. This means that the resulting third list is not guaranteed to be ordered in
     ///     the same way the elements were yielded by the file system.
-    fn compare<P, T, U>(path: P, src: T, dst: U) -> Result<Vec<TreeNode>>
+    fn compare<P, T, U>(path: P, src: T, dst: U) -> Vec<TreeNode>
     where
         P: AsRef<Path>,
         T: Iterator<Item = (PathBuf, OsString)>,
@@ -227,12 +228,10 @@ impl TreeNode {
                 .or_insert((path, Presence::Dst));
         }
 
-        let vec = table
-            .drain()
+        table
+            .into_iter()
             .map(|(key, value)| TreeNode::new(path.join(key), value.1, FileType::from(value.0)))
-            .collect();
-
-        Ok(vec)
+            .collect()
     }
 }
 
@@ -418,27 +417,27 @@ impl CopyModel {
     ///
     /// An important thing to notice is that this functions returns an error, it may imply the
     /// model was partially executed and that a cleanup operation of the partial execution is needed.
-    pub fn execute(self) -> Result<()> {
+    pub fn execute(self) -> ::std::io::Result<()> {
         for action in self.actions {
             match action {
                 CopyAction::CreateDir { target } => {
                     if !target.exists() {
-                        fs::create_dir_all(&target).context(FsError::OpenFile((&target).into()))?;
+                        fs::create_dir_all(&target)?;
                     }
                 }
 
                 CopyAction::CopyFile { src, dst } => {
                     if let Ok(metadata) = fs::symlink_metadata(&dst) {
                         if metadata.file_type().is_symlink() {
-                            fs::remove_file(&dst).context(FsError::DeleteFile((&dst).into()))?;
+                            fs::remove_file(&dst)?;
                         }
                     }
 
-                    fs::copy(&src, &dst).context(FsError::CreateFile((&dst).into()))?;
+                    fs::copy(&src, &dst)?;
                 }
 
                 CopyAction::CopyLink { src, dst } => {
-                    symlink(&src, &dst).context(FsError::CreateFile((&dst).into()))?;
+                    symlink(&src, &dst)?;
                 }
             }
         }
