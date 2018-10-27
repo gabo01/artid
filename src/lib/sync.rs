@@ -173,7 +173,7 @@ impl TreeNode {
 
         match self.presence {
             Presence::Both => {
-                self.children = Some(Self::compare(&self.path, read!(&src), read!(&dst))?);
+                self.children = Some(Self::compare(&self.path, read!(&src), read!(&dst)));
             }
 
             Presence::Src => {
@@ -206,7 +206,7 @@ impl TreeNode {
     ///     This function works using a hash table to properly map the elements to the third
     ///     list. This means that the resulting third list is not guaranteed to be ordered in
     ///     the same way the elements were yielded by the file system.
-    fn compare<P, T, U>(path: P, src: T, dst: U) -> Result<Vec<TreeNode>>
+    fn compare<P, T, U>(path: P, src: T, dst: U) -> Vec<TreeNode>
     where
         P: AsRef<Path>,
         T: Iterator<Item = (PathBuf, OsString)>,
@@ -232,7 +232,7 @@ impl TreeNode {
             .map(|(key, value)| TreeNode::new(path.join(key), value.1, FileType::from(value.0)))
             .collect();
 
-        Ok(vec)
+        vec
     }
 }
 
