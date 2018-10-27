@@ -228,12 +228,10 @@ impl TreeNode {
                 .or_insert((path, Presence::Dst));
         }
 
-        let vec = table
-            .drain()
+        table
+            .into_iter()
             .map(|(key, value)| TreeNode::new(path.join(key), value.1, FileType::from(value.0)))
-            .collect();
-
-        vec
+            .collect()
     }
 }
 

@@ -1,5 +1,5 @@
 use failure::ResultExt;
-use std::path::PathBuf;
+use std::path::Path;
 
 use sync::{CopyAction, CopyModel, DirTree, Direction, FileType, Presence};
 
@@ -24,12 +24,8 @@ impl BackupOptions {
 pub struct Backup;
 
 impl Backup {
-    pub fn with_previous(
-        base: PathBuf,
-        old: PathBuf,
-        new: PathBuf,
-    ) -> Result<CopyModel, BackupError> {
-        let tree = DirTree::new(&base, &old).context(BackupErrorType::Scan)?;
+    pub fn with_previous(base: &Path, old: &Path, new: &Path) -> Result<CopyModel, BackupError> {
+        let tree = DirTree::new(base, old).context(BackupErrorType::Scan)?;
         Ok(tree
             .iter()
             .filter(|e| e.presence() != Presence::Dst)
@@ -52,7 +48,7 @@ impl Backup {
             }).collect())
     }
 
-    pub fn from_scratch(base: PathBuf, new: PathBuf) -> Result<CopyModel, BackupError> {
+    pub fn from_scratch(base: &Path, new: &Path) -> Result<CopyModel, BackupError> {
         let tree = DirTree::new(&base, &new).context(BackupErrorType::Scan)?;
         Ok(tree
             .iter()

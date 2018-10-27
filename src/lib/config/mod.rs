@@ -58,11 +58,11 @@ where
 
     /// Loads the data present in the configuration file. Currently this function receives
     /// a directory and looks for the config file in the subpath .backup/config.json.
-    pub fn load(dir: P) -> ::std::result::Result<Self, LoadError> {
+    pub fn load(dir: P) -> Result<Self, LoadError> {
         Self::load_from(dir, Self::RESTORE)
     }
 
-    pub fn load_from<T: AsRef<Path>>(dir: P, path: T) -> ::std::result::Result<Self, LoadError> {
+    pub fn load_from<T: AsRef<Path>>(dir: P, path: T) -> Result<Self, LoadError> {
         let file = dir.as_ref().join(path);
 
         debug!("Config file location: {}", pathlight(&file));
@@ -80,14 +80,14 @@ where
     ///
     /// This function uses the directory saved on the ConfigFile and looks for the
     /// config.json file inside .backup/config.json.
-    pub fn save(&self) -> ::std::result::Result<(), SaveError> {
+    pub fn save(&self) -> Result<(), SaveError> {
         self.save_to(Self::RESTORE)
     }
 
     /// Saves the changes made to the path specified in 'to'. The 'to' path is relative to
     /// the master directory of ConfigFile. All the parent components of 'to' must exist
     /// in order for this function to suceed.
-    pub fn save_to<T: AsRef<Path>>(&self, to: T) -> ::std::result::Result<(), SaveError> {
+    pub fn save_to<T: AsRef<Path>>(&self, to: T) -> Result<(), SaveError> {
         let file = self.dir.as_ref().join(to);
 
         debug!("Config file location: {}", pathlight(&file));
@@ -113,10 +113,7 @@ where
     ///
     /// Also, this function will delete files present in the backup that have been removed from
     /// their original locations and fail it cannot delete a file.
-    pub fn backup(
-        &mut self,
-        options: BackupOptions,
-    ) -> ::std::result::Result<DateTime<Utc>, BackupError> {
+    pub fn backup(&mut self, options: BackupOptions) -> Result<DateTime<Utc>, BackupError> {
         let stamp = Utc::now();
 
         let mut error = None;
@@ -138,7 +135,7 @@ where
         }
 
         match error {
-            Some(err) => Err(err.into()),
+            Some(err) => Err(err),
             None => Ok(stamp),
         }
     }
@@ -148,7 +145,7 @@ where
     ///
     /// The behaviour of this function can be customized through the options provided. Check
     /// RestoreOptions to see what things can be modified.
-    pub fn restore(self, options: RestoreOptions) -> ::std::result::Result<(), RestoreError> {
+    pub fn restore(self, options: RestoreOptions) -> Result<(), RestoreError> {
         for folder in &self.folders {
             folder.restore(&self.dir, options)?;
         }
@@ -201,9 +198,9 @@ impl Folder {
 
         let model = if let Some(modified) = self.modified {
             let (old, new) = (rel.join(rfc3339!(modified)), rel.join(rfc3339!(stamp)));
-            Backup::with_previous(abs, old, new)?
+            Backup::with_previous(&abs, &old, &new)?
         } else {
-            Backup::from_scratch(abs, rel.join(rfc3339!(stamp)))?
+            Backup::from_scratch(&abs, &rel.join(rfc3339!(stamp)))?
         };
 
         if options.run {
@@ -222,13 +219,13 @@ impl Folder {
         &self,
         root: P,
         options: RestoreOptions,
-    ) -> ::std::result::Result<(), RestoreError> {
+    ) -> Result<(), RestoreError> {
         let (mut rel, abs) = self.resolve(root);
         if let Some(modified) = self.modified {
             debug!("Starting restore of: {}", pathlight(&rel));
             rel.push(rfc3339!(modified));
 
-            let model = Restore::from_point(abs, rel, options.overwrite)?;
+            let model = Restore::from_point(&abs, &rel, options.overwrite)?;
 
             if options.run {
                 model.execute().context(RestoreErrorType::Execute)?;

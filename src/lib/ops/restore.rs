@@ -1,5 +1,5 @@
 use failure::ResultExt;
-use std::path::PathBuf;
+use std::path::Path;
 
 use sync::{CopyAction, CopyModel, DirTree, FileType, Presence};
 
@@ -32,8 +32,8 @@ pub struct Restore;
 
 impl Restore {
     pub fn from_point(
-        restore: PathBuf,
-        backup: PathBuf,
+        restore: &Path,
+        backup: &Path,
         overwrite: bool,
     ) -> Result<CopyModel, RestoreError> {
         let tree = DirTree::new(&restore, &backup).context(RestoreErrorType::Scan)?;
