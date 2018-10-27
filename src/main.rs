@@ -1,4 +1,5 @@
 #![allow(deprecated)]
+#![allow(unused_imports)]
 
 #[macro_use]
 extern crate clap;
@@ -7,6 +8,8 @@ extern crate failure;
 extern crate libc;
 #[macro_use]
 extern crate log;
+#[macro_use]
+extern crate failure_derive;
 
 extern crate artid as app; // Application library
 

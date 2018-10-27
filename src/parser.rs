@@ -9,7 +9,7 @@ use errors::AppError;
 
 macro_rules! curr_dir {
     () => {
-        std::env::current_dir().expect("Unable to retrieve current work directory")
+        ::std::env::current_dir().expect("Unable to retrieve current work directory")
     };
 }
 
