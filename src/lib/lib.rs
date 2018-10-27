@@ -43,13 +43,12 @@ pub mod errors;
 pub mod logger;
 mod sync;
 
-pub use errors::{AppError, AppErrorType};
-use errors::{FsError, ParseError};
+use errors::{
+    BackupError, BackupErrorType, LoadError, LoadErrorType, RestoreError, RestoreErrorType,
+    SaveError, SaveErrorType,
+};
 use logger::pathlight;
 use sync::{CopyAction, CopyModel, DirTree, Direction, FileType, Presence};
-
-/// Alias for the Result type
-pub type Result<T> = ::std::result::Result<T, AppError>;
 
 /// Modifier options for the backup action on ConfigFile. Check the properties to see which
 /// behaviour they control
@@ -130,16 +129,18 @@ where
 
     /// Loads the data present in the configuration file. Currently this function receives
     /// a directory and looks for the config file in the subpath .backup/config.json.
-    pub fn load(dir: P) -> Result<Self> {
+    pub fn load(dir: P) -> ::std::result::Result<Self, LoadError> {
         Self::load_from(dir, Self::RESTORE)
     }
 
-    pub fn load_from<T: AsRef<Path>>(dir: P, path: T) -> Result<Self> {
+    pub fn load_from<T: AsRef<Path>>(dir: P, path: T) -> ::std::result::Result<Self, LoadError> {
         let file = dir.as_ref().join(path);
+
         debug!("Config file location: {}", pathlight(&file));
-        let reader = File::open(&file).context(FsError::OpenFile((&file).into()))?;
-        let folders = json::from_reader(reader).context(ParseError::JsonParse((&file).into()))?;
-        trace!("{:?}", folders);
+
+        let reader = File::open(&file).context(LoadErrorType::File((&file).into()))?;
+        let folders = json::from_reader(reader).context(LoadErrorType::Parse((&file).into()))?;
+        trace!("{:#?}", folders);
 
         Ok(ConfigFile { dir, folders })
     }
@@ -149,21 +150,23 @@ where
     ///
     /// This function uses the directory saved on the ConfigFile and looks for the
     /// config.json file inside .backup/config.json.
-    pub fn save(&self) -> Result<()> {
+    pub fn save(&self) -> ::std::result::Result<(), SaveError> {
         self.save_to(Self::RESTORE)
     }
 
     /// Saves the changes made to the path specified in 'to'. The 'to' path is relative to
     /// the master directory of ConfigFile. All the parent components of 'to' must exist
     /// in order for this function to suceed.
-    pub fn save_to<T: AsRef<Path>>(&self, to: T) -> Result<()> {
+    pub fn save_to<T: AsRef<Path>>(&self, to: T) -> ::std::result::Result<(), SaveError> {
         let file = self.dir.as_ref().join(to);
+
         debug!("Config file location: {}", pathlight(&file));
+
         write!(
-            File::create(&file).context(FsError::CreateFile((&file).into()))?,
+            File::create(&file).context(SaveErrorType::File((&file).into()))?,
             "{}",
             json::to_string_pretty(&self.folders).expect("ConfigFile cannot fail serialization")
-        ).context(FsError::ReadFile((&file).into()))?;
+        ).context(SaveErrorType::File((&file).into()))?;
 
         info!("Config file saved on {}", pathlight(file));
         Ok(())
@@ -180,15 +183,15 @@ where
     ///
     /// Also, this function will delete files present in the backup that have been removed from
     /// their original locations and fail it cannot delete a file.
-    pub fn backup(&mut self, options: BackupOptions) -> Result<DateTime<Utc>> {
+    pub fn backup(
+        &mut self,
+        options: BackupOptions,
+    ) -> ::std::result::Result<DateTime<Utc>, BackupError> {
         let stamp = Utc::now();
 
         let mut error = None;
         for folder in &mut self.folders {
-            if let Err(err) = folder
-                .backup(&self.dir, stamp, options)
-                .context(AppErrorType::UpdateFolder)
-            {
+            if let Err(err) = folder.backup(&self.dir, stamp, options) {
                 error = Some(err);
                 break;
             }
@@ -215,11 +218,9 @@ where
     ///
     /// The behaviour of this function can be customized through the options provided. Check
     /// RestoreOptions to see what things can be modified.
-    pub fn restore(self, options: RestoreOptions) -> Result<()> {
+    pub fn restore(self, options: RestoreOptions) -> ::std::result::Result<(), RestoreError> {
         for folder in &self.folders {
-            folder
-                .restore(&self.dir, options)
-                .context(AppErrorType::RestoreFolder)?;
+            folder.restore(&self.dir, options)?;
         }
 
         Ok(())
@@ -257,7 +258,12 @@ impl Folder {
     /// Performs the backup of a specified folder entry. Given a root, the function checks
     /// for a previous backup and links all the files from the previous location, after
     /// that performs a sync operation between the folder and the origin location.
-    fn backup<P>(&mut self, root: P, stamp: DateTime<Utc>, options: BackupOptions) -> Result<()>
+    fn backup<P>(
+        &mut self,
+        root: P,
+        stamp: DateTime<Utc>,
+        options: BackupOptions,
+    ) -> ::std::result::Result<(), BackupError>
     where
         P: AsRef<Path>,
     {
@@ -273,7 +279,7 @@ impl Folder {
         };
 
         let model: CopyModel = if let Some(ref old) = old {
-            let tree = DirTree::new(&base, &old)?;
+            let tree = DirTree::new(&base, &old).context(BackupErrorType::Scan)?;
             tree.iter()
                 .filter(|e| e.presence() != Presence::Dst)
                 .map(|e| {
@@ -294,7 +300,7 @@ impl Folder {
                     }
                 }).collect()
         } else {
-            let tree = DirTree::new(&base, &new)?;
+            let tree = DirTree::new(&base, &new).context(BackupErrorType::Scan)?;
             tree.iter()
                 .map(|e| {
                     if e.kind() == FileType::Dir {
@@ -311,7 +317,7 @@ impl Folder {
         };
 
         if options.run {
-            model.execute()?;
+            model.execute().context(BackupErrorType::Execute)?;
             self.modified = Some(stamp);
         } else {
             model.log();
@@ -322,13 +328,17 @@ impl Folder {
 
     /// Performs the restore of the folder entry. Given a root, the function looks for the
     /// backup folder with the latest timestamp and performs the restore from there.
-    fn restore<P: AsRef<Path>>(&self, root: P, options: RestoreOptions) -> Result<()> {
+    fn restore<P: AsRef<Path>>(
+        &self,
+        root: P,
+        options: RestoreOptions,
+    ) -> ::std::result::Result<(), RestoreError> {
         let (mut rel, abs) = self.resolve(root);
         if let Some(modified) = self.modified {
             debug!("Starting restore of: {}", pathlight(&rel));
             rel.push(rfc3339!(modified));
 
-            let tree = DirTree::new(&abs, &rel)?;
+            let tree = DirTree::new(&abs, &rel).context(RestoreErrorType::Scan)?;
             let model: CopyModel = tree
                 .iter()
                 .filter(|e| {
@@ -350,7 +360,7 @@ impl Folder {
                 }).collect();
 
             if options.run {
-                model.execute().context(AppErrorType::RestoreFolder)?;
+                model.execute().context(RestoreErrorType::Execute)?;
             } else {
                 model.log();
             }

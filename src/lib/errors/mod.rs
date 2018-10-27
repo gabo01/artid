@@ -5,15 +5,42 @@ use std::fmt::{self, Display};
 mod helpers;
 pub use self::helpers::PathRepr;
 
-/// Represents an error that happened in the application. It contains a backtrace, if relevant,
-/// telling step by step what went wrong in execution. By default it tries to highlight important
-/// details about the errors encountered.
-#[derive(Debug)]
-pub struct AppError {
-    inner: Context<AppErrorType>,
+#[derive(Clone, Debug, Fail, Eq, PartialEq)]
+pub enum LoadErrorType {
+    File(PathRepr),
+    Parse(PathRepr),
 }
 
-impl Fail for AppError {
+impl Display for LoadErrorType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            LoadErrorType::File(ref path) => write!(
+                f,
+                "Unable to read configuration from disk path {}",
+                highlight(path)
+            ),
+
+            LoadErrorType::Parse(ref path) => write!(
+                f,
+                "Configuration format on disk path {} is not valid",
+                highlight(path)
+            ),
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct LoadError {
+    inner: Context<LoadErrorType>,
+}
+
+impl Display for LoadError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        Display::fmt(&self.inner, f)
+    }
+}
+
+impl Fail for LoadError {
     fn cause(&self) -> Option<&Fail> {
         self.inner.cause()
     }
@@ -23,117 +50,154 @@ impl Fail for AppError {
     }
 }
 
-impl Display for AppError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        Display::fmt(&self.inner, f)
-    }
-}
-
-/// Type of error that was encountered in the application. Many of these types are backed by
-/// a more specific error contained in these module.
-#[derive(Copy, Clone, Debug, Fail, Eq, PartialEq)]
-pub enum AppErrorType {
-    /// Represents failure while communicating with the file system. The specific details
-    /// of the failure are stored in the FsError.
-    #[fail(display = "Unable to access the given disk path")]
-    FileSystem,
-    /// Represents failure while trying to parse the config file. The specific details of
-    /// the failure are stored in ParseError.
-    #[fail(display = "Unable to parse the config file")]
-    JsonParse,
-    /// Represents failure while trying to make a new backup.
-    #[fail(display = "Unable to update the backup folder")]
-    UpdateFolder,
-    /// Represents failure while trying to restore a folder.
-    #[fail(display = "Unable to restore the backup")]
-    RestoreFolder,
-}
-
-impl From<AppErrorType> for AppError {
-    fn from(kind: AppErrorType) -> AppError {
-        AppError {
+impl From<LoadErrorType> for LoadError {
+    fn from(kind: LoadErrorType) -> Self {
+        Self {
             inner: Context::new(kind),
         }
     }
 }
 
-impl From<Context<AppErrorType>> for AppError {
-    fn from(inner: Context<AppErrorType>) -> AppError {
-        AppError { inner }
+impl From<Context<LoadErrorType>> for LoadError {
+    fn from(inner: Context<LoadErrorType>) -> Self {
+        Self { inner }
     }
 }
 
-/// Type of error that was encountered while interacting with the file system. These type
-/// carries the system path that triggered the error.
 #[derive(Clone, Debug, Fail, Eq, PartialEq)]
-pub enum FsError {
-    OpenFile(PathRepr),
-    CreateFile(PathRepr),
-    ReadFile(PathRepr),
-    PathExists(PathRepr),
-    DeleteFile(PathRepr),
+pub enum SaveErrorType {
+    File(PathRepr),
 }
 
-impl Display for FsError {
+impl Display for SaveErrorType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match *self {
-            FsError::OpenFile(ref file) => write!(f, "Could not open {}", highlight(file)),
-            FsError::CreateFile(ref file) => write!(f, "Could not create {}", highlight(file)),
-            FsError::ReadFile(ref file) => write!(f, "Could not read {}", highlight(file)),
-            FsError::PathExists(ref path) => write!(
+        match self {
+            SaveErrorType::File(ref path) => write!(
                 f,
-                "{} already exists, could not write to it",
+                "Unable to save configuration into disk path {}",
                 highlight(path)
             ),
-
-            FsError::DeleteFile(ref file) => write!(f, "Could not remove {}", highlight(file)),
         }
     }
 }
 
-impl From<FsError> for AppError {
-    fn from(err: FsError) -> Self {
-        Self {
-            inner: Context::new(err).context(AppErrorType::FileSystem),
-        }
+#[derive(Debug)]
+pub struct SaveError {
+    inner: Context<SaveErrorType>,
+}
+
+impl Fail for SaveError {
+    fn cause(&self) -> Option<&Fail> {
+        self.inner.cause()
+    }
+
+    fn backtrace(&self) -> Option<&Backtrace> {
+        self.inner.backtrace()
     }
 }
 
-impl From<Context<FsError>> for AppError {
-    fn from(context: Context<FsError>) -> Self {
-        Self {
-            inner: context.context(AppErrorType::FileSystem),
-        }
-    }
-}
-
-/// Type of error that was encountered while parsing the configuration file.
-#[derive(Clone, Debug, Fail, Eq, PartialEq)]
-pub enum ParseError {
-    // ! Fixme: improve the details on these error type
-    JsonParse(PathRepr),
-}
-
-impl Display for ParseError {
+impl Display for SaveError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match *self {
-            ParseError::JsonParse(ref file) => write!(f, "Could not parse {}", highlight(file)),
+        Display::fmt(&self.inner, f)
+    }
+}
+
+impl From<SaveErrorType> for SaveError {
+    fn from(kind: SaveErrorType) -> Self {
+        Self {
+            inner: Context::new(kind),
         }
     }
 }
 
-impl From<ParseError> for AppError {
-    fn from(err: ParseError) -> Self {
+impl From<Context<SaveErrorType>> for SaveError {
+    fn from(inner: Context<SaveErrorType>) -> Self {
+        Self { inner }
+    }
+}
+
+#[derive(Copy, Clone, Debug, Fail, Eq, PartialEq)]
+pub enum BackupErrorType {
+    #[fail(display = "Unable to read the directory tree")]
+    Scan,
+    #[fail(display = "Unable to perform the backup operation")]
+    Execute,
+}
+
+#[derive(Debug)]
+pub struct BackupError {
+    inner: Context<BackupErrorType>,
+}
+
+impl Fail for BackupError {
+    fn cause(&self) -> Option<&Fail> {
+        self.inner.cause()
+    }
+
+    fn backtrace(&self) -> Option<&Backtrace> {
+        self.inner.backtrace()
+    }
+}
+
+impl Display for BackupError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        Display::fmt(&self.inner, f)
+    }
+}
+
+impl From<BackupErrorType> for BackupError {
+    fn from(kind: BackupErrorType) -> Self {
         Self {
-            inner: Context::new(err).context(AppErrorType::FileSystem),
+            inner: Context::new(kind),
         }
     }
 }
 
-impl From<Context<ParseError>> for AppError {
-    fn from(context: Context<ParseError>) -> Self {
+impl From<Context<BackupErrorType>> for BackupError {
+    fn from(inner: Context<BackupErrorType>) -> Self {
+        Self { inner }
+    }
+}
+
+#[derive(Copy, Clone, Debug, Fail, Eq, PartialEq)]
+pub enum RestoreErrorType {
+    #[fail(display = "Unable to read the directory tree")]
+    Scan,
+    #[fail(display = "Unable to perform the backup operation")]
+    Execute,
+}
+
+#[derive(Debug)]
+pub struct RestoreError {
+    inner: Context<RestoreErrorType>,
+}
+
+impl Fail for RestoreError {
+    fn cause(&self) -> Option<&Fail> {
+        self.inner.cause()
+    }
+
+    fn backtrace(&self) -> Option<&Backtrace> {
+        self.inner.backtrace()
+    }
+}
+
+impl Display for RestoreError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        Display::fmt(&self.inner, f)
+    }
+}
+
+impl From<RestoreErrorType> for RestoreError {
+    fn from(kind: RestoreErrorType) -> Self {
         Self {
-            inner: context.context(AppErrorType::JsonParse),
+            inner: Context::new(kind),
         }
+    }
+}
+
+impl From<Context<RestoreErrorType>> for RestoreError {
+    fn from(inner: Context<RestoreErrorType>) -> Self {
+        Self { inner }
     }
 }
