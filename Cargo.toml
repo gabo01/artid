@@ -9,6 +9,9 @@ version = "0.2.1"
 authors = ["Gabriel Dos Ramos Albo <dosramosgabriel@gmail.com>"]
 description = "Light client to backup your data"
 
+[lib]
+path = "src/lib/lib.rs"
+
 [dependencies]
 atty = "0.2.11"
 chrono = {version = "0.4.5", features = ["serde"]}
