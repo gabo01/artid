@@ -1,3 +1,8 @@
+/// This file contains the implementation of the top-level application error.
+/// 
+/// This error is responsible for showing the the general applciation error cause to the
+/// user and to contain a backtrace that the user can request to be displayed.
+
 use failure::{Backtrace, Context, Fail};
 use std::fmt::{self, Display};
 
