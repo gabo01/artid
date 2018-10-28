@@ -74,6 +74,23 @@ fn test_config_file_load_valid() {
 }
 
 #[test]
+fn test_config_file_load_valid_with_modified() {
+    let dir = tmpdir!();
+    create_file!(
+        tmppath!(dir, "config.json"),
+        "[
+        {{
+            \"path\": \"asd\", 
+            \"origin\": \"$HOME\", 
+            \"modified\": \"{}\"
+        }}
+    ]",
+        rfc3339!(Utc::now())
+    );
+    assert!(ConfigFile::load_from(dir, "config.json").is_ok());
+}
+
+#[test]
 fn test_config_file_load_invalid() {
     let dir = tmpdir!();
     create_file!(
