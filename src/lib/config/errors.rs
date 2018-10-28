@@ -1,3 +1,7 @@
+//! Contains the errors throwed by the config module.
+//! 
+//! These errors are mostly related with failure in accessing to the configuration file.
+
 use failure::{Backtrace, Context, Fail};
 use std::fmt::{self, Display};
 

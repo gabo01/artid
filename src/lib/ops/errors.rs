@@ -1,3 +1,5 @@
+//! Contains the errors related to the different operations.
+
 use failure::{Backtrace, Context, Fail};
 use std::fmt::{self, Display};
 

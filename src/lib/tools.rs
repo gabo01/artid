@@ -1,3 +1,6 @@
+//! Tools related to running the tests, these are mostly utilities and do not make part
+//! of the application's logic.
+
 #[macro_export]
 macro_rules! tmpdir {
     () => {

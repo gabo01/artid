@@ -1,3 +1,5 @@
+//! Contains the implementations related to the restore operation
+
 use failure::ResultExt;
 use std::path::Path;
 

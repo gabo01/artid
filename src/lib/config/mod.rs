@@ -1,3 +1,13 @@
+//! The config module is responsible for managing everything related to the configuration
+//! file.
+//! 
+//! The configuration file is currently a config.json file where an array of folders is stored.
+//! Each folder represents both a folder on the backup directory and an origin folder on
+//! someplace, usually outside the backup directory.
+//! 
+//! Most of artid's operations such as backup, restore and zip are applied to a single folder
+//! so they depend on the folder's given configuration on the file to do their work.
+
 use chrono::offset::Utc;
 use chrono::DateTime;
 use env_path::EnvPath;

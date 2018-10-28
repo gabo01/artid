@@ -1,3 +1,5 @@
+//! Contains the implementations related to the backup operation
+
 use failure::ResultExt;
 use std::path::Path;
 
