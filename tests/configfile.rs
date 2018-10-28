@@ -82,7 +82,7 @@ fn test_config_file_load_valid_with_modified() {
         {{
             \"path\": \"asd\", 
             \"origin\": \"$HOME\", 
-            \"modified\": \"{}\"
+            \"modified\": [\"{}\"]
         }}
     ]",
         rfc3339!(Utc::now())
@@ -281,7 +281,7 @@ fn test_config_restore() {
         {{
             \"path\": \"backup\",
             \"origin\": \"{}\",
-            \"modified\": \"{}\"
+            \"modified\": [\"{}\"]
         }}
     ]",
         origin.path().display().to_string(),

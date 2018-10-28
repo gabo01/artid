@@ -230,16 +230,32 @@ pub struct Folder {
     /// Path of origin. If thinked as a link, this is the place the link points to
     origin: EnvPath,
     /// Last time the folder was synced, if any. Parses from an RFC3339 valid string
-    modified: Option<DateTime<Utc>>,
+    modified: Option<Vec<DateTime<Utc>>>,
 }
 
 impl Folder {
     /// Creates a new folder from the options specified
-    pub fn new(path: EnvPath, origin: EnvPath, modified: Option<DateTime<Utc>>) -> Self {
+    pub fn new(path: EnvPath, origin: EnvPath, modified: Option<Vec<DateTime<Utc>>>) -> Self {
         Self {
             path,
             origin,
             modified,
+        }
+    }
+
+    /// Register a new folder backup on the list
+    fn add_modified(&mut self, stamp: DateTime<Utc>) {
+        match self.modified {
+            Some(ref mut vec) => vec.push(stamp),
+            None => self.modified = Some(vec![stamp]),
+        }
+    }
+
+    /// Returns the latest backup made of the folder if there is one
+    fn backup_exists(&self) -> Option<DateTime<Utc>> {
+        match self.modified {
+            Some(ref vec) if !vec.is_empty() => Some(vec.last().unwrap().to_owned()),
+            Some(_) | None => None,
         }
     }
 
@@ -257,7 +273,7 @@ impl Folder {
     {
         let (rel, abs) = self.resolve(root);
 
-        let model = if let Some(modified) = self.modified {
+        let model = if let Some(modified) = self.backup_exists() {
             let (old, new) = (rel.join(rfc3339!(modified)), rel.join(rfc3339!(stamp)));
             Backup::with_previous(&abs, &old, &new)?
         } else {
@@ -266,7 +282,7 @@ impl Folder {
 
         if options.run {
             model.execute().context(OperativeErrorType::Backup)?;
-            self.modified = Some(stamp);
+            self.add_modified(stamp);
         } else {
             model.log();
         }
@@ -282,7 +298,7 @@ impl Folder {
         options: RestoreOptions,
     ) -> Result<(), OperativeError> {
         let (mut rel, abs) = self.resolve(root);
-        if let Some(modified) = self.modified {
+        if let Some(modified) = self.backup_exists() {
             debug!("Starting restore of: {}", pathlight(&rel));
             rel.push(rfc3339!(modified));
 
@@ -377,7 +393,7 @@ mod tests {
             let mut backup = tmppath!(&root, "backup");
             assert!(backup.exists());
 
-            assert_eq!(folder.modified, Some(stamp));
+            assert_eq!(folder.modified, Some(vec![stamp]));
 
             backup.push(rfc3339!(stamp));
 
@@ -614,7 +630,7 @@ mod tests {
             let folder = Folder::new(
                 EnvPath::new("backup"),
                 EnvPath::new(origin.path().display().to_string()),
-                Some(stamp),
+                Some(vec![stamp]),
             );
 
             folder
@@ -657,7 +673,7 @@ mod tests {
             let folder = Folder::new(
                 EnvPath::new("backup"),
                 EnvPath::new(origin.path().display().to_string()),
-                Some(stamp_new),
+                Some(vec![stamp_new]),
             );
 
             folder
