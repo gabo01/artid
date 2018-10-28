@@ -9,6 +9,7 @@ use logger::highlight;
 
 pub type PathRepr = String;
 
+/// Underlying cause of failure when trying to load a file
 #[derive(Clone, Debug, Fail, Eq, PartialEq)]
 pub(super) enum LoadErrorType {
     File(PathRepr),
@@ -33,6 +34,7 @@ impl Display for LoadErrorType {
     }
 }
 
+/// Represents failure while trying to load the configuration file
 #[derive(Debug)]
 pub struct LoadError {
     inner: Context<LoadErrorType>,
@@ -68,6 +70,7 @@ impl From<Context<LoadErrorType>> for LoadError {
     }
 }
 
+/// Represents the underlying failure while trying to save the configuration file
 #[derive(Clone, Debug, Fail, Eq, PartialEq)]
 pub(super) enum SaveErrorType {
     File(PathRepr),
@@ -85,6 +88,7 @@ impl Display for SaveErrorType {
     }
 }
 
+/// Represents failure while trying to save the configuration file
 #[derive(Debug)]
 pub struct SaveError {
     inner: Context<SaveErrorType>,

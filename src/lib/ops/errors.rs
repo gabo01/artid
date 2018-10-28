@@ -3,6 +3,7 @@
 use failure::{Backtrace, Context, Fail};
 use std::fmt::{self, Display};
 
+/// Represents the underlying cause of failure while trying to perform a backup.
 #[derive(Copy, Clone, Debug, Fail, Eq, PartialEq)]
 pub enum BackupErrorType {
     #[fail(display = "Unable to read the directory tree")]
@@ -11,6 +12,8 @@ pub enum BackupErrorType {
     Execute,
 }
 
+/// Represents failure while trying to either build a CopyModel for the backup operation
+/// or while trying to execute the model.
 #[derive(Debug)]
 pub struct BackupError {
     inner: Context<BackupErrorType>,
@@ -46,6 +49,7 @@ impl From<Context<BackupErrorType>> for BackupError {
     }
 }
 
+/// Represents the underlying cause of failure while trying to perform a restore.
 #[derive(Copy, Clone, Debug, Fail, Eq, PartialEq)]
 pub enum RestoreErrorType {
     #[fail(display = "Unable to read the directory tree")]
@@ -54,6 +58,8 @@ pub enum RestoreErrorType {
     Execute,
 }
 
+/// Represents failure while trying to either build a CopyModel for the restore operation
+/// or while trying to execute the model.
 #[derive(Debug)]
 pub struct RestoreError {
     inner: Context<RestoreErrorType>,
