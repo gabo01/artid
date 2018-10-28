@@ -380,6 +380,7 @@ impl<'a, 'b> TreeIterNode<'a, 'b> {
 ///
 /// Based on a list of these actions, a copy model can be built to describe the whole process before
 /// making it.
+#[derive(Debug)]
 pub enum CopyAction {
     /// Creates a directory on the target location, this is expected to be done if a tree node
     /// is present in one location but not in the other. This action creates the target dir and
@@ -401,6 +402,7 @@ pub enum CopyAction {
 ///
 /// As such, since the model is a list of actions, it can and is constructed from a list of actions
 /// to perform
+#[derive(Debug)]
 pub struct CopyModel {
     actions: Vec<CopyAction>,
 }

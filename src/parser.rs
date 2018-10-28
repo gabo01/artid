@@ -15,6 +15,7 @@ macro_rules! curr_dir {
 
 pub type AppResult<T> = Result<T, AppError>;
 
+#[derive(Debug)]
 pub struct Instance {
     trace: bool,
     operation: Operation,
@@ -37,6 +38,7 @@ impl Instance {
     }
 }
 
+#[derive(Debug)]
 enum Operation {
     Backup {
         run: bool,
