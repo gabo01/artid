@@ -62,6 +62,8 @@ where
         Self::load_from(dir, Self::RESTORE)
     }
 
+    /// Loads the data present in the configuration file present in path. A thing to notice
+    /// is that path must be relative to the root used to create the object.
     pub fn load_from<T: AsRef<Path>>(dir: P, path: T) -> Result<Self, LoadError> {
         let file = dir.as_ref().join(path);
 
