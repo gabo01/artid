@@ -303,15 +303,20 @@ mod tests {
             let stamp = Utc::now();
             let options = BackupOptions::new(true);
 
-            Folder::new(
+            let mut folder = Folder::new(
                 EnvPath::new("backup"),
                 EnvPath::new(origin.path().display().to_string()),
                 None,
-            ).backup(root.path(), stamp, options)
-            .expect("Unable to perform backup");
+            );
+            
+            folder
+                .backup(root.path(), stamp, options)
+                .expect("Unable to perform backup");
 
             let mut backup = tmppath!(&root, "backup");
             assert!(backup.exists());
+            
+            assert_eq!(folder.modified, Some(stamp));
 
             backup.push(rfc3339!(stamp));
 
