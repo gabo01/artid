@@ -296,7 +296,7 @@ fn test_config_restore() {
 
     let config = ConfigFile::load(root.path()).expect("Unable to load file");
     config
-        .restore(RestoreOptions::new(true, true))
+        .restore(RestoreOptions::new(true, true, None))
         .expect("Unable to perform restore");
 
     assert!(tmppath!(origin, "a.txt").exists());
@@ -316,13 +316,13 @@ fn test_config_restore_single() {
         {{
             \"path\": \"backup\",
             \"origin\": \"{origin}\",
-            \"modified\": \"{stamp}\"
+            \"modified\": [\"{stamp}\"]
         }},
 
         {{
             \"path\": \"other\",
             \"origin\": \"{origin}\",
-            \"modified\": \"{stamp}\"
+            \"modified\": [\"{stamp}\"]
         }}
     ]",
         origin = origin.path().display().to_string(),
@@ -342,7 +342,7 @@ fn test_config_restore_single() {
 
     let config = ConfigFile::load(root.path()).expect("Unable to load file");
     config
-        .restore_folder("backup", RestoreOptions::new(true, true))
+        .restore_folder("backup", RestoreOptions::new(true, true, None))
         .expect("Unable to perform restore");
 
     assert!(tmppath!(origin, "a.txt").exists());

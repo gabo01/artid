@@ -165,7 +165,7 @@ fn backup(run: bool, path: &Path, folder: &Option<String>) -> AppResult<()> {
 fn restore(run: bool, overwrite: bool, path: &Path, folder: &Option<String>) -> AppResult<()> {
     info!("Starting restore of the contents in {}", pathlight(path));
 
-    let options = RestoreOptions::new(run, overwrite);
+    let options = RestoreOptions::new(run, overwrite, None);
     let config = ConfigFile::load(path)?;
 
     match folder {

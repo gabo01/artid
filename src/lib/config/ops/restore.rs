@@ -21,12 +21,19 @@ pub struct RestoreOptions {
     /// Controls if the model should be ran or not. In case the model does not run, the
     /// intended actions will be logged into the screen
     pub(crate) run: bool,
+    /// Tell which backup point to restore from the backups list on folder.modified. None
+    /// means restore the latest backup
+    pub(crate) point: Option<usize>,
 }
 
 impl RestoreOptions {
     /// Creates a new set of options for the restore operation.
-    pub fn new(overwrite: bool, run: bool) -> Self {
-        Self { overwrite, run }
+    pub fn new(overwrite: bool, run: bool, point: Option<usize>) -> Self {
+        Self {
+            overwrite,
+            run,
+            point,
+        }
     }
 }
 

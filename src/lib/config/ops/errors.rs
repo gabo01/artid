@@ -14,6 +14,8 @@ pub enum OperativeErrorType {
     Restore,
     #[fail(display = "Unable to find the requested folder")]
     FolderDoesNotExists,
+    #[fail(display = "Unable to find the snapshot point requested")]
+    PointDoesNotExists,
 }
 
 /// Represents failure while trying to either build a CopyModel for the backup operation

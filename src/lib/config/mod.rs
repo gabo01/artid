@@ -251,11 +251,26 @@ impl Folder {
         }
     }
 
-    /// Returns the latest backup made of the folder if there is one
-    fn backup_exists(&self) -> Option<DateTime<Utc>> {
-        match self.modified {
-            Some(ref vec) if !vec.is_empty() => Some(vec.last().unwrap().to_owned()),
-            Some(_) | None => None,
+    /// Returns the backup date, if it exists, of the position specified by point or
+    /// the latest backup date made if point is None
+    fn backup_exists(&self, point: Option<usize>) -> Option<DateTime<Utc>> {
+        match point {
+            Some(position) => match self.modified {
+                Some(ref vec) => {
+                    if let Some(date) = vec.get(position) {
+                        Some(date.to_owned())
+                    } else {
+                        None
+                    }
+                }
+
+                None => None,
+            },
+
+            None => match self.modified {
+                Some(ref vec) if !vec.is_empty() => Some(vec.last().unwrap().to_owned()),
+                Some(_) | None => None,
+            },
         }
     }
 
@@ -273,7 +288,7 @@ impl Folder {
     {
         let (rel, abs) = self.resolve(root);
 
-        let model = if let Some(modified) = self.backup_exists() {
+        let model = if let Some(modified) = self.backup_exists(None) {
             let (old, new) = (rel.join(rfc3339!(modified)), rel.join(rfc3339!(stamp)));
             Backup::with_previous(&abs, &old, &new)?
         } else {
@@ -298,19 +313,24 @@ impl Folder {
         options: RestoreOptions,
     ) -> Result<(), OperativeError> {
         let (mut rel, abs) = self.resolve(root);
-        if let Some(modified) = self.backup_exists() {
-            debug!("Starting restore of: {}", pathlight(&rel));
-            rel.push(rfc3339!(modified));
 
-            let model = Restore::from_point(&abs, &rel, options.overwrite)?;
+        if self.backup_exists(None).is_some() {
+            if let Some(modified) = self.backup_exists(options.point) {
+                debug!("Starting restore of: {}", pathlight(&rel));
+                rel.push(rfc3339!(modified));
 
-            if options.run {
-                model.execute().context(OperativeErrorType::Restore)?;
+                let model = Restore::from_point(&abs, &rel, options.overwrite)?;
+
+                if options.run {
+                    model.execute().context(OperativeErrorType::Restore)?;
+                } else {
+                    model.log();
+                }
+
+                Ok(())
             } else {
-                model.log();
+                Err(OperativeErrorType::PointDoesNotExists)?
             }
-
-            Ok(())
         } else {
             info!("Restore not needed for {}", pathlight(&rel));
             Ok(())
@@ -634,7 +654,7 @@ mod tests {
             );
 
             folder
-                .restore(root.path(), RestoreOptions::new(true, true))
+                .restore(root.path(), RestoreOptions::new(true, true, None))
                 .expect("Unable to perform restore");
 
             assert!(tmppath!(origin, "a.txt").exists());
@@ -677,7 +697,7 @@ mod tests {
             );
 
             folder
-                .restore(root.path(), RestoreOptions::new(true, true))
+                .restore(root.path(), RestoreOptions::new(true, true, None))
                 .expect("Unable to perform restore");
 
             assert!(tmppath!(origin, "a.txt").exists());
