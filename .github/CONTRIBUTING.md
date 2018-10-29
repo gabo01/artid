@@ -76,6 +76,17 @@ The verions of clippy and rustfmt that the CI uses are those corresponding to th
 release of rust. This means that for developing you will need the latest version of the stable
 compiler to check formatting and lints.
 
+In order to check this locally you can use git hooks to abort your commit if the files are not
+well formatted. To install the hooks do:
+
+- Run make init (make and git 2.9.0 or later required)
+- See [here][hooks]
+
+The hooks are designed to work with the bash shell. If you are on Windows, install the bash
+shell or rewrite the hooks with powershell syntax.
+
+[hooks]: https://www.viget.com/articles/two-ways-to-share-git-hooks-with-your-team/
+
 ### Commit messages
 
 Our commit messages follow a [convetional changelog][cclog] format and we aim to use [clog][cl]

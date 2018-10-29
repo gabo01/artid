@@ -1,0 +1,15 @@
+#! /bin/bash
+
+if cargo fmt --all -- --check; then
+    if cargo clippy --all-targets --all-features -- -D warnings; then
+        exit 0
+    else
+        echo ""
+        echo "Clippy check not passed"
+        exit 1
+    fi
+else
+    echo ""
+    echo "Rustfmt check not passed"
+    exit 1
+fi
