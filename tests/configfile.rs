@@ -234,6 +234,41 @@ fn test_config_backup() {
 }
 
 #[test]
+fn test_config_backup_single() {
+    let tmp = tmpdir!();
+    let backup = tmppath!(tmp, "backup");
+
+    fs::create_dir(tmppath!(tmp, "origin")).expect("Unable to create path");
+    fs::create_dir_all(backup.join(".backup")).expect("Unable to create path");
+
+    create_file!(
+        backup.join(".backup/config.json"),
+        "[
+        {{
+            \"path\": \"backup\",
+            \"origin\": \"{origin}\",
+            \"modified\": null
+        }},
+
+        {{
+            \"path\": \"other\",
+            \"origin\": \"{origin}\",
+            \"modified\": null
+        }}
+    ]",
+        origin = tmppath!(tmp, "origin").display().to_string()
+    );
+
+    let mut config = ConfigFile::load(&backup).expect("Unable to load file");
+    let stamp = config
+        .backup_folder("backup", BackupOptions::new(true))
+        .expect("Unable to perform backup");
+
+    assert!(backup.join(format!("backup/{}", rfc3339!(stamp))).exists());
+    assert!(!backup.join(format!("other/{}", rfc3339!(stamp))).exists());
+}
+
+#[test]
 fn test_config_restore() {
     let (origin, root) = (tmpdir!(), tmpdir!());
     let stamp = Utc::now();
@@ -266,4 +301,52 @@ fn test_config_restore() {
 
     assert!(tmppath!(origin, "a.txt").exists());
     assert!(tmppath!(origin, "b.txt").exists());
+}
+
+#[test]
+fn test_config_restore_single() {
+    let (origin, root) = (tmpdir!(), tmpdir!());
+    let stamp = Utc::now();
+
+    // Create the config file
+    fs::create_dir(tmppath!(root, ".backup")).expect("Unable to create path");
+    create_file!(
+        tmppath!(root, ".backup/config.json"),
+        "[
+        {{
+            \"path\": \"backup\",
+            \"origin\": \"{origin}\",
+            \"modified\": \"{stamp}\"
+        }},
+
+        {{
+            \"path\": \"other\",
+            \"origin\": \"{origin}\",
+            \"modified\": \"{stamp}\"
+        }}
+    ]",
+        origin = origin.path().display().to_string(),
+        stamp = rfc3339!(stamp)
+    );
+
+    // Create some files on the backups 1 and 2
+    let backup = tmppath!(root, format!("backup/{}", rfc3339!(stamp)));
+    fs::create_dir_all(&backup).expect("Unable to create path");
+    create_file!(backup.join("a.txt"));
+    create_file!(backup.join("b.txt"));
+
+    let other = tmppath!(root, format!("other/{}", rfc3339!(stamp)));
+    fs::create_dir_all(&other).expect("Unable to create path");
+    create_file!(other.join("c.txt"));
+    create_file!(other.join("d.txt"));
+
+    let config = ConfigFile::load(root.path()).expect("Unable to load file");
+    config
+        .restore_folder("backup", RestoreOptions::new(true, true))
+        .expect("Unable to perform restore");
+
+    assert!(tmppath!(origin, "a.txt").exists());
+    assert!(tmppath!(origin, "b.txt").exists());
+    assert!(!tmppath!(origin, "c.txt").exists());
+    assert!(!tmppath!(origin, "d.txt").exists());
 }
