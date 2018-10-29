@@ -12,6 +12,8 @@ pub enum OperativeErrorType {
     Backup,
     #[fail(display = "Unable to execute the restore operation model")]
     Restore,
+    #[fail(display = "Unable to find the requested folder")]
+    FolderDoesNotExists,
 }
 
 /// Represents failure while trying to either build a CopyModel for the backup operation

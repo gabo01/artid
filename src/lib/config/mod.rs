@@ -158,6 +158,35 @@ where
         }
     }
 
+    /// Performs the backup of a single folder identified through it's path instead of
+    /// all the folders registered on the config file. For more information see the docs
+    /// of ConfigFile::backup.
+    pub fn backup_folder(
+        &mut self,
+        folderpath: &str,
+        options: BackupOptions,
+    ) -> Result<DateTime<Utc>, OperativeError> {
+        let stamp = Utc::now();
+
+        if let Some(folder) = self.folders.iter_mut().find(|e| e.path == folderpath) {
+            folder.backup(&self.dir, stamp, options)?;
+        } else {
+            Err(OperativeErrorType::FolderDoesNotExists)?;
+        }
+
+        if options.run {
+            if let Err(err) = self.save() {
+                warn!(
+                    "Unable to save on {} because of {}",
+                    pathlight(self.dir.as_ref()),
+                    err
+                );
+            }
+        }
+
+        Ok(stamp)
+    }
+
     /// Performs the restore of the backed files on the dir where the config file was loaded to
     /// their original locations on the specified root.
     ///
@@ -166,6 +195,23 @@ where
     pub fn restore(self, options: RestoreOptions) -> Result<(), OperativeError> {
         for folder in &self.folders {
             folder.restore(&self.dir, options)?;
+        }
+
+        Ok(())
+    }
+
+    /// Performs the restore of a single folder instead of all the registered folders on
+    /// the config file. For more information about how this method works see the docs of
+    /// ConfigFile::restore
+    pub fn restore_folder(
+        self,
+        folderpath: &str,
+        options: RestoreOptions,
+    ) -> Result<(), OperativeError> {
+        if let Some(folder) = self.folders.iter().find(|e| e.path == folderpath) {
+            folder.restore(&self.dir, options)?;
+        } else {
+            Err(OperativeErrorType::FolderDoesNotExists)?;
         }
 
         Ok(())
