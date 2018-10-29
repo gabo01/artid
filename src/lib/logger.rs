@@ -1,8 +1,8 @@
 //! Contains the logger implementation of the application.
-//! 
-//! **Note**: This module is currently on the process of being refactored away from the 
+//!
+//! **Note**: This module is currently on the process of being refactored away from the
 //! core and included into the main subtree instead.
-//! 
+//!
 //! The logger implementation is responsible to manage all the calls to error!, warn!,
 //! info! and the other logging macros. Right now, it maps these calls to the standard
 //! error.

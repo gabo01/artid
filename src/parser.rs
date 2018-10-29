@@ -1,8 +1,7 @@
 /// This file contains the command line parser wrapper.
-/// 
+///
 /// The wrappers job is to call the command line parser and create a model of the operations
 /// that the user wishes to perform.
-
 use chrono::SecondsFormat;
 use clap::ArgMatches;
 use std::path::{Path, PathBuf};

@@ -3,7 +3,7 @@
 
 //! This is the CLI implementation for the artid application, it allows the app to run from
 //! the command line or to start as a GUI.
-//! 
+//!
 //! The core of the application lives on the lib directory. This file and its modules job
 //! is to parse the command line arguments and transform them into the proper calls to the
 //! core.

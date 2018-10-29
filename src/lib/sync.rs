@@ -1,10 +1,10 @@
 //! The sync module is responsible for implementing the low level details of artid's
 //! operations.
-//! 
-//! Right now, the logic of this module consists mostly on DirTree and it's derivates. 
+//!
+//! Right now, the logic of this module consists mostly on DirTree and it's derivates.
 //! DirTree makes a graph representation of the contents on the two directories it takes on
 //! input. For more information se DirTree docs.
-//! 
+//!
 //! The other interesting point of the module is the CopyModel as it represents the
 //! final face of the operation to be implemented
 
