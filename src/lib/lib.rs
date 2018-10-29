@@ -82,9 +82,8 @@ pub mod prelude {
     pub use ops::{BackupOptions, RestoreOptions};
 }
 
-
 /// Contains the errors that can be thrown by the application components.
 pub mod errors {
-    pub use config::{LoadError, SaveError};
-    pub use ops::{BackupError, RestoreError};
+    pub use config::FileError;
+    pub use ops::OperativeError;
 }

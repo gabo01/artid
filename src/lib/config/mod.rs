@@ -19,14 +19,11 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use logger::pathlight;
-use ops::{
-    Backup, BackupError, BackupErrorType, BackupOptions, Restore, RestoreError, RestoreErrorType,
-    RestoreOptions,
-};
+use ops::{Backup, BackupOptions, OperativeError, OperativeErrorType, Restore, RestoreOptions};
 
 mod errors;
-pub use self::errors::{LoadError, SaveError};
-use self::errors::{LoadErrorType, SaveErrorType};
+pub use self::errors::FileError;
+use self::errors::FileErrorType;
 
 /// Represents a configuration file in json format. A valid json config file is composed
 /// by an array of folder structs. The config file has to be stored in a subpath of the
@@ -68,20 +65,20 @@ where
 
     /// Loads the data present in the configuration file. Currently this function receives
     /// a directory and looks for the config file in the subpath .backup/config.json.
-    pub fn load(dir: P) -> Result<Self, LoadError> {
+    pub fn load(dir: P) -> Result<Self, FileError> {
         Self::load_from(dir, Self::RESTORE)
     }
 
     /// Loads the data present in the configuration file present in path. A thing to notice
     /// is that path must be relative to the root used to create the object.
-    pub fn load_from<T: AsRef<Path>>(dir: P, path: T) -> Result<Self, LoadError> {
+    pub fn load_from<T: AsRef<Path>>(dir: P, path: T) -> Result<Self, FileError> {
         let file = dir.as_ref().join(path);
 
         debug!("Config file location: {}", pathlight(&file));
 
-        let reader = File::open(&file).context(LoadErrorType::File(file.display().to_string()))?;
+        let reader = File::open(&file).context(FileErrorType::Load(file.display().to_string()))?;
         let folders =
-            json::from_reader(reader).context(LoadErrorType::Parse(file.display().to_string()))?;
+            json::from_reader(reader).context(FileErrorType::Parse(file.display().to_string()))?;
         trace!("{:#?}", folders);
 
         Ok(ConfigFile { dir, folders })
@@ -92,23 +89,23 @@ where
     ///
     /// This function uses the directory saved on the ConfigFile and looks for the
     /// config.json file inside .backup/config.json.
-    pub fn save(&self) -> Result<(), SaveError> {
+    pub fn save(&self) -> Result<(), FileError> {
         self.save_to(Self::RESTORE)
     }
 
     /// Saves the changes made to the path specified in 'to'. The 'to' path is relative to
     /// the master directory of ConfigFile. All the parent components of 'to' must exist
     /// in order for this function to suceed.
-    pub fn save_to<T: AsRef<Path>>(&self, to: T) -> Result<(), SaveError> {
+    pub fn save_to<T: AsRef<Path>>(&self, to: T) -> Result<(), FileError> {
         let file = self.dir.as_ref().join(to);
 
         debug!("Config file location: {}", pathlight(&file));
 
         write!(
-            File::create(&file).context(SaveErrorType::File(file.display().to_string()))?,
+            File::create(&file).context(FileErrorType::Save(file.display().to_string()))?,
             "{}",
             json::to_string_pretty(&self.folders).expect("ConfigFile cannot fail serialization")
-        ).context(SaveErrorType::File(file.display().to_string()))?;
+        ).context(FileErrorType::Save(file.display().to_string()))?;
 
         info!("Config file saved on {}", pathlight(file));
         Ok(())
@@ -125,7 +122,7 @@ where
     ///
     /// Also, this function will delete files present in the backup that have been removed from
     /// their original locations and fail it cannot delete a file.
-    pub fn backup(&mut self, options: BackupOptions) -> Result<DateTime<Utc>, BackupError> {
+    pub fn backup(&mut self, options: BackupOptions) -> Result<DateTime<Utc>, OperativeError> {
         let stamp = Utc::now();
 
         let mut error = None;
@@ -157,7 +154,7 @@ where
     ///
     /// The behaviour of this function can be customized through the options provided. Check
     /// RestoreOptions to see what things can be modified.
-    pub fn restore(self, options: RestoreOptions) -> Result<(), RestoreError> {
+    pub fn restore(self, options: RestoreOptions) -> Result<(), OperativeError> {
         for folder in &self.folders {
             folder.restore(&self.dir, options)?;
         }
@@ -202,7 +199,7 @@ impl Folder {
         root: P,
         stamp: DateTime<Utc>,
         options: BackupOptions,
-    ) -> Result<(), BackupError>
+    ) -> Result<(), OperativeError>
     where
         P: AsRef<Path>,
     {
@@ -216,7 +213,7 @@ impl Folder {
         };
 
         if options.run {
-            model.execute().context(BackupErrorType::Execute)?;
+            model.execute().context(OperativeErrorType::Backup)?;
             self.modified = Some(stamp);
         } else {
             model.log();
@@ -231,7 +228,7 @@ impl Folder {
         &self,
         root: P,
         options: RestoreOptions,
-    ) -> Result<(), RestoreError> {
+    ) -> Result<(), OperativeError> {
         let (mut rel, abs) = self.resolve(root);
         if let Some(modified) = self.modified {
             debug!("Starting restore of: {}", pathlight(&rel));
@@ -240,7 +237,7 @@ impl Folder {
             let model = Restore::from_point(&abs, &rel, options.overwrite)?;
 
             if options.run {
-                model.execute().context(RestoreErrorType::Execute)?;
+                model.execute().context(OperativeErrorType::Restore)?;
             } else {
                 model.log();
             }
@@ -320,14 +317,14 @@ mod tests {
                 EnvPath::new(origin.path().display().to_string()),
                 None,
             );
-            
+
             folder
                 .backup(root.path(), stamp, options)
                 .expect("Unable to perform backup");
 
             let mut backup = tmppath!(&root, "backup");
             assert!(backup.exists());
-            
+
             assert_eq!(folder.modified, Some(stamp));
 
             backup.push(rfc3339!(stamp));

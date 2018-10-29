@@ -5,7 +5,7 @@ use std::path::Path;
 
 use sync::{CopyAction, CopyModel, DirTree, FileType, Presence};
 
-use super::errors::{RestoreError, RestoreErrorType};
+use super::errors::{OperativeError, OperativeErrorType};
 
 /// Modified options for the restore action on ConfigFile. Check the properties to see which
 /// behaviour they control
@@ -37,8 +37,8 @@ impl Restore {
         restore: &Path,
         backup: &Path,
         overwrite: bool,
-    ) -> Result<CopyModel, RestoreError> {
-        let tree = DirTree::new(&restore, &backup).context(RestoreErrorType::Scan)?;
+    ) -> Result<CopyModel, OperativeError> {
+        let tree = DirTree::new(&restore, &backup).context(OperativeErrorType::Scan)?;
         Ok(tree
             .iter()
             .filter(|e| {

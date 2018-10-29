@@ -5,21 +5,23 @@ use std::fmt::{self, Display};
 
 /// Represents the underlying cause of failure while trying to perform a backup.
 #[derive(Copy, Clone, Debug, Fail, Eq, PartialEq)]
-pub enum BackupErrorType {
+pub enum OperativeErrorType {
     #[fail(display = "Unable to read the directory tree")]
     Scan,
-    #[fail(display = "Unable to perform the backup operation")]
-    Execute,
+    #[fail(display = "Unable to execute the backup operation model")]
+    Backup,
+    #[fail(display = "Unable to execute the restore operation model")]
+    Restore,
 }
 
 /// Represents failure while trying to either build a CopyModel for the backup operation
 /// or while trying to execute the model.
 #[derive(Debug)]
-pub struct BackupError {
-    inner: Context<BackupErrorType>,
+pub struct OperativeError {
+    inner: Context<OperativeErrorType>,
 }
 
-impl Fail for BackupError {
+impl Fail for OperativeError {
     fn cause(&self) -> Option<&Fail> {
         self.inner.cause()
     }
@@ -29,68 +31,22 @@ impl Fail for BackupError {
     }
 }
 
-impl Display for BackupError {
+impl Display for OperativeError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         Display::fmt(&self.inner, f)
     }
 }
 
-impl From<BackupErrorType> for BackupError {
-    fn from(kind: BackupErrorType) -> Self {
+impl From<OperativeErrorType> for OperativeError {
+    fn from(kind: OperativeErrorType) -> Self {
         Self {
             inner: Context::new(kind),
         }
     }
 }
 
-impl From<Context<BackupErrorType>> for BackupError {
-    fn from(inner: Context<BackupErrorType>) -> Self {
-        Self { inner }
-    }
-}
-
-/// Represents the underlying cause of failure while trying to perform a restore.
-#[derive(Copy, Clone, Debug, Fail, Eq, PartialEq)]
-pub enum RestoreErrorType {
-    #[fail(display = "Unable to read the directory tree")]
-    Scan,
-    #[fail(display = "Unable to perform the backup operation")]
-    Execute,
-}
-
-/// Represents failure while trying to either build a CopyModel for the restore operation
-/// or while trying to execute the model.
-#[derive(Debug)]
-pub struct RestoreError {
-    inner: Context<RestoreErrorType>,
-}
-
-impl Fail for RestoreError {
-    fn cause(&self) -> Option<&Fail> {
-        self.inner.cause()
-    }
-
-    fn backtrace(&self) -> Option<&Backtrace> {
-        self.inner.backtrace()
-    }
-}
-
-impl Display for RestoreError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        Display::fmt(&self.inner, f)
-    }
-}
-
-impl From<RestoreErrorType> for RestoreError {
-    fn from(kind: RestoreErrorType) -> Self {
-        Self {
-            inner: Context::new(kind),
-        }
-    }
-}
-
-impl From<Context<RestoreErrorType>> for RestoreError {
-    fn from(inner: Context<RestoreErrorType>) -> Self {
+impl From<Context<OperativeErrorType>> for OperativeError {
+    fn from(inner: Context<OperativeErrorType>) -> Self {
         Self { inner }
     }
 }

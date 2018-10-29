@@ -6,7 +6,7 @@
 use failure::{Backtrace, Context, Fail};
 use std::fmt::{self, Display};
 
-use app::errors::{BackupError, LoadError, RestoreError, SaveError};
+use app::errors::{FileError, OperativeError};
 
 #[derive(Debug)]
 pub struct AppError {
@@ -31,12 +31,10 @@ impl Display for AppError {
 
 #[derive(Copy, Clone, Debug, Fail, Eq, PartialEq)]
 pub enum ErrorType {
-    #[fail(display = "Unable to restore the elements")]
-    Restore,
-    #[fail(display = "Unable to copy the elements")]
-    Backup,
-    #[fail(display = "Unable to parse the configuration file")]
-    Parse,
+    #[fail(display = "Unable to perform the requested operation")]
+    Operative,
+    #[fail(display = "Unable to operate on the configuration file")]
+    Config,
 }
 
 impl From<ErrorType> for AppError {
@@ -53,34 +51,18 @@ impl From<Context<ErrorType>> for AppError {
     }
 }
 
-impl From<LoadError> for AppError {
-    fn from(error: LoadError) -> Self {
+impl From<FileError> for AppError {
+    fn from(error: FileError) -> Self {
         Self {
-            inner: error.context(ErrorType::Parse),
+            inner: error.context(ErrorType::Config),
         }
     }
 }
 
-impl From<SaveError> for AppError {
-    fn from(error: SaveError) -> Self {
+impl From<OperativeError> for AppError {
+    fn from(error: OperativeError) -> Self {
         Self {
-            inner: error.context(ErrorType::Parse),
-        }
-    }
-}
-
-impl From<BackupError> for AppError {
-    fn from(error: BackupError) -> Self {
-        Self {
-            inner: error.context(ErrorType::Backup),
-        }
-    }
-}
-
-impl From<RestoreError> for AppError {
-    fn from(error: RestoreError) -> Self {
-        Self {
-            inner: error.context(ErrorType::Restore),
+            inner: error.context(ErrorType::Operative),
         }
     }
 }

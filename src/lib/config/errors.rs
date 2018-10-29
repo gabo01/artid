@@ -11,75 +11,28 @@ pub type PathRepr = String;
 
 /// Underlying cause of failure when trying to load a file
 #[derive(Clone, Debug, Fail, Eq, PartialEq)]
-pub(super) enum LoadErrorType {
-    File(PathRepr),
+pub(super) enum FileErrorType {
+    Load(PathRepr),
     Parse(PathRepr),
+    Save(PathRepr),
 }
 
-impl Display for LoadErrorType {
+impl Display for FileErrorType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            LoadErrorType::File(ref path) => write!(
+            FileErrorType::Load(ref path) => write!(
                 f,
                 "Unable to read configuration from disk path {}",
                 highlight(path)
             ),
 
-            LoadErrorType::Parse(ref path) => write!(
+            FileErrorType::Parse(ref path) => write!(
                 f,
                 "Configuration format on disk path {} is not valid",
                 highlight(path)
             ),
-        }
-    }
-}
 
-/// Represents failure while trying to load the configuration file
-#[derive(Debug)]
-pub struct LoadError {
-    inner: Context<LoadErrorType>,
-}
-
-impl Display for LoadError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        Display::fmt(&self.inner, f)
-    }
-}
-
-impl Fail for LoadError {
-    fn cause(&self) -> Option<&Fail> {
-        self.inner.cause()
-    }
-
-    fn backtrace(&self) -> Option<&Backtrace> {
-        self.inner.backtrace()
-    }
-}
-
-impl From<LoadErrorType> for LoadError {
-    fn from(kind: LoadErrorType) -> Self {
-        Self {
-            inner: Context::new(kind),
-        }
-    }
-}
-
-impl From<Context<LoadErrorType>> for LoadError {
-    fn from(inner: Context<LoadErrorType>) -> Self {
-        Self { inner }
-    }
-}
-
-/// Represents the underlying failure while trying to save the configuration file
-#[derive(Clone, Debug, Fail, Eq, PartialEq)]
-pub(super) enum SaveErrorType {
-    File(PathRepr),
-}
-
-impl Display for SaveErrorType {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            SaveErrorType::File(ref path) => write!(
+            FileErrorType::Save(ref path) => write!(
                 f,
                 "Unable to save configuration into disk path {}",
                 highlight(path)
@@ -88,13 +41,19 @@ impl Display for SaveErrorType {
     }
 }
 
-/// Represents failure while trying to save the configuration file
+/// Represents failure while trying to load the configuration file
 #[derive(Debug)]
-pub struct SaveError {
-    inner: Context<SaveErrorType>,
+pub struct FileError {
+    inner: Context<FileErrorType>,
 }
 
-impl Fail for SaveError {
+impl Display for FileError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        Display::fmt(&self.inner, f)
+    }
+}
+
+impl Fail for FileError {
     fn cause(&self) -> Option<&Fail> {
         self.inner.cause()
     }
@@ -104,22 +63,16 @@ impl Fail for SaveError {
     }
 }
 
-impl Display for SaveError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        Display::fmt(&self.inner, f)
-    }
-}
-
-impl From<SaveErrorType> for SaveError {
-    fn from(kind: SaveErrorType) -> Self {
+impl From<FileErrorType> for FileError {
+    fn from(kind: FileErrorType) -> Self {
         Self {
             inner: Context::new(kind),
         }
     }
 }
 
-impl From<Context<SaveErrorType>> for SaveError {
-    fn from(inner: Context<SaveErrorType>) -> Self {
+impl From<Context<FileErrorType>> for FileError {
+    fn from(inner: Context<FileErrorType>) -> Self {
         Self { inner }
     }
 }

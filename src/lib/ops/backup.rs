@@ -5,7 +5,7 @@ use std::path::Path;
 
 use sync::{CopyAction, CopyModel, DirTree, Direction, FileType, Presence};
 
-use super::errors::{BackupError, BackupErrorType};
+use super::errors::{OperativeError, OperativeErrorType};
 
 /// Modifier options for the backup action on ConfigFile. Check the properties to see which
 /// behaviour they control
@@ -26,8 +26,8 @@ impl BackupOptions {
 pub struct Backup;
 
 impl Backup {
-    pub fn with_previous(base: &Path, old: &Path, new: &Path) -> Result<CopyModel, BackupError> {
-        let tree = DirTree::new(base, old).context(BackupErrorType::Scan)?;
+    pub fn with_previous(base: &Path, old: &Path, new: &Path) -> Result<CopyModel, OperativeError> {
+        let tree = DirTree::new(base, old).context(OperativeErrorType::Scan)?;
         Ok(tree
             .iter()
             .filter(|e| e.presence() != Presence::Dst)
@@ -50,8 +50,8 @@ impl Backup {
             }).collect())
     }
 
-    pub fn from_scratch(base: &Path, new: &Path) -> Result<CopyModel, BackupError> {
-        let tree = DirTree::new(&base, &new).context(BackupErrorType::Scan)?;
+    pub fn from_scratch(base: &Path, new: &Path) -> Result<CopyModel, OperativeError> {
+        let tree = DirTree::new(&base, &new).context(OperativeErrorType::Scan)?;
         Ok(tree
             .iter()
             .map(|e| {
