@@ -19,11 +19,20 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use logger::pathlight;
-use ops::{Backup, BackupOptions, OperativeError, OperativeErrorType, Restore, RestoreOptions};
 
 mod errors;
-pub use self::errors::FileError;
-use self::errors::FileErrorType;
+mod ops;
+
+pub use self::{
+    errors::FileError,
+    ops::OperativeError,
+    ops::{BackupOptions, RestoreOptions},
+};
+
+use self::{
+    errors::FileErrorType,
+    ops::{Backup, OperativeErrorType, Restore},
+};
 
 /// Represents a configuration file in json format. A valid json config file is composed
 /// by an array of folder structs. The config file has to be stored in a subpath of the
