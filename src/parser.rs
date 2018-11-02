@@ -180,7 +180,7 @@ fn restore(
 ) -> AppResult<()> {
     info!("Starting restore of the contents in {}", pathlight(path));
 
-    let options = RestoreOptions::new(run, overwrite, point.to_owned());
+    let options = RestoreOptions::new(overwrite, run, point.to_owned());
     let config = ConfigFile::load(path)?;
 
     match folder {
