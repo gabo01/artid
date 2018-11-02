@@ -4,12 +4,13 @@
 /// that the user wishes to perform.
 use chrono::SecondsFormat;
 use clap::ArgMatches;
+use failure::ResultExt;
 use std::path::{Path, PathBuf};
 
 // Internal imports
 use app::logger::{highlight, pathlight};
 use app::prelude::*;
-use errors::AppError;
+use errors::{AppError, ErrorType};
 
 macro_rules! curr_dir {
     () => {
@@ -26,11 +27,11 @@ pub struct Instance {
 }
 
 impl Instance {
-    pub fn new(matches: &ArgMatches<'_>) -> Instance {
+    pub fn new(matches: &ArgMatches<'_>) -> AppResult<Instance> {
         let trace = matches.is_present("backtrace");
-        let operation = Operation::new(&matches);
+        let operation = Operation::new(&matches)?;
 
-        Self { trace, operation }
+        Ok(Self { trace, operation })
     }
 
     pub fn run(&self) -> AppResult<()> {
@@ -55,27 +56,26 @@ enum Operation {
         overwrite: bool,
         path: PathBuf,
         folder: Option<String>,
+        point: Option<usize>,
     },
 }
 
 impl Operation {
-    fn new(matches: &ArgMatches<'_>) -> Operation {
-        match matches.subcommand_name() {
+    fn new(matches: &ArgMatches<'_>) -> AppResult<Operation> {
+        Ok(match matches.subcommand_name() {
             Some(command) => {
                 // If a subcommand exists, it's matches must also exist
                 let matches = matches.subcommand_matches(command).unwrap();
 
                 match command {
                     "backup" => Self::build_backup(matches),
-
-                    "restore" => Self::build_restore(matches),
-
+                    "restore" => Self::build_restore(matches)?,
                     _ => unreachable!(),
                 }
             }
 
             None => unreachable!(),
-        }
+        })
     }
 
     fn build_backup(matches: &ArgMatches<'_>) -> Self {
@@ -97,8 +97,8 @@ impl Operation {
         }
     }
 
-    fn build_restore(matches: &ArgMatches<'_>) -> Self {
-        Operation::Restore {
+    fn build_restore(matches: &ArgMatches<'_>) -> AppResult<Self> {
+        Ok(Operation::Restore {
             run: !matches.is_present("dry-run"),
             overwrite: matches.is_present("overwrite"),
             path: {
@@ -114,7 +114,15 @@ impl Operation {
                 Some(val) => Some(val.into()),
                 None => None,
             },
-        }
+
+            point: match matches.value_of("from") {
+                Some(val) => Some(
+                    val.parse::<usize>()
+                        .context(ErrorType::BadArgument("from".to_string(), val.to_string()))?,
+                ),
+                None => None,
+            },
+        })
     }
 
     fn run(&self) -> AppResult<()> {
@@ -132,8 +140,9 @@ impl Operation {
                 overwrite,
                 ref path,
                 ref folder,
+                ref point,
             } => {
-                restore(run, overwrite, path, folder)?;
+                restore(run, overwrite, path, folder, point)?;
             }
         }
 
@@ -162,10 +171,16 @@ fn backup(run: bool, path: &Path, folder: &Option<String>) -> AppResult<()> {
     Ok(())
 }
 
-fn restore(run: bool, overwrite: bool, path: &Path, folder: &Option<String>) -> AppResult<()> {
+fn restore(
+    run: bool,
+    overwrite: bool,
+    path: &Path,
+    folder: &Option<String>,
+    point: &Option<usize>,
+) -> AppResult<()> {
     info!("Starting restore of the contents in {}", pathlight(path));
 
-    let options = RestoreOptions::new(run, overwrite);
+    let options = RestoreOptions::new(run, overwrite, point.to_owned());
     let config = ConfigFile::load(path)?;
 
     match folder {

@@ -44,3 +44,8 @@ subcommands:
             - dry-run:
                 help: Prints the all the changes for the operation without making them
                 long: dry-run
+            - from:
+                help: Select a point to restore that is different from the latest latest
+                long: from
+                takes_value: true
+                requires: folder

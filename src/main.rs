@@ -45,7 +45,14 @@ fn main() {
         .about(crate_description!())
         .get_matches();
 
-    let instance = Instance::new(&matches);
+    let instance = match Instance::new(&matches) {
+        Ok(instance) => instance,
+        Err(err) => {
+            error!("{}", err);
+            exit(EXIT_FAILURE);
+        }
+    };
+
     if let Err(err) = instance.run() {
         if instance.backtrace() {
             err.causes().for_each(|cause| error!("{}", cause));

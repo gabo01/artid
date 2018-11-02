@@ -190,6 +190,10 @@ where
     /// The behaviour of this function can be customized through the options provided. Check
     /// RestoreOptions to see what things can be modified.
     pub fn restore(self, options: RestoreOptions) -> Result<(), OperativeError> {
+        if options.point.is_some() {
+            Err(OperativeErrorType::PointDoesNotExists)?;
+        }
+
         for folder in &self.folders {
             folder.restore(&self.dir, options)?;
         }
@@ -230,16 +234,47 @@ pub struct Folder {
     /// Path of origin. If thinked as a link, this is the place the link points to
     origin: EnvPath,
     /// Last time the folder was synced, if any. Parses from an RFC3339 valid string
-    modified: Option<DateTime<Utc>>,
+    modified: Option<Vec<DateTime<Utc>>>,
 }
 
 impl Folder {
     /// Creates a new folder from the options specified
-    pub fn new(path: EnvPath, origin: EnvPath, modified: Option<DateTime<Utc>>) -> Self {
+    pub fn new(path: EnvPath, origin: EnvPath, modified: Option<Vec<DateTime<Utc>>>) -> Self {
         Self {
             path,
             origin,
             modified,
+        }
+    }
+
+    /// Register a new folder backup on the list
+    fn add_modified(&mut self, stamp: DateTime<Utc>) {
+        match self.modified {
+            Some(ref mut vec) => vec.push(stamp),
+            None => self.modified = Some(vec![stamp]),
+        }
+    }
+
+    /// Returns the backup date, if it exists, of the position specified by point or
+    /// the latest backup date made if point is None
+    fn backup_exists(&self, point: Option<usize>) -> Option<DateTime<Utc>> {
+        match point {
+            Some(position) => match self.modified {
+                Some(ref vec) => {
+                    if let Some(date) = vec.get(position) {
+                        Some(date.to_owned())
+                    } else {
+                        None
+                    }
+                }
+
+                None => None,
+            },
+
+            None => match self.modified {
+                Some(ref vec) if !vec.is_empty() => Some(vec.last().unwrap().to_owned()),
+                Some(_) | None => None,
+            },
         }
     }
 
@@ -257,7 +292,7 @@ impl Folder {
     {
         let (rel, abs) = self.resolve(root);
 
-        let model = if let Some(modified) = self.modified {
+        let model = if let Some(modified) = self.backup_exists(None) {
             let (old, new) = (rel.join(rfc3339!(modified)), rel.join(rfc3339!(stamp)));
             Backup::with_previous(&abs, &old, &new)?
         } else {
@@ -266,7 +301,7 @@ impl Folder {
 
         if options.run {
             model.execute().context(OperativeErrorType::Backup)?;
-            self.modified = Some(stamp);
+            self.add_modified(stamp);
         } else {
             model.log();
         }
@@ -282,19 +317,24 @@ impl Folder {
         options: RestoreOptions,
     ) -> Result<(), OperativeError> {
         let (mut rel, abs) = self.resolve(root);
-        if let Some(modified) = self.modified {
-            debug!("Starting restore of: {}", pathlight(&rel));
-            rel.push(rfc3339!(modified));
 
-            let model = Restore::from_point(&abs, &rel, options.overwrite)?;
+        if self.backup_exists(None).is_some() {
+            if let Some(modified) = self.backup_exists(options.point) {
+                debug!("Starting restore of: {}", pathlight(&rel));
+                rel.push(rfc3339!(modified));
 
-            if options.run {
-                model.execute().context(OperativeErrorType::Restore)?;
+                let model = Restore::from_point(&abs, &rel, options.overwrite)?;
+
+                if options.run {
+                    model.execute().context(OperativeErrorType::Restore)?;
+                } else {
+                    model.log();
+                }
+
+                Ok(())
             } else {
-                model.log();
+                Err(OperativeErrorType::PointDoesNotExists)?
             }
-
-            Ok(())
         } else {
             info!("Restore not needed for {}", pathlight(&rel));
             Ok(())
@@ -377,7 +417,7 @@ mod tests {
             let mut backup = tmppath!(&root, "backup");
             assert!(backup.exists());
 
-            assert_eq!(folder.modified, Some(stamp));
+            assert_eq!(folder.modified, Some(vec![stamp]));
 
             backup.push(rfc3339!(stamp));
 
@@ -614,11 +654,11 @@ mod tests {
             let folder = Folder::new(
                 EnvPath::new("backup"),
                 EnvPath::new(origin.path().display().to_string()),
-                Some(stamp),
+                Some(vec![stamp]),
             );
 
             folder
-                .restore(root.path(), RestoreOptions::new(true, true))
+                .restore(root.path(), RestoreOptions::new(true, true, None))
                 .expect("Unable to perform restore");
 
             assert!(tmppath!(origin, "a.txt").exists());
@@ -657,11 +697,11 @@ mod tests {
             let folder = Folder::new(
                 EnvPath::new("backup"),
                 EnvPath::new(origin.path().display().to_string()),
-                Some(stamp_new),
+                Some(vec![stamp_new]),
             );
 
             folder
-                .restore(root.path(), RestoreOptions::new(true, true))
+                .restore(root.path(), RestoreOptions::new(true, true, None))
                 .expect("Unable to perform restore");
 
             assert!(tmppath!(origin, "a.txt").exists());

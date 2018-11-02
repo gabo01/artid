@@ -28,12 +28,14 @@ impl Display for AppError {
     }
 }
 
-#[derive(Copy, Clone, Debug, Fail, Eq, PartialEq)]
+#[derive(Clone, Debug, Fail, Eq, PartialEq)]
 pub enum ErrorType {
     #[fail(display = "Unable to perform the requested operation")]
     Operative,
     #[fail(display = "Unable to operate on the configuration file")]
     Config,
+    #[fail(display = "Bad argument {} given to {}", _0, _1)]
+    BadArgument(String, String),
 }
 
 impl From<ErrorType> for AppError {
