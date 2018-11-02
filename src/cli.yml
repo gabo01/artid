@@ -12,6 +12,9 @@ subcommands:
         version: "0.2.0"
         author: Gabriel Dos Ramos <dosramosgabriel@gmail.com>
         args:
+            - folder:
+                help: Select a folder to backup instead of all folders specified on config.json
+                required: false
             - path:
                 help: Sets the root folder where the backup will be made
                 short: d
@@ -26,6 +29,9 @@ subcommands:
         version: "0.2.0"
         author: Gabriel Dos Ramos <dosramosgabriel@gmail.com>
         args:
+            - folder:
+                help: Select a folder to restore instead of all folders specified on config.json
+                required: false
             - path:
                 help: Sets the root folder with the backed contents to restore
                 short: d
