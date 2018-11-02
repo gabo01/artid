@@ -190,6 +190,10 @@ where
     /// The behaviour of this function can be customized through the options provided. Check
     /// RestoreOptions to see what things can be modified.
     pub fn restore(self, options: RestoreOptions) -> Result<(), OperativeError> {
+        if options.point.is_some() {
+            Err(OperativeErrorType::PointDoesNotExists)?;
+        }
+
         for folder in &self.folders {
             folder.restore(&self.dir, options)?;
         }
