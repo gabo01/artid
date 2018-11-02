@@ -10,6 +10,7 @@ use serde::{
     de::{Deserialize, Deserializer},
     ser::{Serialize, Serializer},
 };
+use std::cmp::PartialEq;
 use std::env;
 use std::fmt::{self, Display, Formatter};
 use std::path::{Path, PathBuf};
@@ -87,6 +88,34 @@ impl AsRef<Path> for EnvPath {
 impl Display for EnvPath {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         write!(f, "{}", self.path.display())
+    }
+}
+
+/// When comparing EnvPath with a path, the comparison will match the path against
+/// the EnvPath's internal path
+impl PartialEq<PathBuf> for EnvPath {
+    fn eq(&self, other: &PathBuf) -> bool {
+        self.path == *other
+    }
+}
+
+/// When comparing EnvPath with a String, the comparison will match the string against
+/// the EnvPath's addr
+impl PartialEq<str> for EnvPath {
+    fn eq(&self, other: &str) -> bool {
+        self.addr == other
+    }
+}
+
+impl<'a> PartialEq<&'a str> for EnvPath {
+    fn eq(&self, other: &&'a str) -> bool {
+        self.addr == *other
+    }
+}
+
+impl PartialEq<String> for EnvPath {
+    fn eq(&self, other: &String) -> bool {
+        self.addr == *other
     }
 }
 

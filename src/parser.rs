@@ -46,13 +46,15 @@ impl Instance {
 enum Operation {
     Backup {
         run: bool,
-        folder: PathBuf,
+        path: PathBuf,
+        folder: Option<String>,
     },
 
     Restore {
         run: bool,
         overwrite: bool,
-        folder: PathBuf,
+        path: PathBuf,
+        folder: Option<String>,
     },
 }
 
@@ -79,13 +81,18 @@ impl Operation {
     fn build_backup(matches: &ArgMatches<'_>) -> Self {
         Operation::Backup {
             run: !matches.is_present("dry-run"),
-            folder: {
+            path: {
                 let mut path = curr_dir!();
                 if let Some(val) = matches.value_of("path") {
                     path.push(val);
                 }
 
                 path
+            },
+
+            folder: match matches.value_of("folder") {
+                Some(val) => Some(val.into()),
+                None => None,
             },
         }
     }
@@ -94,7 +101,7 @@ impl Operation {
         Operation::Restore {
             run: !matches.is_present("dry-run"),
             overwrite: matches.is_present("overwrite"),
-            folder: {
+            path: {
                 let mut path = curr_dir!();
                 if let Some(val) = matches.value_of("path") {
                     path.push(val);
@@ -102,21 +109,31 @@ impl Operation {
 
                 path
             },
+
+            folder: match matches.value_of("folder") {
+                Some(val) => Some(val.into()),
+                None => None,
+            },
         }
     }
 
     fn run(&self) -> AppResult<()> {
         match *self {
-            Operation::Backup { run, ref folder } => {
-                backup(run, folder)?;
+            Operation::Backup {
+                run,
+                ref path,
+                ref folder,
+            } => {
+                backup(run, path, folder)?;
             }
 
             Operation::Restore {
                 run,
                 overwrite,
+                ref path,
                 ref folder,
             } => {
-                restore(run, overwrite, folder)?;
+                restore(run, overwrite, path, folder)?;
             }
         }
 
@@ -124,11 +141,16 @@ impl Operation {
     }
 }
 
-fn backup(run: bool, folder: &Path) -> AppResult<()> {
-    info!("Starting backup on {}", pathlight(folder));
+fn backup(run: bool, path: &Path, folder: &Option<String>) -> AppResult<()> {
+    info!("Starting backup on {}", pathlight(path));
 
     let options = BackupOptions::new(run);
-    let stamp = ConfigFile::load(folder)?.backup(options)?;
+    let mut config = ConfigFile::load(path)?;
+
+    let stamp = match folder {
+        Some(ref value) => config.backup_folder(value, options)?,
+        None => config.backup(options)?,
+    };
 
     if !run {
         info!(
@@ -140,11 +162,16 @@ fn backup(run: bool, folder: &Path) -> AppResult<()> {
     Ok(())
 }
 
-fn restore(run: bool, overwrite: bool, folder: &Path) -> AppResult<()> {
-    info!("Starting restore of the contents in {}", pathlight(folder));
+fn restore(run: bool, overwrite: bool, path: &Path, folder: &Option<String>) -> AppResult<()> {
+    info!("Starting restore of the contents in {}", pathlight(path));
 
     let options = RestoreOptions::new(run, overwrite);
-    ConfigFile::load(folder)?.restore(options)?;
+    let config = ConfigFile::load(path)?;
+
+    match folder {
+        Some(ref value) => config.restore_folder(value, options)?,
+        None => config.restore(options)?,
+    }
 
     Ok(())
 }
