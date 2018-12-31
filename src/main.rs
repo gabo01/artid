@@ -18,7 +18,7 @@ extern crate log;
 #[macro_use]
 extern crate failure_derive;
 
-extern crate artid as app; // Application library
+extern crate artid_core as app; // Application library
 
 use clap::App;
 use failure::Fail;

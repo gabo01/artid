@@ -40,6 +40,8 @@
 //! in order to integrate this library with an external frontend, for example electron, a
 //! bridge must be written.
 
+pub extern crate artid_logger as logger;
+
 extern crate atty;
 extern crate chrono;
 extern crate env_logger;
@@ -71,7 +73,6 @@ macro_rules! rfc3339 {
 mod tools;
 
 mod config;
-pub mod logger;
 mod sync;
 
 /// The prelude contains the most commonly used structures of artid and as such represents

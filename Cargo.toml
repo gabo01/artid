@@ -1,6 +1,8 @@
 [workspace]
 members = [
-    "crates/env_path"
+    "crates/env_path",
+    "src/core",
+    "src/logger"
 ]
 
 [package]
@@ -9,23 +11,12 @@ version = "0.2.1"
 authors = ["Gabriel Dos Ramos Albo <dosramosgabriel@gmail.com>"]
 description = "Light client to backup your data"
 
-[lib]
-path = "src/lib/lib.rs"
-
 [dependencies]
-atty = "0.2.11"
+artid-core = {path = "src/core"}
+artid-logger = {path = "src/logger"}
 chrono = {version = "0.4.5", features = ["serde"]}
 clap = {version = "~2.32.0", features = ["yaml"]}
-env_logger = "0.5.12"
-env_path = {path = "crates/env_path", features = ["serde"]}
 failure = "0.1.2"
 failure_derive = "0.1.2"
 libc = "0.2.43"
 log = "0.4.3"
-serde = "1.0.71"
-serde_derive = "1.0.71"
-serde_json = "1.0.24"
-yansi = "0.4.*"
-
-[dev-dependencies]
-tempfile = "3.0.3"

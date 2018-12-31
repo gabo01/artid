@@ -1,0 +1,11 @@
+[package]
+name = "artid-logger"
+version = "0.1.0"
+authors = ["Gabriel Dos Ramos Albo <dosramosgabriel@gmail.com>"]
+description = "Contains the logger implementation for a terminal logger"
+
+[dependencies]
+atty = "0.2.11"
+env_logger = "0.5.12"
+log = "0.4.3"
+yansi = "0.4.*"
