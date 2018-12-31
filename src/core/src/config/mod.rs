@@ -355,6 +355,84 @@ impl Folder {
     }
 }
 
+/// Represents two linked directories on the filesystem.
+#[derive(Debug)]
+struct Link {
+    origin: PathBuf,
+    relative: PathBuf,
+}
+
+/// Represents a two point directory on the filesystem with the details present in the
+/// configuration file added.
+#[derive(Debug)]
+pub struct FileSystemFolder<'a> {
+    link: Link,
+    config: &'a mut Folder,
+}
+
+impl<'a> FileSystemFolder<'a> {
+    /// Builds a new link from two directories to link and a configuration folder
+    fn new(config: &'a mut Folder, origin: PathBuf, relative: PathBuf) -> Self {
+        Self {
+            config,
+            link: Link { origin, relative },
+        }
+    }
+
+    /// Performs the backup of a specified folder entry. The function checks
+    /// for a previous backup and links all the files from the previous location, after
+    /// that performs a sync operation between the folder and the origin location.
+    pub fn backup(
+        &mut self,
+        stamp: DateTime<Utc>,
+        options: BackupOptions,
+    ) -> Result<(), OperativeError> {
+        let model = if let Some(modified) = self.config.backup_exists(None) {
+            let old = self.link.relative.join(rfc3339!(modified));
+            let new = self.link.relative.join(rfc3339!(stamp));
+            Backup::with_previous(&self.link.origin, &old, &new)?
+        } else {
+            let relative = self.link.relative.join(rfc3339!(stamp));
+            Backup::from_scratch(&self.link.origin, &relative)?
+        };
+
+        if options.run {
+            model.execute().context(OperativeErrorType::Backup)?;
+            self.config.add_modified(stamp);
+        } else {
+            model.log();
+        }
+
+        Ok(())
+    }
+
+    /// Performs the restore of the folder entry.The function looks for the
+    /// backup folder with the latest timestamp and performs the restore from there.
+    pub fn restore(&self, options: RestoreOptions) -> Result<(), OperativeError> {
+        if self.config.backup_exists(None).is_some() {
+            if let Some(modified) = self.config.backup_exists(options.point) {
+                debug!("Starting restore of: {}", pathlight(&self.link.relative));
+                let relative = self.link.relative.join(rfc3339!(modified));
+
+                let model = Restore::from_point(&self.link.origin, &relative, options.overwrite)?;
+
+                if options.run {
+                    model.execute().context(OperativeErrorType::Restore)?;
+                } else {
+                    model.log();
+                }
+
+                Ok(())
+            } else {
+                Err(OperativeErrorType::PointDoesNotExists)?
+            }
+        } else {
+            info!("Restore not needed for {}", pathlight(&self.link.relative));
+            Ok(())
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use prelude::{BackupOptions, Folder, RestoreOptions};
