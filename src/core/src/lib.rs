@@ -40,7 +40,7 @@
 //! in order to integrate this library with an external frontend, for example electron, a
 //! bridge must be written.
 
-pub extern crate artid_logger as logger;
+extern crate artid_logger as logger;
 
 extern crate chrono;
 extern crate failure;

@@ -18,14 +18,14 @@ extern crate log;
 #[macro_use]
 extern crate failure_derive;
 
-extern crate artid_core as app; // Application library
+// Internal packages
+extern crate artid_core as app;
+extern crate artid_logger as logger;
 
 use clap::App;
 use failure::Fail;
 use libc::EXIT_FAILURE;
 use std::process::exit;
-
-use app::logger;
 
 mod errors;
 mod parser;

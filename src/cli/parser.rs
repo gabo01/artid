@@ -8,9 +8,9 @@ use failure::ResultExt;
 use std::path::{Path, PathBuf};
 
 // Internal imports
-use app::logger::{highlight, pathlight};
 use app::prelude::*;
 use errors::{AppError, ErrorType};
+use logger::{highlight, pathlight};
 
 macro_rules! curr_dir {
     () => {
