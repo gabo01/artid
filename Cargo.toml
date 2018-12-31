@@ -14,7 +14,8 @@ description = "Light client to backup your data"
 [dependencies]
 artid-core = {path = "src/core"}
 artid-logger = {path = "src/logger"}
-chrono = {version = "0.4.5", features = ["serde"]}
+
+chrono = {version = "0.4.5"}
 clap = {version = "~2.32.0", features = ["yaml"]}
 failure = "0.1.2"
 failure_derive = "0.1.2"

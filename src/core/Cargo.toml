@@ -5,19 +5,15 @@ authors = ["Gabriel Dos Ramos Albo <dosramosgabriel@gmail.com>"]
 
 [dependencies]
 artid-logger = {path = "../logger"}
-atty = "0.2.11"
-chrono = {version = "0.4.5", features = ["serde"]}
-clap = {version = "~2.32.0", features = ["yaml"]}
-env_logger = "0.5.12"
 env_path = {path = "../../crates/env_path", features = ["serde"]}
+
+chrono = {version = "0.4.5", features = ["serde"]}
 failure = "0.1.2"
 failure_derive = "0.1.2"
-libc = "0.2.43"
 log = "0.4.3"
 serde = "1.0.71"
 serde_derive = "1.0.71"
 serde_json = "1.0.24"
-yansi = "0.4.*"
 
 [dev-dependencies]
 tempfile = "3.0.3"

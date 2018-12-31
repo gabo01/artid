@@ -42,13 +42,10 @@
 
 pub extern crate artid_logger as logger;
 
-extern crate atty;
 extern crate chrono;
-extern crate env_logger;
 extern crate failure;
 #[macro_use]
 extern crate failure_derive;
-extern crate libc;
 #[macro_use]
 extern crate log;
 extern crate serde;
@@ -57,7 +54,6 @@ extern crate serde_derive;
 extern crate serde_json as json;
 #[cfg(test)]
 extern crate tempfile;
-extern crate yansi;
 
 extern crate env_path;
 
