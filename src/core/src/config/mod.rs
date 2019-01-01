@@ -47,7 +47,7 @@ where
     P: AsRef<Path> + Debug,
 {
     dir: P,
-    folders: Vec<Folder>,
+    folders: Vec<FolderConfig>,
 }
 
 impl<P> ConfigFile<P>
@@ -68,7 +68,7 @@ where
     }
 
     /// Returns a reference to the folders in the configuration file
-    pub fn folders(&self) -> &[Folder] {
+    pub fn folders(&self) -> &[FolderConfig] {
         &self.folders
     }
 
@@ -134,7 +134,7 @@ where
 
         let mut error = None;
         for folder in &mut self.folders {
-            if let Err(err) = folder.backup(&self.dir, stamp, options) {
+            if let Err(err) = folder.apply_root(&self.dir).backup(stamp, options) {
                 error = Some(err);
                 break;
             }
@@ -167,7 +167,7 @@ where
         let stamp = Utc::now();
 
         if let Some(folder) = self.folders.iter_mut().find(|e| e.path == folderpath) {
-            folder.backup(&self.dir, stamp, options)?;
+            folder.apply_root(&self.dir).backup(stamp, options)?;
         } else {
             Err(OperativeErrorType::FolderDoesNotExists)?;
         }
@@ -190,13 +190,13 @@ where
     ///
     /// The behaviour of this function can be customized through the options provided. Check
     /// RestoreOptions to see what things can be modified.
-    pub fn restore(self, options: RestoreOptions) -> Result<(), OperativeError> {
+    pub fn restore(mut self, options: RestoreOptions) -> Result<(), OperativeError> {
         if options.point.is_some() {
             Err(OperativeErrorType::PointDoesNotExists)?;
         }
 
-        for folder in &self.folders {
-            folder.restore(&self.dir, options)?;
+        for folder in &mut self.folders {
+            folder.apply_root(&self.dir).restore(options)?;
         }
 
         Ok(())
@@ -206,12 +206,12 @@ where
     /// the config file. For more information about how this method works see the docs of
     /// ConfigFile::restore
     pub fn restore_folder(
-        self,
+        mut self,
         folderpath: &str,
         options: RestoreOptions,
     ) -> Result<(), OperativeError> {
-        if let Some(folder) = self.folders.iter().find(|e| e.path == folderpath) {
-            folder.restore(&self.dir, options)?;
+        if let Some(folder) = self.folders.iter_mut().find(|e| e.path == folderpath) {
+            folder.apply_root(&self.dir).restore(options)?;
         } else {
             Err(OperativeErrorType::FolderDoesNotExists)?;
         }
@@ -229,7 +229,7 @@ where
 /// Aside from the link, the modified field represents the last time the contents from
 /// the two folders where synced
 #[derive(Debug, Serialize, Deserialize)]
-pub struct Folder {
+pub struct FolderConfig {
     /// Link path. If thinked as a link, this is where the symbolic link is
     path: EnvPath,
     /// Path of origin. If thinked as a link, this is the place the link points to
@@ -238,13 +238,37 @@ pub struct Folder {
     modified: Option<Vec<DateTime<Utc>>>,
 }
 
-impl Folder {
+impl FolderConfig {
     /// Creates a new folder from the options specified
-    pub fn new(path: EnvPath, origin: EnvPath, modified: Option<Vec<DateTime<Utc>>>) -> Self {
+    pub fn new<P: Into<PathBuf>, T: Into<PathBuf>>(path: P, origin: T) -> Self {
         Self {
-            path,
-            origin,
-            modified,
+            path: EnvPath::new(path.into().display().to_string()),
+            origin: EnvPath::new(origin.into().display().to_string()),
+            modified: None,
+        }
+    }
+
+    /// Checks if there has been a sync of the folder
+    pub fn has_sync(&self) -> bool {
+        match self.modified {
+            Some(ref vec) if !vec.is_empty() => true,
+            Some(_) | None => false,
+        }
+    }
+
+    /// Returns the last sync of the folder if there is one
+    pub fn find_last_sync(&self) -> Option<DateTime<Utc>> {
+        match self.modified {
+            Some(ref vec) if !vec.is_empty() => Some(vec.last().unwrap().to_owned()),
+            Some(_) | None => None,
+        }
+    }
+
+    /// Returns the backup date, if it exists, of the position specified by point
+    pub fn find_sync(&self, point: usize) -> Option<DateTime<Utc>> {
+        match self.modified {
+            Some(ref vec) => vec.get(point).map(ToOwned::to_owned),
+            None => None,
         }
     }
 
@@ -256,102 +280,13 @@ impl Folder {
         }
     }
 
-    /// Returns the backup date, if it exists, of the position specified by point or
-    /// the latest backup date made if point is None
-    fn backup_exists(&self, point: Option<usize>) -> Option<DateTime<Utc>> {
-        match point {
-            Some(position) => match self.modified {
-                Some(ref vec) => {
-                    if let Some(date) = vec.get(position) {
-                        Some(date.to_owned())
-                    } else {
-                        None
-                    }
-                }
+    /// Searches for the two folders and links them with the details present here into a new
+    /// type
+    fn apply_root<P: AsRef<Path>>(&mut self, root: P) -> FileSystemFolder<'_> {
+        let origin = self.origin.as_ref().into();
+        let relative = root.as_ref().join(self.path.as_ref());
 
-                None => None,
-            },
-
-            None => match self.modified {
-                Some(ref vec) if !vec.is_empty() => Some(vec.last().unwrap().to_owned()),
-                Some(_) | None => None,
-            },
-        }
-    }
-
-    /// Performs the backup of a specified folder entry. Given a root, the function checks
-    /// for a previous backup and links all the files from the previous location, after
-    /// that performs a sync operation between the folder and the origin location.
-    fn backup<P>(
-        &mut self,
-        root: P,
-        stamp: DateTime<Utc>,
-        options: BackupOptions,
-    ) -> Result<(), OperativeError>
-    where
-        P: AsRef<Path>,
-    {
-        let (rel, abs) = self.resolve(root);
-
-        let model = if let Some(modified) = self.backup_exists(None) {
-            let (old, new) = (rel.join(rfc3339!(modified)), rel.join(rfc3339!(stamp)));
-            Backup::with_previous(&abs, &old, &new)?
-        } else {
-            Backup::from_scratch(&abs, &rel.join(rfc3339!(stamp)))?
-        };
-
-        if options.run {
-            model.execute().context(OperativeErrorType::Backup)?;
-            self.add_modified(stamp);
-        } else {
-            model.log();
-        }
-
-        Ok(())
-    }
-
-    /// Performs the restore of the folder entry. Given a root, the function looks for the
-    /// backup folder with the latest timestamp and performs the restore from there.
-    fn restore<P: AsRef<Path>>(
-        &self,
-        root: P,
-        options: RestoreOptions,
-    ) -> Result<(), OperativeError> {
-        let (mut rel, abs) = self.resolve(root);
-
-        if self.backup_exists(None).is_some() {
-            if let Some(modified) = self.backup_exists(options.point) {
-                debug!("Starting restore of: {}", pathlight(&rel));
-                rel.push(rfc3339!(modified));
-
-                let model = Restore::from_point(&abs, &rel, options.overwrite)?;
-
-                if options.run {
-                    model.execute().context(OperativeErrorType::Restore)?;
-                } else {
-                    model.log();
-                }
-
-                Ok(())
-            } else {
-                Err(OperativeErrorType::PointDoesNotExists)?
-            }
-        } else {
-            info!("Restore not needed for {}", pathlight(&rel));
-            Ok(())
-        }
-    }
-
-    /// Resolves the link between the two elements in a folder. In order to do so a root
-    /// must be given to the relative path.
-    ///
-    /// The returned elements are the backup path and the origin path respectively. Can also
-    /// be seen as the resolved relative path and the absolute path
-    fn resolve<P: AsRef<Path>>(&self, root: P) -> (PathBuf, PathBuf) {
-        (
-            root.as_ref().join(self.path.as_ref()),
-            PathBuf::from(self.origin.as_ref()),
-        )
+        FileSystemFolder::new(self, origin, relative)
     }
 }
 
@@ -367,12 +302,12 @@ struct Link {
 #[derive(Debug)]
 pub struct FileSystemFolder<'a> {
     link: Link,
-    config: &'a mut Folder,
+    config: &'a mut FolderConfig,
 }
 
 impl<'a> FileSystemFolder<'a> {
     /// Builds a new link from two directories to link and a configuration folder
-    fn new(config: &'a mut Folder, origin: PathBuf, relative: PathBuf) -> Self {
+    fn new(config: &'a mut FolderConfig, origin: PathBuf, relative: PathBuf) -> Self {
         Self {
             config,
             link: Link { origin, relative },
@@ -387,7 +322,7 @@ impl<'a> FileSystemFolder<'a> {
         stamp: DateTime<Utc>,
         options: BackupOptions,
     ) -> Result<(), OperativeError> {
-        let model = if let Some(modified) = self.config.backup_exists(None) {
+        let model = if let Some(modified) = self.config.find_last_sync() {
             let old = self.link.relative.join(rfc3339!(modified));
             let new = self.link.relative.join(rfc3339!(stamp));
             Backup::with_previous(&self.link.origin, &old, &new)?
@@ -409,8 +344,13 @@ impl<'a> FileSystemFolder<'a> {
     /// Performs the restore of the folder entry.The function looks for the
     /// backup folder with the latest timestamp and performs the restore from there.
     pub fn restore(&self, options: RestoreOptions) -> Result<(), OperativeError> {
-        if self.config.backup_exists(None).is_some() {
-            if let Some(modified) = self.config.backup_exists(options.point) {
+        if self.config.has_sync() {
+            let modified = match options.point {
+                Some(point) => self.config.find_sync(point),
+                None => self.config.find_last_sync(),
+            };
+
+            if let Some(modified) = modified {
                 debug!("Starting restore of: {}", pathlight(&self.link.relative));
                 let relative = self.link.relative.join(rfc3339!(modified));
 

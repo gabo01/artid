@@ -76,7 +76,7 @@ mod sync;
 /// The prelude contains the most commonly used structures of artid and as such represents
 /// an easy way to access to them.
 pub mod prelude {
-    pub use config::{BackupOptions, ConfigFile, Folder, RestoreOptions};
+    pub use config::{BackupOptions, ConfigFile, FolderConfig, RestoreOptions};
 }
 
 /// Contains the errors that can be thrown by the application components.
