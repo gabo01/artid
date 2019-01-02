@@ -81,5 +81,5 @@ pub mod prelude {
 
 /// Contains the errors that can be thrown by the application components.
 pub mod errors {
-    pub use config::{FileError, OperativeError};
+    pub use config::{FileError, OperativeError, OperativeErrorType};
 }
