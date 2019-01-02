@@ -51,7 +51,8 @@ impl Restore {
             .filter(|e| {
                 e.presence() == Presence::Dst
                     || overwrite && e.presence() == Presence::Both && e.kind() != FileType::Dir
-            }).map(|e| {
+            })
+            .map(|e| {
                 if e.kind() == FileType::Dir && e.presence() == Presence::Dst {
                     CopyAction::CreateDir {
                         target: restore.join(e.path()),
@@ -62,6 +63,7 @@ impl Restore {
                         dst: restore.join(e.path()),
                     }
                 }
-            }).collect())
+            })
+            .collect())
     }
 }

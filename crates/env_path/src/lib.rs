@@ -60,7 +60,8 @@ impl EnvPath {
                 Ok(s) => s,
                 Err(_) => String::from(""),
             }
-        }).to_string()
+        })
+        .to_string()
     }
 }
 

@@ -192,7 +192,8 @@ impl TreeNode {
                     read!(&src)
                         .map(|(path, name)| {
                             TreeNode::new(self.path.join(name), Presence::Src, FileType::from(path))
-                        }).collect(),
+                        })
+                        .collect(),
                 );
             }
 
@@ -201,7 +202,8 @@ impl TreeNode {
                     read!(&dst)
                         .map(|(path, name)| {
                             TreeNode::new(self.path.join(name), Presence::Dst, FileType::from(path))
-                        }).collect(),
+                        })
+                        .collect(),
                 );
             }
         }

@@ -139,7 +139,8 @@ fn test_config_load_from() {
         }}
     ]",
         tmp.path().join("origin").display().to_string()
-    ).unwrap();
+    )
+    .unwrap();
 
     let _config = ConfigFile::load_from(tmp.path(), "config.json").unwrap();
 }

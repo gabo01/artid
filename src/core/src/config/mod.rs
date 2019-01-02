@@ -114,7 +114,8 @@ where
             File::create(&file).context(FileErrorType::Save(file.display().to_string()))?,
             "{}",
             json::to_string_pretty(&self.folders).expect("ConfigFile cannot fail serialization")
-        ).context(FileErrorType::Save(file.display().to_string()))?;
+        )
+        .context(FileErrorType::Save(file.display().to_string()))?;
 
         info!("Config file saved on {}", pathlight(file));
         Ok(())

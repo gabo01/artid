@@ -47,7 +47,8 @@ impl Backup {
                         dst: new.join(e.path()),
                     }
                 }
-            }).collect())
+            })
+            .collect())
     }
 
     pub fn from_scratch(base: &Path, new: &Path) -> Result<CopyModel, OperativeError> {
@@ -65,6 +66,7 @@ impl Backup {
                         dst: new.join(e.path()),
                     }
                 }
-            }).collect())
+            })
+            .collect())
     }
 }
