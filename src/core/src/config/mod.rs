@@ -375,12 +375,11 @@ impl<'a> FileSystemFolder<'a> {
 
 #[cfg(test)]
 mod tests {
-    use prelude::{BackupOptions, Folder, RestoreOptions};
+    use prelude::{BackupOptions, FolderConfig, RestoreOptions};
 
     mod folder {
-        use super::{BackupOptions, Folder, RestoreOptions};
+        use super::{BackupOptions, FolderConfig, RestoreOptions};
         use chrono::offset::Utc;
-        use env_path::EnvPath;
         use std::fs::{self, File, OpenOptions};
         use std::{env, io::Write, mem, path::PathBuf, thread, time};
         use tempfile;
@@ -390,16 +389,11 @@ mod tests {
             let home = env::var("HOME").expect("Unable to access $HOME var");
             let user = env::var("USER").expect("Unable to access $USER var");
 
-            let folder = Folder {
-                path: EnvPath::new("config"),
-                origin: EnvPath::new(home.clone()),
-                modified: None,
-            };
-
-            let (rel, abs) = folder.resolve(user.clone());
+            let mut config = FolderConfig::new("config", home.clone());
+            let folder = config.apply_root(user.clone());
 
             assert_eq!(
-                rel.display().to_string(),
+                folder.link.relative.display().to_string(),
                 PathBuf::from(user.clone())
                     .join("config")
                     .display()
@@ -407,7 +401,7 @@ mod tests {
             );
 
             assert_eq!(
-                abs.display().to_string(),
+                folder.link.origin.display().to_string(),
                 PathBuf::from(home.clone()).display().to_string()
             );
         }
@@ -423,20 +417,17 @@ mod tests {
             let stamp = Utc::now();
             let options = BackupOptions::new(true);
 
-            let mut folder = Folder::new(
-                EnvPath::new("backup"),
-                EnvPath::new(origin.path().display().to_string()),
-                None,
-            );
+            let mut config = FolderConfig::new("backup", origin.path());
+            let mut folder = config.apply_root(root.path());
 
             folder
-                .backup(root.path(), stamp, options)
+                .backup(stamp, options)
                 .expect("Unable to perform backup");
 
             let mut backup = tmppath!(&root, "backup");
             assert!(backup.exists());
 
-            assert_eq!(folder.modified, Some(vec![stamp]));
+            assert_eq!(folder.config.modified, Some(vec![stamp]));
 
             backup.push(rfc3339!(stamp));
 
@@ -459,14 +450,12 @@ mod tests {
 
             let stamp = Utc::now();
             let options = BackupOptions::new(true);
-            let mut folder = Folder::new(
-                EnvPath::new("backup"),
-                EnvPath::new(origin.path().display().to_string()),
-                None,
-            );
+
+            let mut config = FolderConfig::new("backup", origin.path());
+            let mut folder = config.apply_root(root.path());
 
             folder
-                .backup(root.path(), stamp, options)
+                .backup(stamp, options)
                 .expect("Unable to perform backup");
 
             let mut backup = tmppath!(root, "backup");
@@ -484,7 +473,7 @@ mod tests {
             thread::sleep(time::Duration::from_millis(2000));
             let stamp = Utc::now();
             folder
-                .backup(root.path(), stamp, options)
+                .backup(stamp, options)
                 .expect("Unable to perform backup");
 
             backup.pop();
@@ -506,14 +495,12 @@ mod tests {
 
             let stamp = Utc::now();
             let options = BackupOptions::new(true);
-            let mut folder = Folder::new(
-                EnvPath::new("backup"),
-                EnvPath::new(origin.path().display().to_string()),
-                None,
-            );
+
+            let mut config = FolderConfig::new("backup", origin.path());
+            let mut folder = config.apply_root(root.path());
 
             folder
-                .backup(root.path(), stamp, options)
+                .backup(stamp, options)
                 .expect("Unable to perform backup");
 
             let mut backup = root.path().join("backup");
@@ -535,7 +522,7 @@ mod tests {
 
             let stamp = Utc::now();
             folder
-                .backup(root.path(), stamp, options)
+                .backup(stamp, options)
                 .expect("Unable to perform backup");
 
             backup.pop();
@@ -560,14 +547,12 @@ mod tests {
 
             let stamp = Utc::now();
             let options = BackupOptions::new(true);
-            let mut folder = Folder::new(
-                EnvPath::new("backup"),
-                EnvPath::new(origin.path().display().to_string()),
-                None,
-            );
+
+            let mut config = FolderConfig::new("backup", origin.path());
+            let mut folder = config.apply_root(root.path());
 
             folder
-                .backup(root.path(), stamp, options)
+                .backup(stamp, options)
                 .expect("Unable to perform backup");
 
             let mut backup = root.path().join("backup");
@@ -595,7 +580,7 @@ mod tests {
 
             let stamp = Utc::now();
             folder
-                .backup(root.path(), stamp, options)
+                .backup(stamp, options)
                 .expect("Unable to perform backup");
 
             backup.pop();
@@ -619,14 +604,12 @@ mod tests {
 
             let stamp = Utc::now();
             let options = BackupOptions::new(true);
-            let mut folder = Folder::new(
-                EnvPath::new("backup"),
-                EnvPath::new(origin.path().display().to_string()),
-                None,
-            );
+
+            let mut config = FolderConfig::new("backup", origin.path());
+            let mut folder = config.apply_root(root.path());
 
             folder
-                .backup(root.path(), stamp, options)
+                .backup(stamp, options)
                 .expect("Unable to perform backup");
 
             let mut backup = root.path().join("backup");
@@ -648,7 +631,7 @@ mod tests {
 
             let stamp = Utc::now();
             folder
-                .backup(root.path(), stamp, options)
+                .backup(stamp, options)
                 .expect("Unable to perform backup");
 
             backup.pop();
@@ -670,14 +653,12 @@ mod tests {
             create_file!(backup.join("a.txt"), "aaaa");
             create_file!(backup.join("b.txt"), "bbbb");
 
-            let folder = Folder::new(
-                EnvPath::new("backup"),
-                EnvPath::new(origin.path().display().to_string()),
-                Some(vec![stamp]),
-            );
+            let mut config = FolderConfig::new("backup", origin.path());
+            config.modified = Some(vec![stamp]);
+            let folder = config.apply_root(root.path());
 
             folder
-                .restore(root.path(), RestoreOptions::new(true, true, None))
+                .restore(RestoreOptions::new(true, true, None))
                 .expect("Unable to perform restore");
 
             assert!(tmppath!(origin, "a.txt").exists());
@@ -713,14 +694,12 @@ mod tests {
             symlink(backup.join("a.txt"), backup_second.join("a.txt")).unwrap();
             symlink(backup.join("b.txt"), backup_second.join("b.txt")).unwrap();
 
-            let folder = Folder::new(
-                EnvPath::new("backup"),
-                EnvPath::new(origin.path().display().to_string()),
-                Some(vec![stamp_new]),
-            );
+            let mut config = FolderConfig::new("backup", origin.path());
+            config.modified = Some(vec![stamp_new]);
+            let folder = config.apply_root(root.path());
 
             folder
-                .restore(root.path(), RestoreOptions::new(true, true, None))
+                .restore(RestoreOptions::new(true, true, None))
                 .expect("Unable to perform restore");
 
             assert!(tmppath!(origin, "a.txt").exists());
