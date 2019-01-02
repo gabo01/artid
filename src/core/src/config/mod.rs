@@ -25,13 +25,13 @@ mod ops;
 
 pub use self::{
     errors::FileError,
-    ops::OperativeError,
     ops::{BackupOptions, RestoreOptions},
+    ops::{OperativeError, OperativeErrorType},
 };
 
 use self::{
     errors::FileErrorType,
-    ops::{Backup, OperativeErrorType, Restore},
+    ops::{Backup, Restore},
 };
 
 /// Represents a configuration file in json format. A valid json config file is composed
@@ -47,7 +47,7 @@ where
     P: AsRef<Path> + Debug,
 {
     dir: P,
-    folders: Vec<Folder>,
+    folders: Vec<FolderConfig>,
 }
 
 impl<P> ConfigFile<P>
@@ -55,7 +55,7 @@ where
     P: AsRef<Path> + Debug,
 {
     /// Represents the relative path to the configuration file from a given root directory
-    const RESTORE: &'static str = ".backup/config.json";
+    const SAVE_PATH: &'static str = ".backup/config.json";
 
     /// Manually create a new ConfigFile object. Usually, you would load (see load method) the
     /// configuration file from disk, but in certain cases like directory initialization it can
@@ -68,14 +68,14 @@ where
     }
 
     /// Returns a reference to the folders in the configuration file
-    pub fn folders(&self) -> &[Folder] {
+    pub fn folders(&self) -> &[FolderConfig] {
         &self.folders
     }
 
     /// Loads the data present in the configuration file. Currently this function receives
     /// a directory and looks for the config file in the subpath .backup/config.json.
     pub fn load(dir: P) -> Result<Self, FileError> {
-        Self::load_from(dir, Self::RESTORE)
+        Self::load_from(dir, Self::SAVE_PATH)
     }
 
     /// Loads the data present in the configuration file present in path. A thing to notice
@@ -99,7 +99,7 @@ where
     /// This function uses the directory saved on the ConfigFile and looks for the
     /// config.json file inside .backup/config.json.
     pub fn save(&self) -> Result<(), FileError> {
-        self.save_to(Self::RESTORE)
+        self.save_to(Self::SAVE_PATH)
     }
 
     /// Saves the changes made to the path specified in 'to'. The 'to' path is relative to
@@ -121,6 +121,26 @@ where
         Ok(())
     }
 
+    /// Links and returns the list of folders present in the configuration
+    pub fn list_folders(&mut self) -> Vec<FileSystemFolder<'_>> {
+        let root = &self.dir;
+        self.folders
+            .iter_mut()
+            .map(|folder| folder.apply_root(&root))
+            .collect()
+    }
+
+    /// Returns the folder with a path matching the given path. Comparison will be done based
+    /// on the relative path.
+    pub fn get_folder<T: AsRef<Path>>(&mut self, path: T) -> Option<FileSystemFolder<'_>> {
+        let root = &self.dir;
+
+        self.folders
+            .iter_mut()
+            .find(|folder| folder.path.path() == path.as_ref())
+            .map(|x| x.apply_root(&root))
+    }
+
     /// Performs the backup of the files in the different directories to the backup dir
     /// where the config file was loaded.
     ///
@@ -134,7 +154,7 @@ where
 
         let mut error = None;
         for folder in &mut self.folders {
-            if let Err(err) = folder.backup(&self.dir, stamp, options) {
+            if let Err(err) = folder.apply_root(&self.dir).backup(stamp, options) {
                 error = Some(err);
                 break;
             }
@@ -155,69 +175,6 @@ where
             None => Ok(stamp),
         }
     }
-
-    /// Performs the backup of a single folder identified through it's path instead of
-    /// all the folders registered on the config file. For more information see the docs
-    /// of ConfigFile::backup.
-    pub fn backup_folder(
-        &mut self,
-        folderpath: &str,
-        options: BackupOptions,
-    ) -> Result<DateTime<Utc>, OperativeError> {
-        let stamp = Utc::now();
-
-        if let Some(folder) = self.folders.iter_mut().find(|e| e.path == folderpath) {
-            folder.backup(&self.dir, stamp, options)?;
-        } else {
-            Err(OperativeErrorType::FolderDoesNotExists)?;
-        }
-
-        if options.run {
-            if let Err(err) = self.save() {
-                warn!(
-                    "Unable to save on {} because of {}",
-                    pathlight(self.dir.as_ref()),
-                    err
-                );
-            }
-        }
-
-        Ok(stamp)
-    }
-
-    /// Performs the restore of the backed files on the dir where the config file was loaded to
-    /// their original locations on the specified root.
-    ///
-    /// The behaviour of this function can be customized through the options provided. Check
-    /// RestoreOptions to see what things can be modified.
-    pub fn restore(self, options: RestoreOptions) -> Result<(), OperativeError> {
-        if options.point.is_some() {
-            Err(OperativeErrorType::PointDoesNotExists)?;
-        }
-
-        for folder in &self.folders {
-            folder.restore(&self.dir, options)?;
-        }
-
-        Ok(())
-    }
-
-    /// Performs the restore of a single folder instead of all the registered folders on
-    /// the config file. For more information about how this method works see the docs of
-    /// ConfigFile::restore
-    pub fn restore_folder(
-        self,
-        folderpath: &str,
-        options: RestoreOptions,
-    ) -> Result<(), OperativeError> {
-        if let Some(folder) = self.folders.iter().find(|e| e.path == folderpath) {
-            folder.restore(&self.dir, options)?;
-        } else {
-            Err(OperativeErrorType::FolderDoesNotExists)?;
-        }
-
-        Ok(())
-    }
 }
 
 /// Represents the structure of a folder in the config.json file.
@@ -229,7 +186,7 @@ where
 /// Aside from the link, the modified field represents the last time the contents from
 /// the two folders where synced
 #[derive(Debug, Serialize, Deserialize)]
-pub struct Folder {
+pub struct FolderConfig {
     /// Link path. If thinked as a link, this is where the symbolic link is
     path: EnvPath,
     /// Path of origin. If thinked as a link, this is the place the link points to
@@ -238,13 +195,37 @@ pub struct Folder {
     modified: Option<Vec<DateTime<Utc>>>,
 }
 
-impl Folder {
+impl FolderConfig {
     /// Creates a new folder from the options specified
-    pub fn new(path: EnvPath, origin: EnvPath, modified: Option<Vec<DateTime<Utc>>>) -> Self {
+    pub fn new<P: Into<PathBuf>, T: Into<PathBuf>>(path: P, origin: T) -> Self {
         Self {
-            path,
-            origin,
-            modified,
+            path: EnvPath::new(path.into().display().to_string()),
+            origin: EnvPath::new(origin.into().display().to_string()),
+            modified: None,
+        }
+    }
+
+    /// Checks if there has been a sync of the folder
+    pub fn has_sync(&self) -> bool {
+        match self.modified {
+            Some(ref vec) if !vec.is_empty() => true,
+            Some(_) | None => false,
+        }
+    }
+
+    /// Returns the last sync of the folder if there is one
+    pub fn find_last_sync(&self) -> Option<DateTime<Utc>> {
+        match self.modified {
+            Some(ref vec) if !vec.is_empty() => Some(vec.last().unwrap().to_owned()),
+            Some(_) | None => None,
+        }
+    }
+
+    /// Returns the backup date, if it exists, of the position specified by point
+    pub fn find_sync(&self, point: usize) -> Option<DateTime<Utc>> {
+        match self.modified {
+            Some(ref vec) => vec.get(point).map(ToOwned::to_owned),
+            None => None,
         }
     }
 
@@ -256,53 +237,60 @@ impl Folder {
         }
     }
 
-    /// Returns the backup date, if it exists, of the position specified by point or
-    /// the latest backup date made if point is None
-    fn backup_exists(&self, point: Option<usize>) -> Option<DateTime<Utc>> {
-        match point {
-            Some(position) => match self.modified {
-                Some(ref vec) => {
-                    if let Some(date) = vec.get(position) {
-                        Some(date.to_owned())
-                    } else {
-                        None
-                    }
-                }
+    /// Searches for the two folders and links them with the details present here into a new
+    /// type
+    fn apply_root<P: AsRef<Path>>(&mut self, root: P) -> FileSystemFolder<'_> {
+        let origin = self.origin.as_ref().into();
+        let relative = root.as_ref().join(self.path.as_ref());
 
-                None => None,
-            },
+        FileSystemFolder::new(self, origin, relative)
+    }
+}
 
-            None => match self.modified {
-                Some(ref vec) if !vec.is_empty() => Some(vec.last().unwrap().to_owned()),
-                Some(_) | None => None,
-            },
+/// Represents two linked directories on the filesystem.
+#[derive(Debug)]
+struct Link {
+    origin: PathBuf,
+    relative: PathBuf,
+}
+
+/// Represents a two point directory on the filesystem with the details present in the
+/// configuration file added.
+#[derive(Debug)]
+pub struct FileSystemFolder<'a> {
+    link: Link,
+    config: &'a mut FolderConfig,
+}
+
+impl<'a> FileSystemFolder<'a> {
+    /// Builds a new link from two directories to link and a configuration folder
+    fn new(config: &'a mut FolderConfig, origin: PathBuf, relative: PathBuf) -> Self {
+        Self {
+            config,
+            link: Link { origin, relative },
         }
     }
 
-    /// Performs the backup of a specified folder entry. Given a root, the function checks
+    /// Performs the backup of a specified folder entry. The function checks
     /// for a previous backup and links all the files from the previous location, after
     /// that performs a sync operation between the folder and the origin location.
-    fn backup<P>(
+    pub fn backup(
         &mut self,
-        root: P,
         stamp: DateTime<Utc>,
         options: BackupOptions,
-    ) -> Result<(), OperativeError>
-    where
-        P: AsRef<Path>,
-    {
-        let (rel, abs) = self.resolve(root);
-
-        let model = if let Some(modified) = self.backup_exists(None) {
-            let (old, new) = (rel.join(rfc3339!(modified)), rel.join(rfc3339!(stamp)));
-            Backup::with_previous(&abs, &old, &new)?
+    ) -> Result<(), OperativeError> {
+        let model = if let Some(modified) = self.config.find_last_sync() {
+            let old = self.link.relative.join(rfc3339!(modified));
+            let new = self.link.relative.join(rfc3339!(stamp));
+            Backup::with_previous(&self.link.origin, &old, &new)?
         } else {
-            Backup::from_scratch(&abs, &rel.join(rfc3339!(stamp)))?
+            let relative = self.link.relative.join(rfc3339!(stamp));
+            Backup::from_scratch(&self.link.origin, &relative)?
         };
 
         if options.run {
             model.execute().context(OperativeErrorType::Backup)?;
-            self.add_modified(stamp);
+            self.config.add_modified(stamp);
         } else {
             model.log();
         }
@@ -310,21 +298,20 @@ impl Folder {
         Ok(())
     }
 
-    /// Performs the restore of the folder entry. Given a root, the function looks for the
+    /// Performs the restore of the folder entry.The function looks for the
     /// backup folder with the latest timestamp and performs the restore from there.
-    fn restore<P: AsRef<Path>>(
-        &self,
-        root: P,
-        options: RestoreOptions,
-    ) -> Result<(), OperativeError> {
-        let (mut rel, abs) = self.resolve(root);
+    pub fn restore(&self, options: RestoreOptions) -> Result<(), OperativeError> {
+        if self.config.has_sync() {
+            let modified = match options.point {
+                Some(point) => self.config.find_sync(point),
+                None => self.config.find_last_sync(),
+            };
 
-        if self.backup_exists(None).is_some() {
-            if let Some(modified) = self.backup_exists(options.point) {
-                debug!("Starting restore of: {}", pathlight(&rel));
-                rel.push(rfc3339!(modified));
+            if let Some(modified) = modified {
+                debug!("Starting restore of: {}", pathlight(&self.link.relative));
+                let relative = self.link.relative.join(rfc3339!(modified));
 
-                let model = Restore::from_point(&abs, &rel, options.overwrite)?;
+                let model = Restore::from_point(&self.link.origin, &relative, options.overwrite)?;
 
                 if options.run {
                     model.execute().context(OperativeErrorType::Restore)?;
@@ -337,32 +324,19 @@ impl Folder {
                 Err(OperativeErrorType::PointDoesNotExists)?
             }
         } else {
-            info!("Restore not needed for {}", pathlight(&rel));
+            info!("Restore not needed for {}", pathlight(&self.link.relative));
             Ok(())
         }
-    }
-
-    /// Resolves the link between the two elements in a folder. In order to do so a root
-    /// must be given to the relative path.
-    ///
-    /// The returned elements are the backup path and the origin path respectively. Can also
-    /// be seen as the resolved relative path and the absolute path
-    fn resolve<P: AsRef<Path>>(&self, root: P) -> (PathBuf, PathBuf) {
-        (
-            root.as_ref().join(self.path.as_ref()),
-            PathBuf::from(self.origin.as_ref()),
-        )
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use prelude::{BackupOptions, Folder, RestoreOptions};
+    use prelude::{BackupOptions, FolderConfig, RestoreOptions};
 
     mod folder {
-        use super::{BackupOptions, Folder, RestoreOptions};
+        use super::{BackupOptions, FolderConfig, RestoreOptions};
         use chrono::offset::Utc;
-        use env_path::EnvPath;
         use std::fs::{self, File, OpenOptions};
         use std::{env, io::Write, mem, path::PathBuf, thread, time};
         use tempfile;
@@ -372,16 +346,11 @@ mod tests {
             let home = env::var("HOME").expect("Unable to access $HOME var");
             let user = env::var("USER").expect("Unable to access $USER var");
 
-            let folder = Folder {
-                path: EnvPath::new("config"),
-                origin: EnvPath::new(home.clone()),
-                modified: None,
-            };
-
-            let (rel, abs) = folder.resolve(user.clone());
+            let mut config = FolderConfig::new("config", home.clone());
+            let folder = config.apply_root(user.clone());
 
             assert_eq!(
-                rel.display().to_string(),
+                folder.link.relative.display().to_string(),
                 PathBuf::from(user.clone())
                     .join("config")
                     .display()
@@ -389,7 +358,7 @@ mod tests {
             );
 
             assert_eq!(
-                abs.display().to_string(),
+                folder.link.origin.display().to_string(),
                 PathBuf::from(home.clone()).display().to_string()
             );
         }
@@ -405,20 +374,17 @@ mod tests {
             let stamp = Utc::now();
             let options = BackupOptions::new(true);
 
-            let mut folder = Folder::new(
-                EnvPath::new("backup"),
-                EnvPath::new(origin.path().display().to_string()),
-                None,
-            );
+            let mut config = FolderConfig::new("backup", origin.path());
+            let mut folder = config.apply_root(root.path());
 
             folder
-                .backup(root.path(), stamp, options)
+                .backup(stamp, options)
                 .expect("Unable to perform backup");
 
             let mut backup = tmppath!(&root, "backup");
             assert!(backup.exists());
 
-            assert_eq!(folder.modified, Some(vec![stamp]));
+            assert_eq!(folder.config.modified, Some(vec![stamp]));
 
             backup.push(rfc3339!(stamp));
 
@@ -441,14 +407,12 @@ mod tests {
 
             let stamp = Utc::now();
             let options = BackupOptions::new(true);
-            let mut folder = Folder::new(
-                EnvPath::new("backup"),
-                EnvPath::new(origin.path().display().to_string()),
-                None,
-            );
+
+            let mut config = FolderConfig::new("backup", origin.path());
+            let mut folder = config.apply_root(root.path());
 
             folder
-                .backup(root.path(), stamp, options)
+                .backup(stamp, options)
                 .expect("Unable to perform backup");
 
             let mut backup = tmppath!(root, "backup");
@@ -466,7 +430,7 @@ mod tests {
             thread::sleep(time::Duration::from_millis(2000));
             let stamp = Utc::now();
             folder
-                .backup(root.path(), stamp, options)
+                .backup(stamp, options)
                 .expect("Unable to perform backup");
 
             backup.pop();
@@ -488,14 +452,12 @@ mod tests {
 
             let stamp = Utc::now();
             let options = BackupOptions::new(true);
-            let mut folder = Folder::new(
-                EnvPath::new("backup"),
-                EnvPath::new(origin.path().display().to_string()),
-                None,
-            );
+
+            let mut config = FolderConfig::new("backup", origin.path());
+            let mut folder = config.apply_root(root.path());
 
             folder
-                .backup(root.path(), stamp, options)
+                .backup(stamp, options)
                 .expect("Unable to perform backup");
 
             let mut backup = root.path().join("backup");
@@ -517,7 +479,7 @@ mod tests {
 
             let stamp = Utc::now();
             folder
-                .backup(root.path(), stamp, options)
+                .backup(stamp, options)
                 .expect("Unable to perform backup");
 
             backup.pop();
@@ -542,14 +504,12 @@ mod tests {
 
             let stamp = Utc::now();
             let options = BackupOptions::new(true);
-            let mut folder = Folder::new(
-                EnvPath::new("backup"),
-                EnvPath::new(origin.path().display().to_string()),
-                None,
-            );
+
+            let mut config = FolderConfig::new("backup", origin.path());
+            let mut folder = config.apply_root(root.path());
 
             folder
-                .backup(root.path(), stamp, options)
+                .backup(stamp, options)
                 .expect("Unable to perform backup");
 
             let mut backup = root.path().join("backup");
@@ -577,7 +537,7 @@ mod tests {
 
             let stamp = Utc::now();
             folder
-                .backup(root.path(), stamp, options)
+                .backup(stamp, options)
                 .expect("Unable to perform backup");
 
             backup.pop();
@@ -601,14 +561,12 @@ mod tests {
 
             let stamp = Utc::now();
             let options = BackupOptions::new(true);
-            let mut folder = Folder::new(
-                EnvPath::new("backup"),
-                EnvPath::new(origin.path().display().to_string()),
-                None,
-            );
+
+            let mut config = FolderConfig::new("backup", origin.path());
+            let mut folder = config.apply_root(root.path());
 
             folder
-                .backup(root.path(), stamp, options)
+                .backup(stamp, options)
                 .expect("Unable to perform backup");
 
             let mut backup = root.path().join("backup");
@@ -630,7 +588,7 @@ mod tests {
 
             let stamp = Utc::now();
             folder
-                .backup(root.path(), stamp, options)
+                .backup(stamp, options)
                 .expect("Unable to perform backup");
 
             backup.pop();
@@ -652,14 +610,12 @@ mod tests {
             create_file!(backup.join("a.txt"), "aaaa");
             create_file!(backup.join("b.txt"), "bbbb");
 
-            let folder = Folder::new(
-                EnvPath::new("backup"),
-                EnvPath::new(origin.path().display().to_string()),
-                Some(vec![stamp]),
-            );
+            let mut config = FolderConfig::new("backup", origin.path());
+            config.modified = Some(vec![stamp]);
+            let folder = config.apply_root(root.path());
 
             folder
-                .restore(root.path(), RestoreOptions::new(true, true, None))
+                .restore(RestoreOptions::new(true, true, None))
                 .expect("Unable to perform restore");
 
             assert!(tmppath!(origin, "a.txt").exists());
@@ -695,14 +651,12 @@ mod tests {
             symlink(backup.join("a.txt"), backup_second.join("a.txt")).unwrap();
             symlink(backup.join("b.txt"), backup_second.join("b.txt")).unwrap();
 
-            let folder = Folder::new(
-                EnvPath::new("backup"),
-                EnvPath::new(origin.path().display().to_string()),
-                Some(vec![stamp_new]),
-            );
+            let mut config = FolderConfig::new("backup", origin.path());
+            config.modified = Some(vec![stamp_new]);
+            let folder = config.apply_root(root.path());
 
             folder
-                .restore(root.path(), RestoreOptions::new(true, true, None))
+                .restore(RestoreOptions::new(true, true, None))
                 .expect("Unable to perform restore");
 
             assert!(tmppath!(origin, "a.txt").exists());

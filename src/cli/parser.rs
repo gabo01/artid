@@ -8,7 +8,9 @@ use failure::ResultExt;
 use std::path::{Path, PathBuf};
 
 // Internal imports
+use app::errors::{OperativeError, OperativeErrorType};
 use app::prelude::*;
+use chrono::Utc;
 use errors::{AppError, ErrorType};
 use logger::{highlight, pathlight};
 
@@ -157,7 +159,16 @@ fn backup(run: bool, path: &Path, folder: &Option<String>) -> AppResult<()> {
     let mut config = ConfigFile::load(path)?;
 
     let stamp = match folder {
-        Some(ref value) => config.backup_folder(value, options)?,
+        Some(ref value) => {
+            let stamp = Utc::now();
+
+            config
+                .get_folder(value)
+                .ok_or_else(|| OperativeError::from(OperativeErrorType::FolderDoesNotExists))?
+                .backup(stamp, options)?;
+
+            stamp
+        }
         None => config.backup(options)?,
     };
 
@@ -181,11 +192,19 @@ fn restore(
     info!("Starting restore of the contents in {}", pathlight(path));
 
     let options = RestoreOptions::new(overwrite, run, point.to_owned());
-    let config = ConfigFile::load(path)?;
+    let mut config = ConfigFile::load(path)?;
 
     match folder {
-        Some(ref value) => config.restore_folder(value, options)?,
-        None => config.restore(options)?,
+        Some(ref value) => config
+            .get_folder(value)
+            .ok_or_else(|| OperativeError::from(OperativeErrorType::FolderDoesNotExists))?
+            .restore(options)?,
+
+        None => {
+            for folder in config.list_folders() {
+                folder.restore(options)?;
+            }
+        }
     }
 
     Ok(())

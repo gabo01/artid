@@ -6,14 +6,19 @@ use std::fmt::{self, Display};
 /// Represents the underlying cause of failure while trying to perform a backup.
 #[derive(Copy, Clone, Debug, Fail, Eq, PartialEq)]
 pub enum OperativeErrorType {
+    #[allow(missing_docs)]
     #[fail(display = "Unable to read the directory tree")]
     Scan,
+    #[allow(missing_docs)]
     #[fail(display = "Unable to execute the backup operation model")]
     Backup,
+    #[allow(missing_docs)]
     #[fail(display = "Unable to execute the restore operation model")]
     Restore,
+    #[allow(missing_docs)]
     #[fail(display = "Unable to find the requested folder")]
     FolderDoesNotExists,
+    #[allow(missing_docs)]
     #[fail(display = "Unable to find the snapshot point requested")]
     PointDoesNotExists,
 }
