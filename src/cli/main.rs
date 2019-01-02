@@ -1,5 +1,6 @@
 #![allow(deprecated)]
 #![allow(unused_imports)]
+#![allow(clippy::new_ret_no_self)]
 
 //! This is the CLI implementation for the artid application, it allows the app to run from
 //! the command line or to start as a GUI.

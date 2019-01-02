@@ -1,5 +1,7 @@
 #![allow(deprecated)]
 #![warn(missing_docs)]
+#![allow(clippy::new_ret_no_self)]
+#![allow(unused_imports)]
 
 //! This is the core of artid. Artid is intended to be a backup application with focus
 //! on versioning and maintaining multiple backups of a single location. to know more
