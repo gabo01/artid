@@ -25,13 +25,13 @@ mod ops;
 
 pub use self::{
     errors::FileError,
-    ops::OperativeError,
     ops::{BackupOptions, RestoreOptions},
+    ops::{OperativeError, OperativeErrorType},
 };
 
 use self::{
     errors::FileErrorType,
-    ops::{Backup, OperativeErrorType, Restore},
+    ops::{Backup, Restore},
 };
 
 /// Represents a configuration file in json format. A valid json config file is composed
@@ -55,7 +55,7 @@ where
     P: AsRef<Path> + Debug,
 {
     /// Represents the relative path to the configuration file from a given root directory
-    const RESTORE: &'static str = ".backup/config.json";
+    const SAVE_PATH: &'static str = ".backup/config.json";
 
     /// Manually create a new ConfigFile object. Usually, you would load (see load method) the
     /// configuration file from disk, but in certain cases like directory initialization it can
@@ -75,7 +75,7 @@ where
     /// Loads the data present in the configuration file. Currently this function receives
     /// a directory and looks for the config file in the subpath .backup/config.json.
     pub fn load(dir: P) -> Result<Self, FileError> {
-        Self::load_from(dir, Self::RESTORE)
+        Self::load_from(dir, Self::SAVE_PATH)
     }
 
     /// Loads the data present in the configuration file present in path. A thing to notice
@@ -99,7 +99,7 @@ where
     /// This function uses the directory saved on the ConfigFile and looks for the
     /// config.json file inside .backup/config.json.
     pub fn save(&self) -> Result<(), FileError> {
-        self.save_to(Self::RESTORE)
+        self.save_to(Self::SAVE_PATH)
     }
 
     /// Saves the changes made to the path specified in 'to'. The 'to' path is relative to
@@ -119,6 +119,26 @@ where
 
         info!("Config file saved on {}", pathlight(file));
         Ok(())
+    }
+
+    /// Links and returns the list of folders present in the configuration
+    pub fn list_folders(&mut self) -> Vec<FileSystemFolder<'_>> {
+        let root = &self.dir;
+        self.folders
+            .iter_mut()
+            .map(|folder| folder.apply_root(&root))
+            .collect()
+    }
+
+    /// Returns the folder with a path matching the given path. Comparison will be done based
+    /// on the relative path.
+    pub fn get_folder<T: AsRef<Path>>(&mut self, path: T) -> Option<FileSystemFolder<'_>> {
+        let root = &self.dir;
+
+        self.folders
+            .iter_mut()
+            .find(|folder| folder.path.path() == path.as_ref())
+            .map(|x| x.apply_root(&root))
     }
 
     /// Performs the backup of the files in the different directories to the backup dir
