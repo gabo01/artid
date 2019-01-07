@@ -73,6 +73,20 @@ mod tools;
 mod config;
 mod sync;
 
+/// Allows to call boxed closures
+///
+/// details about this helper can be found on the rust book chapter 20: building a
+/// multi-threaded web server
+trait FnBox {
+    fn call_box(self: Box<Self>);
+}
+
+impl<F: FnOnce()> FnBox for F {
+    fn call_box(self: Box<F>) {
+        (*self)()
+    }
+}
+
 #[allow(missing_docs)]
 pub mod prelude {
     pub use config::{BackupOptions, ConfigFile, FileSystemFolder, FolderConfig, RestoreOptions};
