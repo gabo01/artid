@@ -73,13 +73,12 @@ mod tools;
 mod config;
 mod sync;
 
-/// The prelude contains the most commonly used structures of artid and as such represents
-/// an easy way to access to them.
+#[allow(missing_docs)]
 pub mod prelude {
     pub use config::{BackupOptions, ConfigFile, FileSystemFolder, FolderConfig, RestoreOptions};
 }
 
-/// Contains the errors that can be thrown by the application components.
+#[allow(missing_docs)]
 pub mod errors {
     pub use config::{FileError, OperativeError, OperativeErrorType};
 }
