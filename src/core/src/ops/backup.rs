@@ -152,3 +152,150 @@ fn actions(
         Backup::from_scratch(&folder.link.origin, &relative)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use chrono::Utc;
+    use std::path::{Path, PathBuf};
+    use std::thread;
+    use std::time;
+    use tempfile::TempDir;
+
+    use super::super::test_helpers::{FileKind, FileTree};
+    use super::{Backup, Model, Operator, Options};
+    use prelude::{FileSystemFolder, FolderConfig};
+
+    macro_rules! filetree {
+        ($var:ident, $join:expr, $push:expr) => {{
+            let mut path = $var.path().join($join);
+
+            path.push(rfc3339!($push));
+
+            let tree: FileTree<_> = path.into();
+            tree
+        }};
+    }
+
+    #[test]
+    fn test_folder_backup_single() {
+        let origin = FileTree::generate();
+        let root = FileTree::create();
+
+        let options = Options::default();
+        let mut config = FolderConfig::new("backup", origin.path());
+        let mut folder = config.apply_root(root.path());
+        run!(folder, options, Backup);
+
+        let mut backup = filetree!(
+            root,
+            "backup",
+            folder
+                .config
+                .find_sync(0)
+                .expect("The backup was not registered")
+        );
+        backup.copy_tree(&origin);
+        backup.assert();
+    }
+
+    #[test]
+    #[ignore]
+    fn test_folder_backup_double() {
+        let origin = FileTree::generate();
+        let root = FileTree::create();
+
+        let options = Options::default();
+        let mut config = FolderConfig::new("backup", origin.path());
+        let mut folder = config.apply_root(root.path());
+        run!(folder, options, Backup);
+
+        let mut backup = filetree!(root, "backup", folder.config.find_sync(0).unwrap());
+        backup.copy_tree(&origin);
+        backup.assert();
+
+        thread::sleep(time::Duration::from_millis(2000));
+        run!(folder, options, Backup);
+
+        let mut backup = filetree!(root, "backup", folder.config.find_sync(1).unwrap());
+        backup.copy_tree(&origin);
+        backup.transform("a.txt", FileKind::Symlink);
+        backup.transform("b.txt", FileKind::Symlink);
+        backup.assert();
+    }
+
+    #[test]
+    #[ignore]
+    fn test_folder_backup_double_addition() {
+        let mut origin = FileTree::generate();
+        let root = FileTree::create();
+
+        let options = Options::default();
+        let mut config = FolderConfig::new("backup", origin.path());
+        let mut folder = config.apply_root(root.path());
+        run!(folder, options, Backup);
+
+        let mut backup = filetree!(root, "backup", folder.config.find_sync(0).unwrap());
+        backup.copy_tree(&origin);
+        backup.assert();
+
+        thread::sleep(time::Duration::from_millis(2000));
+        origin.add_file("c.txt");
+        run!(folder, options, Backup);
+
+        let mut backup = filetree!(root, "backup", folder.config.find_sync(1).unwrap());
+        backup.copy_tree(&origin);
+        backup.transform("a.txt", FileKind::Symlink);
+        backup.transform("b.txt", FileKind::Symlink);
+        backup.assert();
+    }
+
+    #[test]
+    #[ignore]
+    fn test_folder_backup_double_modification() {
+        let mut origin = FileTree::generate();
+        let root = FileTree::create();
+
+        let options = Options::default();
+        let mut config = FolderConfig::new("backup", origin.path());
+        let mut folder = config.apply_root(root.path());
+        run!(folder, options, Backup);
+
+        let mut backup = filetree!(root, "backup", folder.config.find_sync(0).unwrap());
+        backup.copy_tree(&origin);
+        backup.assert();
+
+        thread::sleep(time::Duration::from_millis(2000));
+        origin.modify("a.txt", "aaaa");
+        run!(folder, options, Backup);
+
+        let mut backup = filetree!(root, "backup", folder.config.find_sync(1).unwrap());
+        backup.copy_tree(&origin);
+        backup.transform("b.txt", FileKind::Symlink);
+        backup.assert();
+    }
+
+    #[test]
+    #[ignore]
+    fn test_folder_backup_double_remotion() {
+        let mut origin = FileTree::generate();
+        let root = FileTree::create();
+
+        let options = Options::default();
+        let mut config = FolderConfig::new("backup", origin.path());
+        let mut folder = config.apply_root(root.path());
+        run!(folder, options, Backup);
+
+        let mut backup = filetree!(root, "backup", folder.config.find_sync(0).unwrap());
+        backup.copy_tree(&origin);
+        backup.assert();
+
+        thread::sleep(time::Duration::from_millis(2000));
+        origin.remove("a.txt");
+        run!(folder, options, Backup);
+
+        let mut backup = filetree!(root, "backup", folder.config.find_sync(1).unwrap());
+        backup.copy_tree(&origin);
+        backup.transform("b.txt", FileKind::Symlink);
+        backup.assert();
+    }
+}
