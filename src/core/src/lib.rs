@@ -59,11 +59,23 @@ extern crate tempfile;
 
 extern crate env_path;
 
+use std::fmt::{self, Debug};
+use std::ops::Deref;
+
 macro_rules! rfc3339 {
     ($stamp:expr) => {{
         use chrono::SecondsFormat;
         $stamp.to_rfc3339_opts(SecondsFormat::Nanos, true)
     }};
+}
+
+macro_rules! closure {
+    ($($body:tt)+) => {
+        Debuggable {
+            text: stringify!($($body)+),
+            value: Box::new($($body)+),
+        }
+    };
 }
 
 #[cfg(test)]
@@ -84,6 +96,30 @@ trait FnBox {
 impl<F: FnOnce()> FnBox for F {
     fn call_box(self: Box<F>) {
         (*self)()
+    }
+}
+
+/// Allow a debug implementation for closures.
+///
+/// details of the implementation can be found in [location][link]
+///
+/// [link]: https://users.rust-lang.org/t/is-it-possible-to-implement-debug-for-fn-type/14824/3
+struct Debuggable<T: ?Sized> {
+    text: &'static str,
+    value: Box<T>,
+}
+
+impl<T: ?Sized> Debug for Debuggable<T> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.text)
+    }
+}
+
+impl<T: ?Sized> Deref for Debuggable<T> {
+    type Target = T;
+
+    fn deref(&self) -> &T {
+        &self.value
     }
 }
 
