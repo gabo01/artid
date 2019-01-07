@@ -46,8 +46,8 @@ pub struct ConfigFile<P>
 where
     P: AsRef<Path> + Debug,
 {
-    dir: P,
-    folders: Vec<FolderConfig>,
+    pub(crate) dir: P,
+    pub(crate) folders: Vec<FolderConfig>,
 }
 
 impl<P> ConfigFile<P>
@@ -188,11 +188,11 @@ where
 #[derive(Debug, Serialize, Deserialize)]
 pub struct FolderConfig {
     /// Link path. If thinked as a link, this is where the symbolic link is
-    path: EnvPath,
+    pub(crate) path: EnvPath,
     /// Path of origin. If thinked as a link, this is the place the link points to
-    origin: EnvPath,
+    pub(crate) origin: EnvPath,
     /// Last time the folder was synced, if any. Parses from an RFC3339 valid string
-    modified: Option<Vec<DateTime<Utc>>>,
+    pub(crate) modified: Option<Vec<DateTime<Utc>>>,
 }
 
 impl FolderConfig {
@@ -230,7 +230,7 @@ impl FolderConfig {
     }
 
     /// Register a new folder backup on the list
-    fn add_modified(&mut self, stamp: DateTime<Utc>) {
+    pub(crate) fn add_modified(&mut self, stamp: DateTime<Utc>) {
         match self.modified {
             Some(ref mut vec) => vec.push(stamp),
             None => self.modified = Some(vec![stamp]),
@@ -239,7 +239,7 @@ impl FolderConfig {
 
     /// Searches for the two folders and links them with the details present here into a new
     /// type
-    fn apply_root<P: AsRef<Path>>(&mut self, root: P) -> FileSystemFolder<'_> {
+    pub(crate) fn apply_root<P: AsRef<Path>>(&mut self, root: P) -> FileSystemFolder<'_> {
         let origin = self.origin.as_ref().into();
         let relative = root.as_ref().join(self.path.as_ref());
 
@@ -249,17 +249,17 @@ impl FolderConfig {
 
 /// Represents two linked directories on the filesystem.
 #[derive(Debug)]
-struct Link {
-    origin: PathBuf,
-    relative: PathBuf,
+pub(crate) struct Link {
+    pub(crate) origin: PathBuf,
+    pub(crate) relative: PathBuf,
 }
 
 /// Represents a two point directory on the filesystem with the details present in the
 /// configuration file added.
 #[derive(Debug)]
 pub struct FileSystemFolder<'a> {
-    link: Link,
-    config: &'a mut FolderConfig,
+    pub(crate) link: Link,
+    pub(crate) config: &'a mut FolderConfig,
 }
 
 impl<'a> FileSystemFolder<'a> {
