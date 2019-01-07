@@ -29,7 +29,7 @@ macro_rules! create_file {
             use std::io::Write;
 
             let mut file = File::create($path).expect("Unable to create file");
-            write!(file, $($arg)*).expect("Unable to write to file");
+            write!(file, "{}", $($arg)*).expect("Unable to write to file");
             $path
         }
     }
