@@ -83,6 +83,7 @@ macro_rules! closure {
 mod tools;
 
 pub mod config;
+pub mod ops;
 mod sync;
 
 /// Allows to call boxed closures
