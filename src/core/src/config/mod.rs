@@ -230,7 +230,157 @@ impl<'a> FileSystemFolder<'a> {
 
 #[cfg(test)]
 mod tests {
-    use prelude::FolderConfig;
+    use prelude::{ConfigFile, FolderConfig};
+
+    mod config {
+        use super::ConfigFile;
+        use chrono::Utc;
+        use std::fs::{self, File};
+        use std::io::Write;
+
+        #[test]
+        fn test_config_file_load_valid() {
+            let dir = tmpdir!();
+            create_file!(
+                tmppath!(dir, "config.json"),
+                "[
+                {{
+                    \"path\": \"asd\", 
+                    \"origin\": \"$HOME\", 
+                    \"modified\": null
+                }}
+            ]"
+            );
+            assert!(ConfigFile::load_from(dir, "config.json").is_ok());
+        }
+
+        #[test]
+        fn test_config_file_load_valid_with_modified() {
+            let dir = tmpdir!();
+            create_file!(
+                tmppath!(dir, "config.json"),
+                "[
+                {{
+                    \"path\": \"asd\", 
+                    \"origin\": \"$HOME\", 
+                    \"modified\": [\"{}\"]
+                }}
+            ]",
+                rfc3339!(Utc::now())
+            );
+            assert!(ConfigFile::load_from(dir, "config.json").is_ok());
+        }
+
+        #[test]
+        fn test_config_file_load_invalid() {
+            let dir = tmpdir!();
+            create_file!(
+                tmppath!(dir, "config.json"),
+                "[
+                {{
+                    \"path\": \"asd, 
+                    \"origin\": \"$HOME\", 
+                    \"modified\": null
+                }}
+            ]"
+            );
+            assert!(ConfigFile::load_from(dir, "config.json").is_err());
+        }
+
+        #[test]
+        fn test_config_load() {
+            let tmp = tmpdir!();
+            fs::create_dir(tmppath!(tmp, ".backup")).expect("Unable to create folder");
+            create_file!(
+                tmppath!(tmp, ".backup/config.json"),
+                "[
+                {{
+                    \"path\": \"backup\",
+                    \"origin\": \"{}\",
+                    \"modified\": null
+                }}
+            ]",
+                tmppath!(tmp, "origin").display().to_string()
+            );
+            assert!(ConfigFile::load(tmp.path()).is_ok());
+        }
+
+        #[test]
+        fn test_config_load_from() {
+            let tmp = tempfile::tempdir().unwrap();
+
+            let mut file = File::create(tmp.path().join("config.json")).unwrap();
+            write!(
+                file,
+                "[
+                {{
+                    \"path\": \"backup\",
+                    \"origin\": \"{}\",
+                    \"modified\": null
+                }}
+            ]",
+                tmp.path().join("origin").display().to_string()
+            )
+            .unwrap();
+
+            let _config = ConfigFile::load_from(tmp.path(), "config.json").unwrap();
+        }
+
+        #[test]
+        fn test_config_file_save_exists() {
+            let dir = tmpdir!();
+            assert!(create_file!(tmppath!(dir, "config.json")).exists());
+
+            let config = ConfigFile::new(dir.path());
+            assert!(config.save_to("config.json").is_ok());
+        }
+
+        #[test]
+        fn test_config_file_save_unexistant() {
+            let dir = tmpdir!();
+
+            let config = ConfigFile::new(dir.path());
+            assert!(config.save_to("config.json").is_ok());
+        }
+
+        #[test]
+        fn test_config_save_to_format() {
+            let tmp = tmpdir!();
+            create_file!(
+                tmppath!(tmp, "config.json"),
+                "[
+                {{
+                    \"path\": \"backup\",
+                    \"origin\": \"{}\",
+                    \"modified\": null
+                }}
+            ]",
+                tmppath!(tmp, "origin").display().to_string()
+            );
+
+            let config =
+                ConfigFile::load_from(tmp.path(), "config.json").expect("Unable to load file");
+            config
+                .save_to("config2.json")
+                .expect("Unable to save the file");
+
+            assert_eq!(
+                json::to_string_pretty(config.folders()).expect("Cannot fail serialization"),
+                read_file!(tmppath!(tmp, "config2.json")),
+            );
+        }
+
+        #[test]
+        fn test_config_save() {
+            let tmp = tmpdir!();
+            fs::create_dir(tmppath!(tmp, ".backup")).expect("Unable to create folder");
+
+            let config = ConfigFile::new(tmp.path());
+            config.save().expect("Unable to save");
+
+            assert!(tmppath!(tmp, ".backup/config.json").exists());
+        }
+    }
 
     mod folder {
         use super::FolderConfig;
