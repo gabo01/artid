@@ -126,10 +126,6 @@ impl<T: ?Sized> Deref for Debuggable<T> {
 
 #[allow(missing_docs)]
 pub mod prelude {
-    pub use config::{BackupOptions, ConfigFile, FileSystemFolder, FolderConfig, RestoreOptions};
-}
-
-#[allow(missing_docs)]
-pub mod errors {
-    pub use config::{FileError, OperativeError, OperativeErrorType};
+    pub use config::{ConfigFile, FileError, FileSystemFolder, FolderConfig};
+    pub use ops::{Model, Operation, Operator};
 }
