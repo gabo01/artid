@@ -29,9 +29,13 @@ use libc::EXIT_FAILURE;
 use std::process::exit;
 
 mod errors;
+mod ops;
 mod parser;
 
+use errors::{AppError, ErrorType};
 use parser::Instance;
+
+pub type AppResult<T> = Result<T, AppError>;
 
 fn main() {
     if logger::init("info").is_err() {

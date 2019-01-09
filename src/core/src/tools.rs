@@ -3,9 +3,10 @@
 
 #[macro_export]
 macro_rules! tmpdir {
-    () => {
-        tempfile::tempdir().expect("Unable to create tmp directory");
-    };
+    () => {{
+        use tempfile;
+        tempfile::tempdir().expect("Unable to create tmp directory")
+    }};
 }
 
 #[macro_export]
@@ -19,6 +20,7 @@ macro_rules! tmppath {
 macro_rules! create_file {
     ($path:expr) => {
         {
+            use std::fs::File;
             let _file = File::create($path).expect("Unable to create file");
             $path
         }
@@ -27,6 +29,7 @@ macro_rules! create_file {
     ($path:expr, $($arg:tt)*) => {
         {
             use std::io::Write;
+            use std::fs::File;
 
             let mut file = File::create($path).expect("Unable to create file");
             write!(file, $($arg)*).expect("Unable to write to file");
@@ -38,6 +41,7 @@ macro_rules! create_file {
 #[macro_export]
 macro_rules! read_file {
     ($file:expr) => {{
+        use std::fs::File;
         use std::io::Read;
 
         let mut file = File::open($file).expect("Unable to open file");

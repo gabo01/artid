@@ -59,6 +59,9 @@ extern crate tempfile;
 
 extern crate env_path;
 
+use std::fmt::{self, Debug};
+use std::ops::Deref;
+
 macro_rules! rfc3339 {
     ($stamp:expr) => {{
         use chrono::SecondsFormat;
@@ -66,20 +69,62 @@ macro_rules! rfc3339 {
     }};
 }
 
+macro_rules! closure {
+    ($($body:tt)+) => {
+        Debuggable {
+            text: stringify!($($body)+),
+            value: Box::new($($body)+),
+        }
+    };
+}
+
 #[cfg(test)]
 #[macro_use]
 mod tools;
 
-mod config;
-mod sync;
+pub mod config;
+pub mod ops;
 
-/// The prelude contains the most commonly used structures of artid and as such represents
-/// an easy way to access to them.
-pub mod prelude {
-    pub use config::{BackupOptions, ConfigFile, FolderConfig, RestoreOptions};
+/// Allows to call boxed closures
+///
+/// details about this helper can be found on the rust book chapter 20: building a
+/// multi-threaded web server
+trait FnBox {
+    fn call_box(self: Box<Self>);
 }
 
-/// Contains the errors that can be thrown by the application components.
-pub mod errors {
-    pub use config::{FileError, OperativeError, OperativeErrorType};
+impl<F: FnOnce()> FnBox for F {
+    fn call_box(self: Box<F>) {
+        (*self)()
+    }
+}
+
+/// Allow a debug implementation for closures.
+///
+/// details of the implementation can be found in [location][link]
+///
+/// [link]: https://users.rust-lang.org/t/is-it-possible-to-implement-debug-for-fn-type/14824/3
+struct Debuggable<T: ?Sized> {
+    text: &'static str,
+    value: Box<T>,
+}
+
+impl<T: ?Sized> Debug for Debuggable<T> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.text)
+    }
+}
+
+impl<T: ?Sized> Deref for Debuggable<T> {
+    type Target = T;
+
+    fn deref(&self) -> &T {
+        &self.value
+    }
+}
+
+#[allow(missing_docs)]
+pub mod prelude {
+    pub use config::{ConfigFile, FileError, FileSystemFolder, FolderConfig};
+    pub use ops::{Model, Operation, Operator};
 }
