@@ -21,6 +21,14 @@ use super::{
 };
 use prelude::{ConfigFile, FileSystemFolder};
 
+/// This function is responsible for making the restore model for the given operator
+pub fn restore<'a, O: Operator<'a, Restore>>(
+    operator: &'a mut O,
+    options: O::Options,
+) -> Result<O::Model, O::Error> {
+    operator.modelate(options)
+}
+
 /// Underlying kind of error responsible for failing the building of the restore model
 #[derive(Debug, Fail)]
 pub enum BuildErrorKind {
