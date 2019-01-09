@@ -235,8 +235,10 @@ mod tests {
     mod config {
         use super::ConfigFile;
         use chrono::Utc;
+        use json;
         use std::fs::{self, File};
         use std::io::Write;
+        use tempfile;
 
         #[test]
         fn test_config_file_load_valid() {

@@ -44,7 +44,7 @@ pub fn restore(
 
 fn get_folder<'a, P>(config: &'a mut ConfigFile<P>, value: &str) -> AppResult<FileSystemFolder<'a>>
 where
-    P: AsRef<Path> + std::fmt::Debug,
+    P: AsRef<Path> + ::std::fmt::Debug,
 {
     config.get_folder(value).ok_or_else(|| {
         AppError::from(ErrorType::BadArgument(
