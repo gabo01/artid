@@ -75,6 +75,24 @@ pub struct Options {
     point: Option<usize>,
 }
 
+impl Options {
+    #[allow(missing_docs)]
+    pub fn new(overwrite: bool) -> Self {
+        Self {
+            overwrite,
+            point: None,
+        }
+    }
+
+    #[allow(missing_docs)]
+    pub fn with_point(overwrite: bool, point: usize) -> Self {
+        Self {
+            overwrite,
+            point: Some(point),
+        }
+    }
+}
+
 impl Default for Options {
     fn default() -> Self {
         Self {
