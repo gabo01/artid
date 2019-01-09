@@ -3,9 +3,10 @@
 
 #[macro_export]
 macro_rules! tmpdir {
-    () => {
-        tempfile::tempdir().expect("Unable to create tmp directory");
-    };
+    () => {{
+        use tempfile;
+        tempfile::tempdir().expect("Unable to create tmp directory")
+    }};
 }
 
 #[macro_export]
