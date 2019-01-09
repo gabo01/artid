@@ -35,7 +35,7 @@ impl<P: AsRef<Path>> FileTree<P> {
 
     pub fn add_file<S: Into<String>>(&mut self, file: S) {
         let file = file.into();
-        create_file!(self.path().join(&file), &file);
+        create_file!(self.path().join(&file), "{}", &file);
         self.files.push((file.clone(), FileKind::File(file)));
     }
 
