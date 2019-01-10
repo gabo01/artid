@@ -2,6 +2,7 @@
 name = "artid-core"
 version = "0.1.0"
 authors = ["Gabriel Dos Ramos Albo <dosramosgabriel@gmail.com>"]
+edition = "2018"
 
 [dependencies]
 env_path = {path = "../../crates/env_path", features = ["serde"]}
@@ -12,7 +13,7 @@ failure_derive = "0.1.2"
 log = "0.4.3"
 serde = "1.0.71"
 serde_derive = "1.0.71"
-serde_json = "1.0.24"
+json = {package = "serde_json", version = "1.0.24"}
 
 [dev-dependencies]
 tempfile = "3.0.3"

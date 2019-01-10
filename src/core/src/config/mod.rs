@@ -12,7 +12,7 @@ use chrono::offset::Utc;
 use chrono::DateTime;
 use env_path::EnvPath;
 use failure::ResultExt;
-use json;
+use log::{debug, info, log, trace};
 use std::fmt::Debug;
 use std::fs::File;
 use std::io::Write;
@@ -138,7 +138,7 @@ where
 ///
 /// Aside from the link, the modified field represents the last time the contents from
 /// the two folders where synced
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, serde_derive::Serialize, serde_derive::Deserialize)]
 pub struct FolderConfig {
     /// Link path. If thinked as a link, this is where the symbolic link is
     pub(crate) path: EnvPath,
@@ -227,12 +227,9 @@ impl<'a> FileSystemFolder<'a> {
 
 #[cfg(test)]
 mod tests {
-    use prelude::{ConfigFile, FolderConfig};
-
     mod config {
-        use super::ConfigFile;
+        use crate::prelude::ConfigFile;
         use chrono::Utc;
-        use json;
         use std::fs::{self, File};
         use std::io::Write;
         use tempfile;
@@ -382,7 +379,7 @@ mod tests {
     }
 
     mod folder {
-        use super::FolderConfig;
+        use crate::prelude::FolderConfig;
         use chrono::offset::Utc;
         use std::fs::{self, File, OpenOptions};
         use std::{env, io::Write, mem, path::PathBuf, thread, time};
