@@ -3,6 +3,7 @@ name = "artid-logger"
 version = "0.1.0"
 authors = ["Gabriel Dos Ramos Albo <dosramosgabriel@gmail.com>"]
 description = "Contains the logger implementation for a terminal logger"
+edition = "2018"
 
 [dependencies]
 atty = "0.2.11"

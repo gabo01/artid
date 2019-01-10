@@ -7,11 +7,6 @@
 //! info! and the other logging macros. Right now, it maps these calls to the standard
 //! error.
 
-extern crate atty;
-extern crate env_logger;
-extern crate log;
-extern crate yansi;
-
 use atty::Stream;
 use env_logger::{Builder, Env, DEFAULT_FILTER_ENV};
 use std::fmt::Display;
