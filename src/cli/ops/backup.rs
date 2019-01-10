@@ -1,16 +1,18 @@
 use chrono::Utc;
 use failure::ResultExt;
+use log::{info, log};
 use std::io;
 use std::path::Path;
 
-use app::ops::backup::{self, Options};
-use app::ops::core::CopyAction;
-use app::prelude::*;
+use crate::{AppError, AppResult, ErrorType};
+use artid::ops::backup::{self, Options};
+use artid::ops::core::CopyAction;
+use artid::prelude::*;
 use logger::pathlight;
-use {AppError, AppResult, ErrorType};
 
 pub fn backup(run: bool, path: &Path, folder: &Option<String>) -> AppResult<()> {
     info!("Starting backup on {}", pathlight(path));
+
     let options = Options::default();
     let mut config = ConfigFile::load(path)?;
 

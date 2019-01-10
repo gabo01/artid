@@ -1,13 +1,14 @@
 use chrono::Utc;
 use failure::ResultExt;
+use log::{info, log};
 use std::io;
 use std::path::Path;
 
-use app::ops::core::CopyAction;
-use app::ops::restore::{self, Options};
-use app::prelude::*;
+use crate::{AppError, AppResult, ErrorType};
+use artid::ops::core::CopyAction;
+use artid::ops::restore::{self, Options};
+use artid::prelude::*;
 use logger::pathlight;
-use {AppError, AppResult, ErrorType};
 
 pub fn restore(
     run: bool,
@@ -17,9 +18,9 @@ pub fn restore(
     point: &Option<usize>,
 ) -> AppResult<()> {
     info!("Starting restore of the contents in {}", pathlight(path));
+
     let options = match point.to_owned() {
         Some(value) => Options::with_point(overwrite, value),
-
         None => Options::new(overwrite),
     };
 

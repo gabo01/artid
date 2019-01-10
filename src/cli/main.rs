@@ -9,31 +9,18 @@
 //! is to parse the command line arguments and transform them into the proper calls to the
 //! core.
 
-#[macro_use]
-extern crate clap;
-extern crate chrono;
-extern crate failure;
-extern crate libc;
-#[macro_use]
-extern crate log;
-#[macro_use]
-extern crate failure_derive;
-
-// Internal packages
-extern crate artid_core as app;
-extern crate artid_logger as logger;
-
-use clap::App;
+use clap::{crate_authors, crate_description, crate_version, load_yaml, App};
 use failure::Fail;
 use libc::EXIT_FAILURE;
+use log::{error, log};
 use std::process::exit;
 
 mod errors;
 mod ops;
 mod parser;
 
-use errors::{AppError, ErrorType};
-use parser::Instance;
+use crate::errors::{AppError, ErrorType};
+use crate::parser::Instance;
 
 pub type AppResult<T> = Result<T, AppError>;
 
