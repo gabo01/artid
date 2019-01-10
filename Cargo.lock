@@ -32,7 +32,6 @@ dependencies = [
 name = "artid-core"
 version = "0.1.0"
 dependencies = [
- "artid-logger 0.1.0",
  "chrono 0.4.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "env_path 0.1.0",
  "failure 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",

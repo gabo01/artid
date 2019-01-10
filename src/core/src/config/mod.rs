@@ -18,8 +18,6 @@ use std::fs::File;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
-use logger::pathlight;
-
 mod errors;
 
 pub use self::errors::FileError;
@@ -73,8 +71,7 @@ where
     /// is that path must be relative to the root used to create the object.
     pub fn load_from<T: AsRef<Path>>(dir: P, path: T) -> Result<Self, FileError> {
         let file = dir.as_ref().join(path);
-
-        debug!("Config file location: {}", pathlight(&file));
+        debug!("Config file location: '{}'", file.display());
 
         let reader = File::open(&file).context(FileErrorType::Load(file.display().to_string()))?;
         let folders =
@@ -99,7 +96,7 @@ where
     pub fn save_to<T: AsRef<Path>>(&self, to: T) -> Result<(), FileError> {
         let file = self.dir.as_ref().join(to);
 
-        debug!("Config file location: {}", pathlight(&file));
+        debug!("Config file location: '{}'", file.display());
 
         write!(
             File::create(&file).context(FileErrorType::Save(file.display().to_string()))?,
@@ -108,7 +105,7 @@ where
         )
         .context(FileErrorType::Save(file.display().to_string()))?;
 
-        info!("Config file saved on {}", pathlight(file));
+        info!("Config file saved on '{}'", file.display());
         Ok(())
     }
 

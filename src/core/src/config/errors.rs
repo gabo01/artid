@@ -5,8 +5,6 @@
 use failure::{Backtrace, Context, Fail};
 use std::fmt::{self, Display};
 
-use logger::highlight;
-
 pub type PathRepr = String;
 
 /// Underlying cause of failure when trying to load a file
@@ -20,23 +18,19 @@ pub(super) enum FileErrorType {
 impl Display for FileErrorType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            FileErrorType::Load(ref path) => write!(
-                f,
-                "Unable to read configuration from disk path {}",
-                highlight(path)
-            ),
+            FileErrorType::Load(ref path) => {
+                write!(f, "Unable to read configuration from disk path '{}'", path)
+            }
 
             FileErrorType::Parse(ref path) => write!(
                 f,
-                "Configuration format on disk path {} is not valid",
-                highlight(path)
+                "Configuration format on disk path '{}' is not valid",
+                path
             ),
 
-            FileErrorType::Save(ref path) => write!(
-                f,
-                "Unable to save configuration into disk path {}",
-                highlight(path)
-            ),
+            FileErrorType::Save(ref path) => {
+                write!(f, "Unable to save configuration into disk path '{}'", path)
+            }
         }
     }
 }

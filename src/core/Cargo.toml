@@ -4,7 +4,6 @@ version = "0.1.0"
 authors = ["Gabriel Dos Ramos Albo <dosramosgabriel@gmail.com>"]
 
 [dependencies]
-artid-logger = {path = "../logger"}
 env_path = {path = "../../crates/env_path", features = ["serde"]}
 
 chrono = {version = "0.4.5", features = ["serde"]}
