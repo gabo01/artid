@@ -1,9 +1,4 @@
-extern crate regex;
-#[macro_use]
-extern crate lazy_static;
-#[cfg(feature = "serde")]
-extern crate serde;
-
+use lazy_static::lazy_static;
 use regex::{Captures, Regex};
 #[cfg(feature = "serde")]
 use serde::{

@@ -2,6 +2,7 @@
 name = "env_path"
 version = "0.1.0"
 authors = ["Gabriel Dos Ramos Albo <dosramosgabriel@gmail.com>"]
+edition = "2018"
 
 [dependencies]
 failure = "0.1.2"
