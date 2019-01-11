@@ -2,18 +2,16 @@
 ///
 /// The wrappers job is to call the command line parser and create a model of the operations
 /// that the user wishes to perform.
-use chrono::SecondsFormat;
+use chrono::{SecondsFormat, Utc};
 use clap::ArgMatches;
 use failure::ResultExt;
 use std::path::{Path, PathBuf};
 
-// Internal imports
 use super::ops;
-use app::prelude::*;
-use chrono::Utc;
-use errors::{AppError, ErrorType};
+use crate::errors::{AppError, ErrorType};
+use crate::AppResult;
+use artid::prelude::*;
 use logger::{highlight, pathlight};
-use AppResult;
 
 macro_rules! curr_dir {
     () => {

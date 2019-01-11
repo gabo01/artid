@@ -42,21 +42,6 @@
 //! in order to integrate this library with an external frontend, for example electron, a
 //! bridge must be written.
 
-extern crate chrono;
-extern crate failure;
-#[macro_use]
-extern crate failure_derive;
-#[macro_use]
-extern crate log;
-extern crate serde;
-#[macro_use]
-extern crate serde_derive;
-extern crate serde_json as json;
-#[cfg(test)]
-extern crate tempfile;
-
-extern crate env_path;
-
 use std::fmt::{self, Debug};
 use std::ops::Deref;
 
@@ -123,6 +108,6 @@ impl<T: ?Sized> Deref for Debuggable<T> {
 
 #[allow(missing_docs)]
 pub mod prelude {
-    pub use config::{ConfigFile, FileError, FileSystemFolder, FolderConfig};
-    pub use ops::{Model, Operation, Operator};
+    pub use crate::config::{ConfigFile, FileError, FileSystemFolder, FolderConfig};
+    pub use crate::ops::{Model, Operation, Operator};
 }

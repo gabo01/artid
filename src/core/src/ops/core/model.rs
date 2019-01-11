@@ -8,7 +8,7 @@ use std::os::windows::fs::symlink_file as symlink;
 use std::path::PathBuf;
 
 use super::super::Model;
-use {Debuggable, FnBox};
+use crate::{Debuggable, FnBox};
 
 /// An alias for a list of actions
 pub type Actions = Vec<CopyAction>;
@@ -180,7 +180,7 @@ mod tests {
 
     mod copy_model {
         use super::{CopyAction, CopyModel};
-        use ops::Model;
+        use crate::ops::Model;
         use std::fs::File;
         use tempfile;
 

@@ -5,7 +5,7 @@
 use failure::{Backtrace, Context, Fail};
 use std::fmt::{self, Display};
 
-use app::prelude::FileError;
+use artid::prelude::FileError;
 
 #[derive(Debug)]
 pub struct AppError {
@@ -28,7 +28,7 @@ impl Display for AppError {
     }
 }
 
-#[derive(Clone, Debug, Fail, Eq, PartialEq)]
+#[derive(Clone, Debug, failure_derive::Fail, Eq, PartialEq)]
 pub enum ErrorType {
     #[fail(display = "Unable to perform the requested operation")]
     Operative,

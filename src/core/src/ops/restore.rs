@@ -11,6 +11,7 @@
 
 use chrono::{DateTime, Utc};
 use failure::{Backtrace, Context, Fail, ResultExt};
+use log::{debug, info, log};
 use std::fmt::{self, Debug, Display};
 use std::io;
 use std::path::Path;
@@ -19,7 +20,7 @@ use super::{
     core::{self, Actions, CopyAction, CopyModel, MultipleCopyModel},
     Model, Operation, Operator,
 };
-use prelude::{ConfigFile, FileSystemFolder};
+use crate::prelude::{ConfigFile, FileSystemFolder};
 
 /// This function is responsible for making the restore model for the given operator
 pub fn restore<'a, O: Operator<'a, Restore>>(
@@ -207,7 +208,7 @@ mod tests {
 
     use super::super::test_helpers::{FileKind, FileTree};
     use super::{Model, Operator, Options, Restore};
-    use prelude::{FileSystemFolder, FolderConfig};
+    use crate::prelude::{FileSystemFolder, FolderConfig};
 
     macro_rules! backup {
         ($root:ident, $stamp:ident, $generate:expr) => {{

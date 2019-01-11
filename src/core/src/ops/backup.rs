@@ -20,7 +20,7 @@ use super::{
     core::{self, Actions, CopyAction, CopyModel, MultipleCopyModel},
     Model, Operation, Operator,
 };
-use prelude::{ConfigFile, FileSystemFolder};
+use crate::prelude::{ConfigFile, FileSystemFolder};
 
 /// This function is responsible for making the backup model for the given operator
 pub fn backup<'a, O: Operator<'a, Backup>>(
@@ -109,7 +109,7 @@ impl<'mo, P: AsRef<Path> + Debug> Operator<'mo, Backup> for ConfigFile<P> {
             self.folders
                 .iter_mut()
                 .map(|e| {
-                    let mut folder = e.apply_root(&dir);
+                    let folder = e.apply_root(&dir);
 
                     Ok(CopyModel::new(
                         actions(&folder, options, stamp)?,
@@ -163,7 +163,7 @@ mod tests {
 
     use super::super::test_helpers::{FileKind, FileTree};
     use super::{Backup, Model, Operator, Options};
-    use prelude::{FileSystemFolder, FolderConfig};
+    use crate::prelude::{FileSystemFolder, FolderConfig};
 
     macro_rules! filetree {
         ($var:ident, $join:expr, $push:expr) => {{
