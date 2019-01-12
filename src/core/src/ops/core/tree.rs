@@ -434,7 +434,9 @@ fn modified<F: FileSystem>(file: &F) -> Option<SystemTime> {
 
 #[cfg(test)]
 mod tests {
-    use super::{DirTree, Direction, FileType, Presence, TreeIterNode, TreeNode};
+    use super::{
+        DirTree, Direction, FileSystem, FileType, Local, Presence, Route, TreeIterNode, TreeNode,
+    };
     use std::fs::File;
     use tempfile;
 
@@ -445,8 +447,11 @@ mod tests {
         create_file!(tmppath!(dst, "a.txt"));
         let node = TreeNode::new("".into(), Presence::Both, FileType::File);
 
-        assert!(TreeIterNode::new(src.path(), dst.path(), &node).synced(Direction::Forward));
-        assert!(TreeIterNode::new(dst.path(), src.path(), &node).synced(Direction::Backward))
+        let src = Local::new(src.path());
+        let dst = Local::new(dst.path());
+
+        assert!(TreeIterNode::new(&src, &dst, &node).synced(Direction::Forward));
+        assert!(TreeIterNode::new(&src, &dst, &node).synced(Direction::Backward))
     }
 
     mod file_system {
@@ -469,7 +474,7 @@ mod tests {
     }
 
     mod tree {
-        use super::{DirTree, FileType, Presence, TreeNode};
+        use super::{DirTree, FileSystem, FileType, Local, Presence, Route, TreeNode};
         use std::fs::{self, File};
         use std::path::PathBuf;
         use tempfile;
@@ -508,28 +513,33 @@ mod tests {
         #[test]
         fn test_dir_root() {
             let (src, dst) = (tmpdir!(), tmpdir!());
-            let unexistant = src.path().join("unexistant");
+
+            let unexistant = Local::new(src.path().join("unexistant"));
+            let src = Local::new(src.path());
+            let dst = Local::new(dst.path());
 
             // test with an unexistant dst
-            let tree = DirTree::new(src.path(), &unexistant).expect("Failed on tree creation");
+            let tree = DirTree::new(&src, &unexistant).expect("Failed on tree creation");
             assert_eq!(tree.root.presence, Presence::Src);
 
             // test with an unexistant src
-            let tree = DirTree::new(&unexistant, dst.path()).expect("Failed on tree creation");
+            let tree = DirTree::new(&unexistant, &dst).expect("Failed on tree creation");
             assert_eq!(tree.root.presence, Presence::Dst);
 
             // test with both points
-            let tree = DirTree::new(src.path(), dst.path()).expect("Failed on tree creation");
+            let tree = DirTree::new(&src, &dst).expect("Failed on tree creation");
             assert_eq!(tree.root.presence, Presence::Both);
         }
 
         #[test]
         fn test_node_read_empty() {
             let (src, dst) = (tmpdir!(), tmpdir!());
-            let unexistant = dst.path().join("unexistant");
+
+            let unexistant = Local::new(dst.path().join("unexistant"));
+            let src = Local::new(src.path());
 
             let mut node = TreeNode::new("".into(), Presence::Src, FileType::Dir);
-            node.read(src.path(), &unexistant)
+            node.read(&src, &unexistant)
                 .expect("Unable to read the directory");
 
             assert!(node.children.is_some());
@@ -538,15 +548,17 @@ mod tests {
         #[test]
         fn test_node_read() {
             let (src, dst) = (tmpdir!(), tmpdir!());
-            let unexistant = dst.path().join("unexistant");
 
             create_file!(tmppath!(src, "a.txt"));
             create_file!(tmppath!(src, "b.txt"));
             fs::create_dir_all(tmppath!(src, "c")).expect("Unable to create dir");
             create_file!(tmppath!(src, "c/d.txt"));
 
+            let src = Local::new(src.path());
+            let unexistant = Local::new(dst.path().join("unexistant"));
+
             let mut node = TreeNode::new("".into(), Presence::Src, FileType::Dir);
-            node.read(src.path(), &unexistant)
+            node.read(&src, &unexistant)
                 .expect("Unable to read the directory");
             sort(&mut node);
 
@@ -579,15 +591,17 @@ mod tests {
         #[test]
         fn test_node_read_recursive() {
             let (src, dst) = (tmpdir!(), tmpdir!());
-            let unexistant = dst.path().join("unexistant");
 
             create_file!(tmppath!(src, "a.txt"));
             create_file!(tmppath!(src, "b.txt"));
             fs::create_dir_all(tmppath!(src, "c")).expect("Unable to create dir");
             create_file!(tmppath!(src, "c/d.txt"));
 
+            let src = Local::new(src.path());
+            let unexistant = Local::new(dst.path().join("unexistant"));
+
             let mut node = TreeNode::new("".into(), Presence::Src, FileType::Dir);
-            node.read_recursive(src.path(), &unexistant)
+            node.read_recursive(&src, &unexistant)
                 .expect("Unable to read the directory");
             sort(&mut node);
 
@@ -626,7 +640,10 @@ mod tests {
         fn test_tree_generation() {
             let (src, dst) = generate_tree();
 
-            let mut tree = DirTree::new(src.path(), dst.path()).expect("Unable to create tree");
+            let src = Local::new(src.path());
+            let dst = Local::new(dst.path());
+
+            let mut tree = DirTree::new(&src, &dst).expect("Unable to create tree");
             sort(&mut tree.root);
 
             assert_eq!(
@@ -688,7 +705,10 @@ mod tests {
         fn test_tree_iteration() {
             let (src, dst) = generate_tree();
 
-            let mut tree = DirTree::new(src.path(), dst.path()).expect("Unable to create tree");
+            let src = Local::new(src.path());
+            let dst = Local::new(dst.path());
+
+            let mut tree = DirTree::new(&src, &dst).expect("Unable to create tree");
             sort(&mut tree.root);
 
             assert_eq!(

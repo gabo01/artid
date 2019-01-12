@@ -217,9 +217,11 @@ where
 #[cfg(test)]
 mod tests {
     use super::{CopyAction, CopyModel};
+    use super::{FileSystem, Local, Route};
 
     mod copy_model {
         use super::{CopyAction, CopyModel};
+        use super::{FileSystem, Local, Route};
         use crate::ops::Model;
         use std::fs::File;
         use tempfile;
@@ -228,10 +230,10 @@ mod tests {
         fn test_create_dir() {
             let dir = tmpdir!();
             let action = CopyAction::CreateDir {
-                target: dir.path().join("asd"),
+                target: Local::new(dir.path().join("asd")),
             };
 
-            let model = CopyModel::new(vec![action], || {});
+            let model: CopyModel<'_, Local, Local> = CopyModel::new(vec![action], || {});
             model.run().expect("Unable to execute model");
             assert!(tmppath!(dir, "asd").exists());
             assert!(tmppath!(dir, "asd").is_dir());
@@ -241,10 +243,10 @@ mod tests {
         fn test_create_nested_dir() {
             let dir = tmpdir!();
             let action = CopyAction::CreateDir {
-                target: dir.path().join("asd/as"),
+                target: Local::new(dir.path().join("asd/as")),
             };
 
-            let model = CopyModel::new(vec![action], || {});
+            let model: CopyModel<'_, Local, Local> = CopyModel::new(vec![action], || {});
             model.run().expect("Unable to execute model");
             assert!(tmppath!(dir, "asd/as").exists());
             assert!(tmppath!(dir, "asd/as").is_dir());
@@ -258,16 +260,16 @@ mod tests {
 
             let actions = vec![
                 CopyAction::CopyFile {
-                    src: a_path.clone(),
-                    dst: tmppath!(dst, "a.txt"),
+                    src: Local::new(a_path.clone()),
+                    dst: Local::new(tmppath!(dst, "a.txt")),
                 },
                 CopyAction::CopyFile {
-                    src: b_path.clone(),
-                    dst: tmppath!(dst, "b.txt"),
+                    src: Local::new(b_path.clone()),
+                    dst: Local::new(tmppath!(dst, "b.txt")),
                 },
             ];
 
-            let model = CopyModel::new(actions, || {});
+            let model: CopyModel<'_, Local, Local> = CopyModel::new(actions, || {});
             model.run().expect("Unable to execute model");
 
             assert!(tmppath!(dst, "a.txt").exists());
@@ -284,16 +286,16 @@ mod tests {
 
             let actions = vec![
                 CopyAction::CopyLink {
-                    src: a_path.clone(),
-                    dst: tmppath!(dst, "a.txt"),
+                    src: Local::new(a_path.clone()),
+                    dst: Local::new(tmppath!(dst, "a.txt")),
                 },
                 CopyAction::CopyLink {
-                    src: b_path.clone(),
-                    dst: tmppath!(dst, "b.txt"),
+                    src: Local::new(b_path.clone()),
+                    dst: Local::new(tmppath!(dst, "b.txt")),
                 },
             ];
 
-            let model = CopyModel::new(actions, || {});
+            let model: CopyModel<'_, Local, Local> = CopyModel::new(actions, || {});
             model.run().expect("Unable to execute model");
 
             assert!(tmppath!(dst, "a.txt").exists());
@@ -313,19 +315,19 @@ mod tests {
 
             let actions = vec![
                 CopyAction::CreateDir {
-                    target: dst.clone(),
+                    target: Local::new(dst.clone()),
                 },
                 CopyAction::CopyFile {
-                    src: a_path,
-                    dst: dst.join("a.txt"),
+                    src: Local::new(a_path),
+                    dst: Local::new(dst.join("a.txt")),
                 },
                 CopyAction::CopyLink {
-                    src: b_path,
-                    dst: dst.join("b.txt"),
+                    src: Local::new(b_path),
+                    dst: Local::new(dst.join("b.txt")),
                 },
             ];
 
-            let model = CopyModel::new(actions, || {});
+            let model: CopyModel<'_, Local, Local> = CopyModel::new(actions, || {});
             model.run().expect("Unable to execute model");
 
             assert!(tmppath!(src, "target").exists());
