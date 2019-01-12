@@ -8,7 +8,7 @@ pub use self::local::Local;
 
 /// Abstraction over a filesystem. Allows to use different representations of a file
 /// system for artid's operations.
-/// 
+///
 /// All the functions present in this trait are present in the standard library and are
 /// intended to behave in a similar way to the ones implemented there
 pub trait FileSystem: Route {
@@ -65,7 +65,7 @@ pub trait FileSystem: Route {
 
 /// Abstraction over a path. It implements an abstraction over the path methods that
 /// do not need to touch the filesystem. If the required method has to do a system call,
-/// then it goes inside the FileSystem trait and not this one 
+/// then it goes inside the FileSystem trait and not this one
 pub trait Route {
     #[allow(missing_docs)]
     fn path(&self) -> &Path;

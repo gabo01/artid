@@ -1,11 +1,11 @@
 use std::fmt::Debug;
 use std::fs::{self, OpenOptions};
 use std::io::{self, Error, ErrorKind};
-use std::path::{Display, Path, PathBuf};
 #[cfg(unix)]
 use std::os::unix::fs::symlink;
 #[cfg(windows)]
 use std::os::windows::fs::symlink_file as symlink;
+use std::path::{Display, Path, PathBuf};
 
 use super::{FileSystem, Route};
 
