@@ -6,7 +6,7 @@ use std::path::Path;
 
 use crate::{AppError, AppResult, ErrorType};
 use artid::ops::backup::{self, Options};
-use artid::ops::core::CopyAction;
+use artid::ops::core::{CopyAction, Route};
 use artid::prelude::*;
 use logger::pathlight;
 
@@ -44,14 +44,21 @@ where
     })
 }
 
-fn operate<M: Model<Action = CopyAction, Error = io::Error>>(run: bool, model: M) -> AppResult<()> {
+fn operate<M>(run: bool, model: M) -> AppResult<()>
+where
+    M: Model<Action = backup::Action, Error = io::Error>,
+{
     if run {
         model.run().context(ErrorType::Operative)?;
         info!("Backup performed successfully");
     } else {
         model.log(&|action| {
             if let CopyAction::CopyFile { ref src, ref dst } = action {
-                info!("sync {} -> {}", pathlight(&src), pathlight(&dst));
+                info!(
+                    "sync {} -> {}",
+                    pathlight(src.path()),
+                    pathlight(dst.path())
+                );
             }
         });
     }
