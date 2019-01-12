@@ -16,11 +16,16 @@ use std::fmt::{self, Debug, Display};
 use std::io;
 use std::path::Path;
 
-use super::{
-    core::{self, Actions, CopyAction, CopyModel, MultipleCopyModel},
-    Model, Operation, Operator,
-};
+use super::core::{self, CopyAction, CopyModel, MultipleCopyModel};
+use super::core::{FileSystem, Local, Route};
+use super::{Model, Operation, Operator};
 use crate::prelude::{ConfigFile, FileSystemFolder};
+
+#[allow(missing_docs)]
+pub type Action = CopyAction<Local, Local>;
+
+#[allow(missing_docs)]
+pub type Actions = core::Actions<Local, Local>;
 
 /// This function is responsible for making the restore model for the given operator
 pub fn restore<'a, O: Operator<'a, Restore>>(
@@ -119,6 +124,9 @@ impl Restore {
     fn from_point(restore: &Path, backup: &Path, overwrite: bool) -> Result<Actions, io::Error> {
         use self::core::{DirTree, FileType, Presence};
 
+        let restore = Local::new(restore);
+        let backup = Local::new(backup);
+
         let tree = DirTree::new(&restore, &backup)?;
         Ok(tree
             .iter()
@@ -145,7 +153,7 @@ impl Restore {
 impl Operation for Restore {}
 
 impl<'mo, P: AsRef<Path> + Debug> Operator<'mo, Restore> for ConfigFile<P> {
-    type Model = MultipleCopyModel<'mo>;
+    type Model = MultipleCopyModel<'mo, Local, Local>;
     type Error = BuildError;
     type Options = Options;
 
@@ -165,7 +173,7 @@ impl<'mo, P: AsRef<Path> + Debug> Operator<'mo, Restore> for ConfigFile<P> {
 }
 
 impl<'mo> Operator<'mo, Restore> for FileSystemFolder<'mo> {
-    type Model = CopyModel<'mo>;
+    type Model = CopyModel<'mo, Local, Local>;
     type Error = BuildError;
     type Options = Options;
 
