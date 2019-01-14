@@ -1,3 +1,8 @@
+//! Contains the details needed for modeling most of artid's operations
+//!
+//! The main element of this module is the CopyModel that is composed by a
+//! set of CopyActions and a callback to be executed after successfully running a model.
+
 use std::fmt::Debug;
 use std::fs;
 use std::iter::FromIterator;
@@ -8,7 +13,7 @@ use std::os::windows::fs::symlink_file as symlink;
 use std::path::PathBuf;
 
 use super::super::Model;
-use super::{FileKind, FileSystem, Local, Metadata, Route};
+use super::filesystem::{FileKind, FileSystem, Local, Metadata, Route};
 use crate::{Debuggable, FnBox};
 
 #[allow(missing_docs)]

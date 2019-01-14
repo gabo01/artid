@@ -16,8 +16,9 @@ use std::fmt::Debug;
 use std::io;
 use std::path::Path;
 
-use super::core::{self, CopyAction, CopyModel, MultipleCopyModel};
-use super::core::{FileSystem, Local, Route};
+use super::core;
+use super::core::filesystem::{FileSystem, Local, Route};
+use super::core::model::{CopyAction, CopyModel, MultipleCopyModel};
 use super::{Model, Operation, Operator};
 use crate::prelude::{ConfigFile, FileSystemFolder};
 
@@ -25,7 +26,7 @@ use crate::prelude::{ConfigFile, FileSystemFolder};
 pub type Action = CopyAction<Local, Local>;
 
 #[allow(missing_docs)]
-pub type Actions = core::Actions<Local, Local>;
+pub type Actions = core::model::Actions<Local, Local>;
 
 /// This function is responsible for making the backup model for the given operator
 pub fn backup<'a, O: Operator<'a, Backup>>(
@@ -51,7 +52,7 @@ pub struct Backup;
 
 impl Backup {
     fn with_previous(base: &Path, old: &Path, new: &Path) -> Result<Actions, io::Error> {
-        use self::core::{DirTree, Direction, FileSystem, Presence};
+        use self::core::tree::{DirTree, Direction, FileType, Presence};
 
         let base = Local::new(base);
         let old = Local::new(old);
@@ -62,7 +63,7 @@ impl Backup {
             .iter()
             .filter(|e| e.presence() != Presence::Dst)
             .map(|e| {
-                if e.kind() == core::FileType::Dir {
+                if e.kind() == FileType::Dir {
                     CopyAction::CreateDir {
                         target: new.join(e.path()),
                     }
@@ -82,7 +83,7 @@ impl Backup {
     }
 
     fn from_scratch(base: &Path, new: &Path) -> Result<Actions, io::Error> {
-        use self::core::{DirTree, FileType};
+        use self::core::tree::{DirTree, FileType};
 
         let base = Local::new(base);
         let new = Local::new(new);

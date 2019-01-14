@@ -5,7 +5,7 @@ use std::io;
 use std::path::Path;
 
 use crate::{AppError, AppResult, ErrorType};
-use artid::ops::core::{CopyAction, Route};
+use artid::ops::core::{filesystem::Route, model::CopyAction};
 use artid::ops::restore::{self, Options};
 use artid::prelude::*;
 use logger::pathlight;

@@ -1,3 +1,11 @@
+//! Allows to create a tree representation in memory of two different directories
+//! and build a comparison tree between the two.
+//!
+//! This may be the most important module inside artid since the operations performed
+//! are esentially models created from the information given by DirTree.
+//!
+//!
+
 use log::{log, warn};
 use std::collections::{HashMap, VecDeque};
 use std::ffi::OsString;
@@ -5,14 +13,13 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
-use super::{Directory, FileSystem, Local, Metadata, Route};
+use super::filesystem::{Directory, FileKind, FileSystem, Local, Metadata, Route};
 
 /// Reduce the boilerplate when reading a directory
 macro_rules! read {
     ($path:expr) => {
         $path
             .read_dir()?
-            .into_iter()
             .filter_map(|e| e.ok())
             .map(|e| (e.path(), e.file_name()))
     };

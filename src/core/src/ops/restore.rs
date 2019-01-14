@@ -16,8 +16,9 @@ use std::fmt::{self, Debug, Display};
 use std::io;
 use std::path::Path;
 
-use super::core::{self, CopyAction, CopyModel, MultipleCopyModel};
-use super::core::{FileSystem, Local, Route};
+use super::core;
+use super::core::filesystem::{FileSystem, Local, Route};
+use super::core::model::{CopyAction, CopyModel, MultipleCopyModel};
 use super::{Model, Operation, Operator};
 use crate::prelude::{ConfigFile, FileSystemFolder};
 
@@ -25,7 +26,7 @@ use crate::prelude::{ConfigFile, FileSystemFolder};
 pub type Action = CopyAction<Local, Local>;
 
 #[allow(missing_docs)]
-pub type Actions = core::Actions<Local, Local>;
+pub type Actions = core::model::Actions<Local, Local>;
 
 /// This function is responsible for making the restore model for the given operator
 pub fn restore<'a, O: Operator<'a, Restore>>(
@@ -122,7 +123,7 @@ pub struct Restore;
 
 impl Restore {
     fn from_point(restore: &Path, backup: &Path, overwrite: bool) -> Result<Actions, io::Error> {
-        use self::core::{DirTree, FileType, Presence};
+        use self::core::tree::{DirTree, FileType, Presence};
 
         let restore = Local::new(restore);
         let backup = Local::new(backup);

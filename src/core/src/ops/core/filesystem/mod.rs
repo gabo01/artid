@@ -1,3 +1,9 @@
+//! Implementation of the abstractions over the filesystem.
+//!
+//! These abstractions are designed to allow for the implementation of multiple
+//! filesystem representations that share behavioral traits such as a zip file
+//! or a remote server.
+
 use std::ffi::OsString;
 use std::fs::{self, OpenOptions};
 use std::io;
