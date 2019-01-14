@@ -5,10 +5,13 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
+use super::{Directory, FileSystem, Local, Metadata, Route};
+
 /// Reduce the boilerplate when reading a directory
 macro_rules! read {
     ($path:expr) => {
-        fs::read_dir($path)?
+        $path
+            .read_dir()?
             .into_iter()
             .filter_map(|e| e.ok())
             .map(|e| (e.path(), e.file_name()))
@@ -22,16 +25,24 @@ macro_rules! read {
 /// Trying to create a DirTree may result in an error because, in order to create it, the filesystem
 /// must be queried.
 #[derive(Debug)]
-pub struct DirTree<'a> {
-    src: &'a Path,
-    dst: &'a Path,
+pub struct DirTree<'a, S, D>
+where
+    S: FileSystem + 'a,
+    D: FileSystem + 'a,
+{
+    src: &'a S,
+    dst: &'a D,
     root: TreeNode,
 }
 
-impl<'a> DirTree<'a> {
+impl<'a, S, D> DirTree<'a, S, D>
+where
+    S: FileSystem + 'a,
+    D: FileSystem + 'a,
+{
     /// Creates a new comparison DirTree from two path references. As told in the type level
     /// documentation, creation of this tree may fail.
-    pub fn new(src: &'a Path, dst: &'a Path) -> ::std::io::Result<Self> {
+    pub fn new(src: &'a S, dst: &'a D) -> ::std::io::Result<Self> {
         let (srcexists, dstexists) = (src.exists(), dst.exists());
         let presence = if srcexists && dstexists {
             Presence::Both
@@ -42,24 +53,30 @@ impl<'a> DirTree<'a> {
         };
 
         let mut root = TreeNode::new("".into(), presence, FileType::Dir);
-        root.read_recursive(&src, &dst)?;
+        root.read_recursive(src, dst)?;
 
         Ok(Self { src, dst, root })
     }
 
     /// Creates an iterator over the elements of the tree. See TreeIter for details about the
     /// iterator created by this method
-    pub fn iter<'b>(&'b self) -> TreeIter<'a, 'b> {
+    pub fn iter<'b>(&'b self) -> TreeIter<'a, 'b, S, D>
+    where
+        S: 'b,
+        D: 'b,
+    {
         TreeIter::new(self)
     }
 }
 
-impl<'a, 'b> IntoIterator for &'b DirTree<'a>
+impl<'a, 'b, S, D> IntoIterator for &'b DirTree<'a, S, D>
 where
     'a: 'b,
+    S: FileSystem + 'a,
+    D: FileSystem + 'a,
 {
-    type Item = TreeIterNode<'a, 'b>;
-    type IntoIter = TreeIter<'a, 'b>;
+    type Item = TreeIterNode<'a, 'b, S, D>;
+    type IntoIter = TreeIter<'a, 'b, S, D>;
 
     fn into_iter(self) -> Self::IntoIter {
         self.iter()
@@ -141,17 +158,17 @@ impl TreeNode {
     /// Performs the read in search of the children of the node (see read function docs). The only
     /// difference is that these function will be also applied to the children found in order to
     /// build a full tree with this node as the root.
-    pub fn read_recursive<T, P>(&mut self, src: T, dst: P) -> ::std::io::Result<()>
+    pub fn read_recursive<S, D>(&mut self, src: &S, dst: &D) -> ::std::io::Result<()>
     where
-        T: AsRef<Path>,
-        P: AsRef<Path>,
+        S: FileSystem,
+        D: FileSystem,
     {
-        self.read(src.as_ref(), dst.as_ref())?;
+        self.read(src, dst)?;
 
         if let Some(ref mut val) = self.children {
             for child in val {
                 if child.kind == FileType::Dir {
-                    child.read_recursive(src.as_ref(), dst.as_ref())?;
+                    child.read_recursive(src, dst)?;
                 }
             }
         } else {
@@ -165,13 +182,13 @@ impl TreeNode {
     /// it makes no sense. To get the children, a source and destination, these are the source
     /// and destination paths of the tree, must be provided. Every element found during
     /// the read process will be added to as children of this node.
-    pub fn read<T: AsRef<Path>, P: AsRef<Path>>(
-        &mut self,
-        src: T,
-        dst: P,
-    ) -> ::std::io::Result<()> {
-        let src = src.as_ref().join(&self.path);
-        let dst = dst.as_ref().join(&self.path);
+    pub fn read<S, D>(&mut self, src: &S, dst: &D) -> ::std::io::Result<()>
+    where
+        S: FileSystem,
+        D: FileSystem,
+    {
+        let src = src.join(&self.path);
+        let dst = dst.join(&self.path);
 
         match self.presence {
             Presence::Both => {
@@ -246,32 +263,38 @@ impl TreeNode {
 /// This iterator goes through the tree nodes by levels, it goes through each level before going
 /// to the next one. In other words, is an horizontal iterator.
 #[derive(Debug)]
-pub struct TreeIter<'a, 'b>
+pub struct TreeIter<'a, 'b, S, D>
 where
     'a: 'b,
+    S: FileSystem + 'a,
+    D: FileSystem + 'a,
 {
-    tree: &'b DirTree<'a>,
-    elements: VecDeque<TreeIterNode<'a, 'b>>,
+    tree: &'b DirTree<'a, S, D>,
+    elements: VecDeque<TreeIterNode<'a, 'b, S, D>>,
 }
 
-impl<'a, 'b> TreeIter<'a, 'b>
+impl<'a, 'b, S, D> TreeIter<'a, 'b, S, D>
 where
     'a: 'b,
+    S: FileSystem + 'a,
+    D: FileSystem + 'a,
 {
     /// Creates the horizontal iterator based on the given tree
-    pub fn new(tree: &'b DirTree<'a>) -> Self {
+    pub fn new(tree: &'b DirTree<'a, S, D>) -> Self {
         let mut elements = VecDeque::new();
-        elements.push_back(TreeIterNode::new(&tree.src, &tree.dst, &tree.root));
+        elements.push_back(TreeIterNode::new(tree.src, tree.dst, &tree.root));
 
         Self { tree, elements }
     }
 }
 
-impl<'a, 'b> Iterator for TreeIter<'a, 'b>
+impl<'a, 'b, S, D> Iterator for TreeIter<'a, 'b, S, D>
 where
     'a: 'b,
+    S: FileSystem + 'a,
+    D: FileSystem + 'a,
 {
-    type Item = TreeIterNode<'a, 'b>;
+    type Item = TreeIterNode<'a, 'b, S, D>;
 
     fn next(&mut self) -> Option<Self::Item> {
         let next = self.elements.pop_front();
@@ -318,19 +341,27 @@ pub enum Direction {
 /// TreeIter type, this element takes the pure node and combines it with the tree's metadata to
 /// have a full link between two filesystem locations.
 #[derive(Debug)]
-pub struct TreeIterNode<'a, 'b> {
+pub struct TreeIterNode<'a, 'b, S, D>
+where
+    S: FileSystem + 'a,
+    D: FileSystem + 'a,
+{
     #[allow(missing_docs)]
-    pub src: &'a Path,
+    pub src: &'a S,
     #[allow(missing_docs)]
-    pub dst: &'a Path,
+    pub dst: &'a D,
     #[allow(missing_docs)]
     pub node: &'b TreeNode,
 }
 
-impl<'a, 'b> TreeIterNode<'a, 'b> {
+impl<'a, 'b, S, D> TreeIterNode<'a, 'b, S, D>
+where
+    S: FileSystem,
+    D: FileSystem,
+{
     /// Creates the node from the pieces of information needed. Src and dst are the paths stored
     /// on the tree.
-    pub fn new(src: &'a Path, dst: &'a Path, node: &'b TreeNode) -> Self {
+    pub fn new(src: &'a S, dst: &'a D, node: &'b TreeNode) -> Self {
         Self { src, dst, node }
     }
 
@@ -354,21 +385,29 @@ impl<'a, 'b> TreeIterNode<'a, 'b> {
     /// Checks if the locations referenced by this node are synced given a syncing direction.
     /// See the docs of Direction to know more about what this check represents.
     pub fn synced(&self, direction: Direction) -> bool {
-        let (to_sync, to_be_synced) = match direction {
-            Direction::Forward => (
-                self.src.join(&self.node.path),
-                self.dst.join(&self.node.path),
-            ),
+        match direction {
+            Direction::Forward => {
+                let to_sync = self.src.join(&self.node.path);
+                let to_be_synced = self.dst.join(&self.node.path);
+                Self::check_sync(&to_sync, &to_be_synced)
+            }
 
-            Direction::Backward => (
-                self.dst.join(&self.node.path),
-                self.src.join(&self.node.path),
-            ),
-        };
+            Direction::Backward => {
+                let to_be_synced = self.dst.join(&self.node.path);
+                let to_sync = self.src.join(&self.node.path);
+                Self::check_sync(&to_sync, &to_be_synced)
+            }
+        }
+    }
 
+    fn check_sync<T, U>(to_sync: &T, to_be_synced: &U) -> bool
+    where
+        T: FileSystem,
+        U: FileSystem,
+    {
         if to_sync.exists() && to_be_synced.exists() {
-            if let Some(src) = modified(&to_sync) {
-                if let Some(dst) = modified(&to_be_synced) {
+            if let Some(src) = modified(to_sync) {
+                if let Some(dst) = modified(to_be_synced) {
                     return dst >= src;
                 }
             }
@@ -382,20 +421,22 @@ impl<'a, 'b> TreeIterNode<'a, 'b> {
 /// by the system. Since this is a measurement made by the system, the time returned by this
 /// function can be wrong in some cases: the user changed the date in it's system, an operation
 /// was queued and performed at a later time and some other cases.
-fn modified<P: AsRef<Path>>(file: P) -> Option<SystemTime> {
-    if let Ok(data) = file.as_ref().metadata() {
+fn modified<F: FileSystem>(file: &F) -> Option<SystemTime> {
+    if let Ok(data) = file.metadata() {
         if let Ok(time) = data.modified() {
             return Some(time);
         }
     }
 
-    warn!("Unable to access metadata for {}", file.as_ref().display());
+    warn!("Unable to access metadata for {}", file.display());
     None
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{DirTree, Direction, FileType, Presence, TreeIterNode, TreeNode};
+    use super::{
+        DirTree, Direction, FileSystem, FileType, Local, Presence, Route, TreeIterNode, TreeNode,
+    };
     use std::fs::File;
     use tempfile;
 
@@ -406,8 +447,11 @@ mod tests {
         create_file!(tmppath!(dst, "a.txt"));
         let node = TreeNode::new("".into(), Presence::Both, FileType::File);
 
-        assert!(TreeIterNode::new(src.path(), dst.path(), &node).synced(Direction::Forward));
-        assert!(TreeIterNode::new(dst.path(), src.path(), &node).synced(Direction::Backward))
+        let src = Local::new(src.path());
+        let dst = Local::new(dst.path());
+
+        assert!(TreeIterNode::new(&src, &dst, &node).synced(Direction::Forward));
+        assert!(TreeIterNode::new(&src, &dst, &node).synced(Direction::Backward))
     }
 
     mod file_system {
@@ -430,7 +474,7 @@ mod tests {
     }
 
     mod tree {
-        use super::{DirTree, FileType, Presence, TreeNode};
+        use super::{DirTree, FileSystem, FileType, Local, Presence, Route, TreeNode};
         use std::fs::{self, File};
         use std::path::PathBuf;
         use tempfile;
@@ -469,28 +513,33 @@ mod tests {
         #[test]
         fn test_dir_root() {
             let (src, dst) = (tmpdir!(), tmpdir!());
-            let unexistant = src.path().join("unexistant");
+
+            let unexistant = Local::new(src.path().join("unexistant"));
+            let src = Local::new(src.path());
+            let dst = Local::new(dst.path());
 
             // test with an unexistant dst
-            let tree = DirTree::new(src.path(), &unexistant).expect("Failed on tree creation");
+            let tree = DirTree::new(&src, &unexistant).expect("Failed on tree creation");
             assert_eq!(tree.root.presence, Presence::Src);
 
             // test with an unexistant src
-            let tree = DirTree::new(&unexistant, dst.path()).expect("Failed on tree creation");
+            let tree = DirTree::new(&unexistant, &dst).expect("Failed on tree creation");
             assert_eq!(tree.root.presence, Presence::Dst);
 
             // test with both points
-            let tree = DirTree::new(src.path(), dst.path()).expect("Failed on tree creation");
+            let tree = DirTree::new(&src, &dst).expect("Failed on tree creation");
             assert_eq!(tree.root.presence, Presence::Both);
         }
 
         #[test]
         fn test_node_read_empty() {
             let (src, dst) = (tmpdir!(), tmpdir!());
-            let unexistant = dst.path().join("unexistant");
+
+            let unexistant = Local::new(dst.path().join("unexistant"));
+            let src = Local::new(src.path());
 
             let mut node = TreeNode::new("".into(), Presence::Src, FileType::Dir);
-            node.read(src.path(), &unexistant)
+            node.read(&src, &unexistant)
                 .expect("Unable to read the directory");
 
             assert!(node.children.is_some());
@@ -499,15 +548,17 @@ mod tests {
         #[test]
         fn test_node_read() {
             let (src, dst) = (tmpdir!(), tmpdir!());
-            let unexistant = dst.path().join("unexistant");
 
             create_file!(tmppath!(src, "a.txt"));
             create_file!(tmppath!(src, "b.txt"));
             fs::create_dir_all(tmppath!(src, "c")).expect("Unable to create dir");
             create_file!(tmppath!(src, "c/d.txt"));
 
+            let src = Local::new(src.path());
+            let unexistant = Local::new(dst.path().join("unexistant"));
+
             let mut node = TreeNode::new("".into(), Presence::Src, FileType::Dir);
-            node.read(src.path(), &unexistant)
+            node.read(&src, &unexistant)
                 .expect("Unable to read the directory");
             sort(&mut node);
 
@@ -540,15 +591,17 @@ mod tests {
         #[test]
         fn test_node_read_recursive() {
             let (src, dst) = (tmpdir!(), tmpdir!());
-            let unexistant = dst.path().join("unexistant");
 
             create_file!(tmppath!(src, "a.txt"));
             create_file!(tmppath!(src, "b.txt"));
             fs::create_dir_all(tmppath!(src, "c")).expect("Unable to create dir");
             create_file!(tmppath!(src, "c/d.txt"));
 
+            let src = Local::new(src.path());
+            let unexistant = Local::new(dst.path().join("unexistant"));
+
             let mut node = TreeNode::new("".into(), Presence::Src, FileType::Dir);
-            node.read_recursive(src.path(), &unexistant)
+            node.read_recursive(&src, &unexistant)
                 .expect("Unable to read the directory");
             sort(&mut node);
 
@@ -587,7 +640,10 @@ mod tests {
         fn test_tree_generation() {
             let (src, dst) = generate_tree();
 
-            let mut tree = DirTree::new(src.path(), dst.path()).expect("Unable to create tree");
+            let src = Local::new(src.path());
+            let dst = Local::new(dst.path());
+
+            let mut tree = DirTree::new(&src, &dst).expect("Unable to create tree");
             sort(&mut tree.root);
 
             assert_eq!(
@@ -649,7 +705,10 @@ mod tests {
         fn test_tree_iteration() {
             let (src, dst) = generate_tree();
 
-            let mut tree = DirTree::new(src.path(), dst.path()).expect("Unable to create tree");
+            let src = Local::new(src.path());
+            let dst = Local::new(dst.path());
+
+            let mut tree = DirTree::new(&src, &dst).expect("Unable to create tree");
             sort(&mut tree.root);
 
             assert_eq!(

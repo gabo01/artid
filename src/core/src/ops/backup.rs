@@ -16,11 +16,16 @@ use std::fmt::Debug;
 use std::io;
 use std::path::Path;
 
-use super::{
-    core::{self, Actions, CopyAction, CopyModel, MultipleCopyModel},
-    Model, Operation, Operator,
-};
+use super::core::{self, CopyAction, CopyModel, MultipleCopyModel};
+use super::core::{FileSystem, Local, Route};
+use super::{Model, Operation, Operator};
 use crate::prelude::{ConfigFile, FileSystemFolder};
+
+#[allow(missing_docs)]
+pub type Action = CopyAction<Local, Local>;
+
+#[allow(missing_docs)]
+pub type Actions = core::Actions<Local, Local>;
 
 /// This function is responsible for making the backup model for the given operator
 pub fn backup<'a, O: Operator<'a, Backup>>(
@@ -46,9 +51,13 @@ pub struct Backup;
 
 impl Backup {
     fn with_previous(base: &Path, old: &Path, new: &Path) -> Result<Actions, io::Error> {
-        use self::core::{DirTree, Direction, Presence};
+        use self::core::{DirTree, Direction, FileSystem, Presence};
 
-        let tree = DirTree::new(base, old)?;
+        let base = Local::new(base);
+        let old = Local::new(old);
+        let new = Local::new(new);
+
+        let tree = DirTree::new(&base, &old)?;
         Ok(tree
             .iter()
             .filter(|e| e.presence() != Presence::Dst)
@@ -75,6 +84,9 @@ impl Backup {
     fn from_scratch(base: &Path, new: &Path) -> Result<Actions, io::Error> {
         use self::core::{DirTree, FileType};
 
+        let base = Local::new(base);
+        let new = Local::new(new);
+
         let tree = DirTree::new(&base, &new)?;
         Ok(tree
             .iter()
@@ -97,7 +109,7 @@ impl Backup {
 impl Operation for Backup {}
 
 impl<'mo, P: AsRef<Path> + Debug> Operator<'mo, Backup> for ConfigFile<P> {
-    type Model = MultipleCopyModel<'mo>;
+    type Model = MultipleCopyModel<'mo, Local, Local>;
     type Error = io::Error;
     type Options = Options;
 
@@ -124,7 +136,7 @@ impl<'mo, P: AsRef<Path> + Debug> Operator<'mo, Backup> for ConfigFile<P> {
 }
 
 impl<'mo, 'a: 'mo> Operator<'mo, Backup> for FileSystemFolder<'a> {
-    type Model = CopyModel<'mo>;
+    type Model = CopyModel<'mo, Local, Local>;
     type Error = io::Error;
     type Options = Options;
 
