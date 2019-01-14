@@ -5,7 +5,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
-use super::{FileSystem, Local, Route};
+use super::{Directory, FileSystem, Local, Metadata, Route};
 
 /// Reduce the boilerplate when reading a directory
 macro_rules! read {

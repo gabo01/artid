@@ -10,7 +10,7 @@ mod model;
 mod tree;
 
 pub use self::{
-    filesystem::{FileSystem, Local, Route},
+    filesystem::{Directory, FileKind, FileSystem, Local, Metadata, Route},
     model::{Action, Actions, CopyAction, CopyModel, MultipleCopyModel},
     tree::{DirTree, Direction, FileType, Presence, TreeIter, TreeIterNode, TreeNode},
 };

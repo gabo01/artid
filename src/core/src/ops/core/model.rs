@@ -8,7 +8,7 @@ use std::os::windows::fs::symlink_file as symlink;
 use std::path::PathBuf;
 
 use super::super::Model;
-use super::{FileSystem, Local, Route};
+use super::{FileKind, FileSystem, Local, Metadata, Route};
 use crate::{Debuggable, FnBox};
 
 #[allow(missing_docs)]
