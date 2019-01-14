@@ -1,3 +1,4 @@
+use std::ffi::OsString;
 use std::fmt::Debug;
 use std::fs::{self, OpenOptions};
 use std::io::{self, Error, ErrorKind};
@@ -6,8 +7,9 @@ use std::os::unix::fs::symlink;
 #[cfg(windows)]
 use std::os::windows::fs::symlink_file as symlink;
 use std::path::{Display, Path, PathBuf};
+use std::time::SystemTime;
 
-use super::{FileSystem, Route};
+use super::{Directory, DirectoryIterator, File, FileKind, FileSystem, Metadata, Route};
 
 /// Represents the standard filesystem. As such, the methods implemented here are
 /// fundamentally call's to the functions in the standard library
@@ -17,6 +19,11 @@ pub struct Local {
 }
 
 impl FileSystem for Local {
+    type File = fs::File;
+    type Metadata = fs::Metadata;
+    type Directory = fs::DirEntry;
+    type DirectoryIterator = fs::ReadDir;
+
     fn new<P: Into<PathBuf>>(path: P) -> Self {
         Self { path: path.into() }
     }
@@ -25,11 +32,11 @@ impl FileSystem for Local {
         self.path.exists()
     }
 
-    fn metadata(&self) -> io::Result<fs::Metadata> {
+    fn metadata(&self) -> io::Result<Self::Metadata> {
         self.path.metadata()
     }
 
-    fn symlink_metadata(&self) -> io::Result<fs::Metadata> {
+    fn symlink_metadata(&self) -> io::Result<Self::Metadata> {
         fs::symlink_metadata(&self.path)
     }
 
@@ -37,11 +44,11 @@ impl FileSystem for Local {
         self.path.is_file()
     }
 
-    fn open(&self, options: &OpenOptions) -> io::Result<fs::File> {
+    fn open(&self, options: &OpenOptions) -> io::Result<Self::File> {
         options.open(&self.path)
     }
 
-    fn read_dir(&self) -> io::Result<fs::ReadDir> {
+    fn read_dir(&self) -> io::Result<Self::DirectoryIterator> {
         fs::read_dir(&self.path)
     }
 
@@ -85,5 +92,51 @@ impl Route for Local {
 impl PartialEq for Local {
     fn eq(&self, _other: &Local) -> bool {
         true
+    }
+}
+
+impl File for fs::File {
+    type Metadata = fs::Metadata;
+
+    fn metadata(&self) -> io::Result<Self::Metadata> {
+        self.metadata()
+    }
+}
+
+impl Metadata for fs::Metadata {
+    type FileKind = fs::FileType;
+
+    fn file_type(&self) -> Self::FileKind {
+        self.file_type()
+    }
+
+    fn modified(&self) -> io::Result<SystemTime> {
+        self.modified()
+    }
+}
+
+impl FileKind for fs::FileType {
+    fn is_file(&self) -> bool {
+        self.is_file()
+    }
+
+    fn is_symlink(&self) -> bool {
+        self.is_symlink()
+    }
+
+    fn is_dir(&self) -> bool {
+        self.is_dir()
+    }
+}
+
+impl DirectoryIterator<fs::DirEntry> for fs::ReadDir {}
+
+impl Directory for fs::DirEntry {
+    fn path(&self) -> PathBuf {
+        self.path()
+    }
+
+    fn file_name(&self) -> OsString {
+        self.file_name()
     }
 }
