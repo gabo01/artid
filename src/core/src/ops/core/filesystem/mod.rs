@@ -45,7 +45,9 @@ pub trait FileSystem: Route {
         Self: PartialEq<F>,
         F: FileSystem;
 
-    #[allow(missing_docs)]
+    /// Mimics the behaviour of the copy function for two filesystems with the only
+    /// drawback that it does not copy the permissions from the source to the
+    /// destination
     fn copy_to<F: FileSystem>(&self, other: &F) -> io::Result<u64> {
         let mut reader = self.open(fs::OpenOptions::new().read(true))?;
         let mut writer = other.open(
@@ -55,11 +57,7 @@ pub trait FileSystem: Route {
                 .truncate(true),
         )?;
 
-        let perm = reader.metadata()?.permissions();
-        let bytes = io::copy(&mut reader, &mut writer)?;
-        writer.set_permissions(perm)?;
-
-        Ok(bytes)
+        io::copy(&mut reader, &mut writer)
     }
 }
 
