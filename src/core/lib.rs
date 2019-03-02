@@ -11,15 +11,13 @@
 //!
 //! ## About the core
 //!
-//! The core of artid contains all the logic for the operations performed. Currently, it
-//! also contains some display related procedures (like CopyModel::log) or the logger module
-//! that are on the way of being refactored away to avoid displaying the data themselves.
-//! Leaving aside the details that need to be polished, the core's responsability is to
-//! provide two things:
+//! The core of artid contains all the logic for the operations performed. It's responsability
+//! is to provide three things:
 //!
 //! - an API to perform common operations: backup, restore, zip (TODO) and others
-//! - an API to generate custom operations: this is made through the sync module
-//!   but it's not currently part of the public API.
+//! - an API to generate custom operations: this is made through the ops::core module but needs
+//!   to be polished and as such is not to be relied on
+//! - an API to access state of the backup (not implemented yet)
 //!
 //! ## About the structure
 //!
@@ -31,10 +29,10 @@
 //!           calls the common operations on the config file elements
 //! - ops: the ops module is responsible of performing the common operation shipped with
 //!        artid
-//! - sync: the sync module provides the bare bone elements for generating the operations
-//!         and will be the API exported to generate custom operations. An example of
-//!         what the sync module does is defining the data type responsible for comparing
-//!         two folders.
+//! - ops::core: the core module provides the bare bone elements for generating the operations
+//!              and will be the API exported to generate custom operations. An example of
+//!              what the core module does is defining the data type responsible for comparing
+//!              two folders.
 //!
 //! ## Integration with frontends
 //!
