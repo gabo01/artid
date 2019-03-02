@@ -7,29 +7,27 @@
 [l1]: https://tokei.rs/b1/github/gabo01/artid
 [l2]: https://github.com/gabo01/artid
 
-A light client to backup your files. It's purpose is to make easier to make and organize backups
-by specifying a configuration file and letting the program take care of the rest.
+A library for building light clients to backup your files. It's purpose is to make easier to make
+and organize backups by specifying a configuration file and letting the program take care of the
+rest.
 
 ## Getting started
 
-Right now, the only way to use the project is to compile it yourself. Once it reaches maturity,
-precompiled binaries will be made available in the releases section.
+This is the library of the project. For specific implementations see the contents of the
+UI directory.
 
 ### Prerequisites
 
-- Rust version 1.27.1 or later
-- Cargo verion 1.27.0 or later
+In order to compile the library, excluding potential dependencies needed for the frontends, you
+will need:
+
+- Rust version 1.31.0 or later
+- Cargo verion 1.31.0 or later
 
 ### Building from Source
 
 ```bash
 cargo build
-```
-
-or just
-
-```bash
-cargo run -- [ARGS]
 ```
 
 ## Features
@@ -44,27 +42,6 @@ cargo run -- [ARGS]
 **Disclaimer:** The features checked are not stable yet and won't be as long as the application
 version does not reach 1.0.0
 
-## Usage from CLI
-
-```bash
-artid 0.2.1
-Gabriel Dos Ramos <dosramosgabriel@gmail.com>
-Light client to backup your data
-
-USAGE:
-    artid [FLAGS] [SUBCOMMAND]
-
-FLAGS:
-    -b, --backtrace    Prints the complete error backtrace if an error is found
-    -h, --help         Prints help information
-    -V, --version      Prints version information
-
-SUBCOMMANDS:
-    backup     Updates the current backup or makes a new one if it does not exist
-    help       Prints this message or the help of the given subcommand(s)
-    restore    Restores all files of the backup to their original locations
-```
-
 ## Contributing
 
 Please see [CONTRIBUTING](.github/CONTRIBUTING.md) for a reference about the style guide, conventions
@@ -72,6 +49,8 @@ on code, tests and commit messages.
 
 Any contributions you make will be automatically licensed under the MIT License unless told
 otherwise.
+
+The guidelines for contribution apply also to the implementations kept in the UI directory.
 
 ## Code of Conduct
 
@@ -85,4 +64,6 @@ A copy of the code of conduct can be found locally [here][c1] or [online][c2].
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for
+details. Implementations of the library in this repo are also licensed under the MIT license
+unless told otherwise.

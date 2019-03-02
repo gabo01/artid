@@ -1,0 +1,17 @@
+[package]
+name = "artid"
+version = "0.2.1"
+authors = ["Gabriel Dos Ramos Albo <dosramosgabriel@gmail.com>"]
+description = "Light client to backup your data"
+edition = "2018"
+
+[dependencies]
+artid = {package = "artid-core", path = "../../"}
+logger = {package = "artid-logger", path = "../../src/logger"}
+
+chrono = "0.4.5"
+clap = {version = "~2.32.0", features = ["yaml"]}
+failure = "0.1.2"
+failure_derive = "0.1.2"
+libc = "0.2.43"
+log = "0.4.3"

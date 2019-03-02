@@ -1,28 +1,33 @@
 [workspace]
 members = [
-    "crates/env_path",
-    "src/core",
-    "src/logger"
+    "src/logger",
+    "src/crates/*",
+    "UI/*"
 ]
 
 [package]
-name = "artid"
-version = "0.2.1"
+name = "artid-core"
+version = "0.1.0"
 authors = ["Gabriel Dos Ramos Albo <dosramosgabriel@gmail.com>"]
-description = "Light client to backup your data"
 edition = "2018"
 
-[[bin]]
-name = "artid"
-path = "src/cli/main.rs"
+[lib]
+path = "src/core/lib.rs"
+test = true
+doctest = true
+bench = true
+doc = true
 
 [dependencies]
-artid = {package = "artid-core", path = "src/core"}
-logger = {package = "artid-logger", path = "src/logger"}
+env_path = {path = "src/crates/env_path", features = ["serde"]}
 
-chrono = "0.4.5"
-clap = {version = "~2.32.0", features = ["yaml"]}
+chrono = {version = "0.4.5", features = ["serde"]}
 failure = "0.1.2"
 failure_derive = "0.1.2"
-libc = "0.2.43"
 log = "0.4.3"
+serde = "1.0.71"
+serde_derive = "1.0.71"
+json = {package = "serde_json", version = "1.0.24"}
+
+[dev-dependencies]
+tempfile = "3.0.3"
