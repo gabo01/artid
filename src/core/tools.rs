@@ -1,6 +1,7 @@
 //! Tools related to running the tests, these are mostly utilities and do not make part
 //! of the application's logic.
 
+#[doc(hidden)]
 #[macro_export]
 macro_rules! tmpdir {
     () => {{
@@ -9,6 +10,7 @@ macro_rules! tmpdir {
     }};
 }
 
+#[doc(hidden)]
 #[macro_export]
 macro_rules! tmppath {
     ($dir:expr, $path:expr) => {
@@ -16,6 +18,7 @@ macro_rules! tmppath {
     };
 }
 
+#[doc(hidden)]
 #[macro_export]
 macro_rules! create_file {
     ($path:expr) => {
@@ -38,6 +41,7 @@ macro_rules! create_file {
     }
 }
 
+#[doc(hidden)]
 #[macro_export]
 macro_rules! read_file {
     ($file:expr) => {{
@@ -51,6 +55,7 @@ macro_rules! read_file {
     }};
 }
 
+#[doc(hidden)]
 #[macro_export]
 macro_rules! symlink {
     ($path:expr) => {
@@ -58,6 +63,7 @@ macro_rules! symlink {
     };
 }
 
+#[doc(hidden)]
 #[macro_export]
 macro_rules! filetype {
     ($path:expr) => {{
