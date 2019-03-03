@@ -14,7 +14,7 @@ use std::path::PathBuf;
 
 use super::super::Model;
 use super::filesystem::{FileKind, FileSystem, Local, Metadata, Route};
-use crate::{Debuggable, FnBox};
+use crate::{debug_closure::Debuggable, fn_box::FnBox};
 
 #[allow(missing_docs)]
 pub type Action<S, D> = CopyAction<S, D>;

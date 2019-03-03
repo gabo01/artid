@@ -40,9 +40,6 @@
 //! in order to integrate this library with an external frontend, for example electron, a
 //! bridge must be written.
 
-use std::fmt::{self, Debug};
-use std::ops::Deref;
-
 macro_rules! rfc3339 {
     ($stamp:expr) => {{
         use chrono::SecondsFormat;
@@ -63,46 +60,11 @@ macro_rules! closure {
 #[macro_use]
 mod tools;
 
+mod debug_closure;
+mod fn_box;
+
 pub mod config;
 pub mod ops;
-
-/// Allows to call boxed closures
-///
-/// details about this helper can be found on the rust book chapter 20: building a
-/// multi-threaded web server
-trait FnBox {
-    fn call_box(self: Box<Self>);
-}
-
-impl<F: FnOnce()> FnBox for F {
-    fn call_box(self: Box<F>) {
-        (*self)()
-    }
-}
-
-/// Allow a debug implementation for closures.
-///
-/// details of the implementation can be found in [location][link]
-///
-/// [link]: https://users.rust-lang.org/t/is-it-possible-to-implement-debug-for-fn-type/14824/3
-struct Debuggable<T: ?Sized> {
-    text: &'static str,
-    value: Box<T>,
-}
-
-impl<T: ?Sized> Debug for Debuggable<T> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.text)
-    }
-}
-
-impl<T: ?Sized> Deref for Debuggable<T> {
-    type Target = T;
-
-    fn deref(&self) -> &T {
-        &self.value
-    }
-}
 
 #[allow(missing_docs)]
 pub mod prelude {
