@@ -120,6 +120,7 @@ impl<'mo, P: AsRef<Path> + Debug> Operator<'mo, Backup> for ConfigFile<P> {
 
         Ok(MultipleCopyModel::new(
             self.folders
+                .contents
                 .iter_mut()
                 .map(|e| {
                     let folder = e.apply_root(&dir);

@@ -14,7 +14,7 @@ use env_path::EnvPath;
 use failure::ResultExt;
 use log::{debug, info, log, trace};
 use std::fmt::Debug;
-use std::fs::File;
+use std::fs::{self, File};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
@@ -23,7 +23,7 @@ mod errors;
 pub use self::errors::FileError;
 use self::errors::FileErrorType;
 
-/// Represents a configuration file in json format. A valid json config file is composed
+/// Represents a configuration file in toml format. A valid toml config file is composed
 /// by an array of folder structs. The config file has to be stored in a subpath of the
 /// directory being used.
 ///
@@ -36,7 +36,13 @@ where
     P: AsRef<Path> + Debug,
 {
     pub(crate) dir: P,
-    pub(crate) folders: Vec<FolderConfig>,
+    pub(crate) folders: Folders,
+}
+
+#[derive(Debug, serde_derive::Serialize, serde_derive::Deserialize)]
+pub(crate) struct Folders {
+    #[serde(rename = "folder")]
+    pub(crate) contents: Vec<FolderConfig>,
 }
 
 impl<P> ConfigFile<P>
@@ -44,7 +50,7 @@ where
     P: AsRef<Path> + Debug,
 {
     /// Represents the relative path to the configuration file from a given root directory
-    const SAVE_PATH: &'static str = ".backup/config.json";
+    const SAVE_PATH: &'static str = ".artid/artid.toml";
 
     /// Manually create a new ConfigFile object. Usually, you would load (see load method) the
     /// configuration file from disk, but in certain cases like directory initialization it can
@@ -52,13 +58,13 @@ where
     pub fn new(dir: P) -> Self {
         Self {
             dir,
-            folders: vec![],
+            folders: Folders { contents: vec![] },
         }
     }
 
     /// Returns a reference to the folders in the configuration file
     pub fn folders(&self) -> &[FolderConfig] {
-        &self.folders
+        &self.folders.contents
     }
 
     /// Loads the data present in the configuration file. Currently this function receives
@@ -73,9 +79,10 @@ where
         let file = dir.as_ref().join(path);
         debug!("Config file location: '{}'", file.display());
 
-        let reader = File::open(&file).context(FileErrorType::Load(file.display().to_string()))?;
+        let contents =
+            fs::read_to_string(&file).context(FileErrorType::Load(file.display().to_string()))?;
         let folders =
-            json::from_reader(reader).context(FileErrorType::Parse(file.display().to_string()))?;
+            toml::from_str(&contents).context(FileErrorType::Parse(file.display().to_string()))?;
         trace!("{:#?}", folders);
 
         Ok(ConfigFile { dir, folders })
@@ -101,7 +108,7 @@ where
         write!(
             File::create(&file).context(FileErrorType::Save(file.display().to_string()))?,
             "{}",
-            json::to_string_pretty(&self.folders).expect("ConfigFile cannot fail serialization")
+            toml::to_string_pretty(&self.folders).expect("ConfigFile cannot fail serialization")
         )
         .context(FileErrorType::Save(file.display().to_string()))?;
 
@@ -113,6 +120,7 @@ where
     pub fn list_folders(&mut self) -> Vec<FileSystemFolder<'_>> {
         let root = &self.dir;
         self.folders
+            .contents
             .iter_mut()
             .map(|folder| folder.apply_root(&root))
             .collect()
@@ -124,6 +132,7 @@ where
         let root = &self.dir;
 
         self.folders
+            .contents
             .iter_mut()
             .find(|folder| folder.path.path() == path.as_ref())
             .map(|x| x.apply_root(&root))
