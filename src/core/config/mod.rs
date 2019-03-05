@@ -18,10 +18,22 @@ use std::fs::{self, File};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
+mod archive;
 mod errors;
 
 pub use self::errors::FileError;
 use self::errors::FileErrorType;
+use archive::Archive;
+
+/// To be written...
+#[derive(Debug)]
+pub struct ArtidArchive<P>
+where
+    P: AsRef<Path> + Debug,
+{
+    folder: P,
+    archive: Archive,
+}
 
 /// Represents a configuration file in toml format. A valid toml config file is composed
 /// by an array of folder structs. The config file has to be stored in a subpath of the
