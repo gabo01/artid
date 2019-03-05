@@ -154,7 +154,7 @@ impl Restore {
 impl Operation for Restore {}
 
 impl<'mo, P: AsRef<Path> + Debug> Operator<'mo, Restore> for ConfigFile<P> {
-    type Model = MultipleCopyModel<'mo, Local, Local>;
+    type Model = MultipleCopyModel<'mo, 'mo, Local, Local>;
     type Error = BuildError;
     type Options = Options;
 
@@ -170,6 +170,7 @@ impl<'mo, P: AsRef<Path> + Debug> Operator<'mo, Restore> for ConfigFile<P> {
                     Ok(CopyModel::new(actions(&folder, options)?, || {}))
                 })
                 .collect::<Result<_, BuildError>>()?,
+            || {},
         ))
     }
 }

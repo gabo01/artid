@@ -110,7 +110,7 @@ impl Backup {
 impl Operation for Backup {}
 
 impl<'mo, P: AsRef<Path> + Debug> Operator<'mo, Backup> for ConfigFile<P> {
-    type Model = MultipleCopyModel<'mo, Local, Local>;
+    type Model = MultipleCopyModel<'mo, 'mo, Local, Local>;
     type Error = io::Error;
     type Options = Options;
 
@@ -133,6 +133,7 @@ impl<'mo, P: AsRef<Path> + Debug> Operator<'mo, Backup> for ConfigFile<P> {
                     ))
                 })
                 .collect::<Result<_, io::Error>>()?,
+            || {},
         ))
     }
 }
