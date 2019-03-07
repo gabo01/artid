@@ -35,6 +35,24 @@ where
     archive: Archive,
 }
 
+impl<P: AsRef<Path> + Debug> ArtidArchive<P> {
+    pub fn new(folder: P) -> Self {
+        Self {
+            folder,
+            archive: Archive::default(),
+        }
+    }
+
+    pub fn add_folder<PS, O>(&mut self, path: PS, origin: O)
+    where
+        PS: Into<String>,
+        O: Into<String>,
+    {
+        self.archive.add_folder(path, origin)
+    }
+
+}
+
 /// Represents a configuration file in toml format. A valid toml config file is composed
 /// by an array of folder structs. The config file has to be stored in a subpath of the
 /// directory being used.

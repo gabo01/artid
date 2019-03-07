@@ -4,12 +4,39 @@ use serde::de::{Deserialize, Deserializer};
 use serde::ser::{Serialize, Serializer};
 use std::fmt::Debug;
 use std::ops::{Deref, DerefMut};
+use std::path::Path;
 
 #[derive(Debug, serde_derive::Serialize, serde_derive::Deserialize)]
 pub struct Archive {
     #[serde(rename = "system")]
     pub(crate) config: Config,
     pub(crate) history: History,
+}
+
+impl Archive {
+    pub(crate) fn add_folder<P, O>(&mut self, path: P, origin: O)
+    where
+        P: Into<String>,
+        O: Into<String>,
+    {
+        self.config
+            .folders
+            .push(Folder::new(path, origin, self.config.hasher))
+    }
+}
+
+impl Default for Archive {
+    fn default() -> Self {
+        Self {
+            config: Config {
+                hasher: Hasher::Sha3,
+                folders: Folders { inner: vec![] },
+            },
+            history: History {
+                snapshots: Snapshots { inner: vec![] },
+            },
+        }
+    }
 }
 
 #[derive(Debug, serde_derive::Serialize, serde_derive::Deserialize)]
@@ -20,7 +47,7 @@ pub struct Config {
     folders: Folders,
 }
 
-#[derive(Debug, serde_derive::Serialize, serde_derive::Deserialize)]
+#[derive(Copy, Clone, Debug, serde_derive::Serialize, serde_derive::Deserialize)]
 pub enum Hasher {
     #[serde(rename = "sha-3")]
     Sha3,
@@ -112,4 +139,28 @@ pub struct Folder {
     /// A hash to uniquely identify this folder even if the path changes
     #[serde(rename = "id")]
     pub(crate) name: String,
+}
+
+impl Folder {
+    pub(crate) fn new<P, O>(path: P, origin: O, hasher: Hasher) -> Self
+    where
+        P: Into<String>,
+        O: Into<String>,
+    {
+        let path = path.into();
+
+        Self {
+            path: EnvPath::new(path.clone()),
+            origin: EnvPath::new(origin),
+            name: match hasher {
+                Hasher::Sha3 => {
+                    use sha3::{Digest, Sha3_256};
+                    let hash =
+                        Sha3_256::digest(format!("{} + {}", rfc3339!(Utc::now()), path).as_bytes());
+
+                    format!("{:x}", hash)
+                }
+            },
+        }
+    }
 }
