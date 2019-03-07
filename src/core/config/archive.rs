@@ -1,5 +1,7 @@
 use chrono::{offset::Utc, DateTime};
 use env_path::EnvPath;
+use serde::de::{Deserialize, Deserializer};
+use serde::ser::{Serialize, Serializer};
 use std::fmt::Debug;
 use std::ops::{Deref, DerefMut};
 
@@ -24,7 +26,7 @@ pub enum Hasher {
     Sha3,
 }
 
-#[derive(Debug, serde_derive::Serialize, serde_derive::Deserialize)]
+#[derive(Debug)]
 pub struct Folders {
     inner: Vec<Folder>,
 }
@@ -43,13 +45,27 @@ impl DerefMut for Folders {
     }
 }
 
+impl Serialize for Folders {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        self.inner.serialize(serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for Folders {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        Ok(Self {
+            inner: <Vec<Folder> as Deserialize<'de>>::deserialize(deserializer)?,
+        })
+    }
+}
+
 #[derive(Debug, serde_derive::Serialize, serde_derive::Deserialize)]
 pub struct History {
     #[serde(rename = "snapshot")]
     snapshots: Snapshots,
 }
 
-#[derive(Debug, serde_derive::Serialize, serde_derive::Deserialize)]
+#[derive(Debug)]
 pub struct Snapshots {
     inner: Vec<Snapshot>,
 }
@@ -65,6 +81,20 @@ impl Deref for Snapshots {
 impl DerefMut for Snapshots {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.inner
+    }
+}
+
+impl Serialize for Snapshots {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        self.inner.serialize(serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for Snapshots {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        Ok(Self {
+            inner: <Vec<Snapshot> as Deserialize<'de>>::deserialize(deserializer)?,
+        })
     }
 }
 
