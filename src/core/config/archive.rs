@@ -4,7 +4,7 @@ use serde::de::{Deserialize, Deserializer};
 use serde::ser::{Serialize, Serializer};
 use std::fmt::Debug;
 use std::ops::{Deref, DerefMut};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 #[derive(Debug, serde_derive::Serialize, serde_derive::Deserialize)]
 pub struct Archive {
@@ -55,7 +55,7 @@ pub struct Config {
     /// determines the type of hash algorithm to use
     hasher: Hasher,
     #[serde(rename = "folder")]
-    folders: Folders,
+    pub(crate) folders: Folders,
 }
 
 #[derive(Copy, Clone, Debug, serde_derive::Serialize, serde_derive::Deserialize)]
@@ -192,6 +192,20 @@ impl Folder {
             },
         }
     }
+
+    pub(crate) fn resolve<P: AsRef<Path>>(&self, root: P) -> Link {
+        Link {
+            relative: root.as_ref().join(self.path.as_ref()),
+            origin: self.origin.as_ref().into(),
+        }
+    }
+}
+
+pub struct Link {
+    pub(crate) relative: PathBuf,
+    pub(crate) origin: PathBuf,
+}
+
 pub struct FolderHistory<'a, 'b> {
     history: &'a History,
     folder: &'b str,
