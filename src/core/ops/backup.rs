@@ -20,7 +20,8 @@ use super::core;
 use super::core::filesystem::{FileSystem, Local, Route};
 use super::core::model::{CopyAction, CopyModel, MultipleCopyModel};
 use super::{Model, Operation, Operator};
-use crate::prelude::{ConfigFile, FileSystemFolder};
+use crate::config::archive::{FolderHistory, Link};
+use crate::prelude::{ArtidArchive, ConfigFile, FileSystemFolder};
 
 #[allow(missing_docs)]
 pub type Action = CopyAction<Local, Local>;
@@ -109,6 +110,32 @@ impl Backup {
 
 impl Operation for Backup {}
 
+impl<'mo, P: AsRef<Path> + Debug> Operator<'mo, Backup> for ArtidArchive<P> {
+    type Model = MultipleCopyModel<'mo, 'mo, Local, Local>;
+    type Error = io::Error;
+    type Options = Options;
+
+    fn modelate(&'mo mut self, options: Self::Options) -> Result<Self::Model, Self::Error> {
+        let stamp = Utc::now();
+        let (root, history) = (&self.folder, &self.archive.history);
+
+        Ok(MultipleCopyModel::new(
+            self.archive
+                .config
+                .folders
+                .iter()
+                .map(|folder| {
+                    let link = folder.resolve(&root);
+                    let actions = create_actions(link, history.find(folder), options, stamp)?;
+
+                    Ok(CopyModel::new(actions, || {}))
+                })
+                .collect::<Result<_, io::Error>>()?,
+            move || self.archive.add_snapshot(stamp),
+        ))
+    }
+}
+
 impl<'mo, P: AsRef<Path> + Debug> Operator<'mo, Backup> for ConfigFile<P> {
     type Model = MultipleCopyModel<'mo, 'mo, Local, Local>;
     type Error = io::Error;
@@ -165,6 +192,22 @@ fn actions(
     } else {
         let relative = folder.link.relative.join(rfc3339!(stamp));
         Backup::from_scratch(&folder.link.origin, &relative)
+    }
+}
+
+fn create_actions(
+    link: Link,
+    history: FolderHistory<'_, '_>,
+    _options: Options,
+    stamp: DateTime<Utc>,
+) -> Result<Actions, io::Error> {
+    if let Some(modified) = history.find_last_sync() {
+        let old = link.relative.join(rfc3339!(modified));
+        let new = link.relative.join(rfc3339!(stamp));
+        Backup::with_previous(&link.origin, &old, &new)
+    } else {
+        let relative = link.relative.join(rfc3339!(stamp));
+        Backup::from_scratch(&link.origin, &relative)
     }
 }
 
