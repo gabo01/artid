@@ -23,6 +23,17 @@ impl Archive {
             .folders
             .push(Folder::new(path, origin, self.config.hasher))
     }
+
+    pub(crate) fn add_snapshot(&mut self, timestamp: DateTime<Utc>) {
+        self.history.add_snapshot(
+            timestamp,
+            self.config
+                .folders
+                .iter()
+                .map(|folder| folder.name.to_owned())
+                .collect(),
+        )
+    }
 }
 
 impl Default for Archive {
@@ -92,6 +103,12 @@ pub struct History {
     snapshots: Snapshots,
 }
 
+impl History {
+    pub fn add_snapshot(&mut self, timestamp: DateTime<Utc>, folders: Vec<String>) {
+        self.snapshots.push(Snapshot::new(timestamp, folders));
+    }
+}
+
 #[derive(Debug)]
 pub struct Snapshots {
     inner: Vec<Snapshot>,
@@ -128,6 +145,14 @@ impl<'de> Deserialize<'de> for Snapshots {
 #[derive(Debug, serde_derive::Serialize, serde_derive::Deserialize)]
 pub struct Snapshot {
     timestamp: DateTime<Utc>,
+    /// List of folders modified
+    folders: Vec<String>,
+}
+
+impl Snapshot {
+    pub fn new(timestamp: DateTime<Utc>, folders: Vec<String>) -> Self {
+        Self { timestamp, folders }
+    }
 }
 
 #[derive(Debug, serde_derive::Serialize, serde_derive::Deserialize)]
