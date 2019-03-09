@@ -18,7 +18,7 @@ use std::fs::{self, File};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
-mod archive;
+pub mod archive;
 mod errors;
 
 pub use self::errors::FileError;
@@ -31,8 +31,8 @@ pub struct ArtidArchive<P>
 where
     P: AsRef<Path> + Debug,
 {
-    folder: P,
-    archive: Archive,
+    pub(crate) folder: P,
+    pub(crate) archive: Archive,
 }
 
 impl<P: AsRef<Path> + Debug> ArtidArchive<P> {

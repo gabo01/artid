@@ -7,14 +7,14 @@ use std::ops::{Deref, DerefMut};
 use std::path::{Path, PathBuf};
 
 #[derive(Debug, serde_derive::Serialize, serde_derive::Deserialize)]
-pub struct Archive {
+pub(crate) struct Archive {
     #[serde(rename = "system")]
-    pub(crate) config: Config,
-    pub(crate) history: History,
+    pub config: Config,
+    pub history: History,
 }
 
 impl Archive {
-    pub(crate) fn add_folder<P, O>(&mut self, path: P, origin: O)
+    pub fn add_folder<P, O>(&mut self, path: P, origin: O)
     where
         P: Into<String>,
         O: Into<String>,
@@ -24,7 +24,7 @@ impl Archive {
             .push(Folder::new(path, origin, self.config.hasher))
     }
 
-    pub(crate) fn add_snapshot(&mut self, timestamp: DateTime<Utc>) {
+    pub fn add_snapshot(&mut self, timestamp: DateTime<Utc>) {
         self.history.add_snapshot(
             timestamp,
             self.config
@@ -51,11 +51,11 @@ impl Default for Archive {
 }
 
 #[derive(Debug, serde_derive::Serialize, serde_derive::Deserialize)]
-pub struct Config {
+pub(crate) struct Config {
     /// determines the type of hash algorithm to use
     hasher: Hasher,
     #[serde(rename = "folder")]
-    pub(crate) folders: Folders,
+    pub folders: Folders,
 }
 
 #[derive(Copy, Clone, Debug, serde_derive::Serialize, serde_derive::Deserialize)]
@@ -65,7 +65,7 @@ pub enum Hasher {
 }
 
 #[derive(Debug)]
-pub struct Folders {
+pub(crate) struct Folders {
     inner: Vec<Folder>,
 }
 
@@ -98,7 +98,7 @@ impl<'de> Deserialize<'de> for Folders {
 }
 
 #[derive(Debug, serde_derive::Serialize, serde_derive::Deserialize)]
-pub struct History {
+pub(crate) struct History {
     #[serde(rename = "snapshot")]
     snapshots: Snapshots,
 }
@@ -114,7 +114,7 @@ impl History {
 }
 
 #[derive(Debug)]
-pub struct Snapshots {
+pub(crate) struct Snapshots {
     inner: Vec<Snapshot>,
 }
 
@@ -201,12 +201,12 @@ impl Folder {
     }
 }
 
-pub struct Link {
-    pub(crate) relative: PathBuf,
-    pub(crate) origin: PathBuf,
+pub(crate) struct Link {
+    pub relative: PathBuf,
+    pub origin: PathBuf,
 }
 
-pub struct FolderHistory<'a, 'b> {
+pub(crate) struct FolderHistory<'a, 'b> {
     history: &'a History,
     folder: &'b str,
 }

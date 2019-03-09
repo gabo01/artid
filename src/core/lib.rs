@@ -68,6 +68,7 @@ pub mod ops;
 
 #[allow(missing_docs)]
 pub mod prelude {
+    pub use crate::config::archive;
     pub use crate::config::{ArtidArchive, ConfigFile, FileError, FileSystemFolder, FolderConfig};
     pub use crate::ops::{Model, Operation, Operator};
 }
