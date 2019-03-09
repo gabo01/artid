@@ -107,6 +107,10 @@ impl History {
     pub fn add_snapshot(&mut self, timestamp: DateTime<Utc>, folders: Vec<String>) {
         self.snapshots.push(Snapshot::new(timestamp, folders));
     }
+
+    pub fn find<'a, 'b>(&'a self, folder: &'b Folder) -> FolderHistory<'a, 'b> {
+        FolderHistory::new(self, &folder.name)
+    }
 }
 
 #[derive(Debug)]
@@ -187,5 +191,27 @@ impl Folder {
                 }
             },
         }
+    }
+pub struct FolderHistory<'a, 'b> {
+    history: &'a History,
+    folder: &'b str,
+}
+
+impl<'a, 'b> FolderHistory<'a, 'b> {
+    pub fn new(history: &'a History, folder: &'b str) -> Self {
+        Self { history, folder }
+    }
+
+    pub fn find_last_sync(&self) -> Option<DateTime<Utc>> {
+        if self.history.snapshots.is_empty() {
+            return None;
+        }
+
+        self.history
+            .snapshots
+            .iter()
+            .rev()
+            .find(|snapshot| snapshot.folders.iter().any(|folder| folder == self.folder))
+            .map(|snapshot| snapshot.timestamp)
     }
 }
