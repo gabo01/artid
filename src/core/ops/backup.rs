@@ -47,6 +47,23 @@ impl Default for Options {
     }
 }
 
+/// Modifiers for the archive backup operation.
+///
+/// The default implementation for the options is equal to specifying all folders for the
+/// snapshot
+#[derive(Clone, Debug, Default)]
+pub struct ArchiveOptions {
+    folders: Option<Vec<String>>,
+}
+
+impl ArchiveOptions {
+    /// Create the options selecting a set of folders for the snapshot
+    pub fn with_folders(folders: Vec<String>) -> Self {
+        let folders = Some(folders);
+        Self { folders }
+    }
+}
+
 /// Represents the backup operation. It's purpouse is to be the operation called for
 /// <Type as Operator<Operation>>::modelate(...)
 pub struct Backup;
@@ -113,26 +130,40 @@ impl Operation for Backup {}
 impl<'mo, P: AsRef<Path> + Debug> Operator<'mo, Backup> for ArtidArchive<P> {
     type Model = MultipleCopyModel<'mo, 'mo, Local, Local>;
     type Error = io::Error;
-    type Options = Options;
+    type Options = ArchiveOptions;
 
     fn modelate(&'mo mut self, options: Self::Options) -> Result<Self::Model, Self::Error> {
         let stamp = Utc::now();
         let (root, history) = (&self.folder, &self.archive.history);
+        let (folders, models): (Vec<String>, Vec<_>) = self
+            .archive
+            .config
+            .folders
+            .iter()
+            .filter(|folder| match options.folders {
+                Some(ref folders) => folders.iter().any(|name| folder.name == *name),
+                None => true,
+            })
+            .map(|folder| {
+                let link = folder.resolve(&root);
+                let actions = create_actions(link, history.find(folder), stamp)?;
+                Ok((folder.name.clone(), CopyModel::new(actions, || {})))
+            })
+            .try_fold(
+                (vec![], vec![]),
+                |(mut folders, mut models), result: Result<_, io::Error>| match result {
+                    Ok((folder, model)) => {
+                        folders.push(folder);
+                        models.push(model);
+                        Ok((folders, models))
+                    }
+                    Err(err) => Err(err),
+                },
+            )?;
 
-        Ok(MultipleCopyModel::new(
-            self.archive
-                .config
-                .folders
-                .iter()
-                .map(|folder| {
-                    let link = folder.resolve(&root);
-                    let actions = create_actions(link, history.find(folder), options, stamp)?;
-
-                    Ok(CopyModel::new(actions, || {}))
-                })
-                .collect::<Result<_, io::Error>>()?,
-            move || self.archive.add_snapshot(stamp),
-        ))
+        Ok(MultipleCopyModel::new(models, move || {
+            self.archive.history.add_snapshot(stamp, folders)
+        }))
     }
 }
 
@@ -198,7 +229,6 @@ fn actions(
 fn create_actions(
     link: Link,
     history: FolderHistory<'_, '_>,
-    _options: Options,
     stamp: DateTime<Utc>,
 ) -> Result<Actions, io::Error> {
     if let Some(modified) = history.find_last_sync() {
