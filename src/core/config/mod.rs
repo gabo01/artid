@@ -25,7 +25,8 @@ pub use self::errors::FileError;
 use self::errors::FileErrorType;
 use archive::Archive;
 
-/// To be written...
+/// Represents the whole archive located in a folder. As such, interaction with the archive
+/// is mostly done through this type
 #[derive(Debug)]
 pub struct ArtidArchive<P>
 where
@@ -39,6 +40,8 @@ impl<P: AsRef<Path> + Debug> ArtidArchive<P> {
     /// Represents the relative path to the configuration file from a given root directory
     const SAVE_PATH: &'static str = ".artid/artid.toml";
 
+    /// Creates a new empty archive in the folder P. The created archive, useful for 
+    /// intialization purpouses, is stored only in memory and must be saved to disk separately
     pub fn new(folder: P) -> Self {
         Self {
             folder,
@@ -46,6 +49,10 @@ impl<P: AsRef<Path> + Debug> ArtidArchive<P> {
         }
     }
 
+    /// Makes the archive aware of a new folder in disk. The new folder will be represented
+    /// by the path it takes inside the archive and it's origin path in disk. At this point,
+    /// an id will be assigned to the folder to uniquely identify it even if it's path of
+    /// origin or it's path inside the archive changes
     pub fn add_folder<PS, O>(&mut self, path: PS, origin: O)
     where
         PS: Into<String>,
