@@ -36,6 +36,9 @@ where
 }
 
 impl<P: AsRef<Path> + Debug> ArtidArchive<P> {
+    /// Represents the relative path to the configuration file from a given root directory
+    const SAVE_PATH: &'static str = ".artid/artid.toml";
+
     pub fn new(folder: P) -> Self {
         Self {
             folder,
@@ -51,6 +54,49 @@ impl<P: AsRef<Path> + Debug> ArtidArchive<P> {
         self.archive.add_folder(path, origin)
     }
 
+    /// Loads the archive present inside the folder P. This function looks for the archive
+    /// configuration inside the default SAVE_PATH
+    pub fn load(folder: P) -> Result<Self, FileError> {
+        Self::load_from(folder, Self::SAVE_PATH)
+    }
+
+    /// Loads the archive present inside the folder P with a custom path for the archive
+    /// configuration
+    pub fn load_from<T: AsRef<Path>>(folder: P, path: T) -> Result<Self, FileError> {
+        let file = folder.as_ref().join(path);
+        debug!("Config file location: '{}'", file.display());
+
+        let contents =
+            fs::read_to_string(&file).context(FileErrorType::Load(file.display().to_string()))?;
+        let archive =
+            toml::from_str(&contents).context(FileErrorType::Parse(file.display().to_string()))?;
+        trace!("{:#?}", archive);
+
+        Ok(Self { folder, archive })
+    }
+
+    /// Saves the archive to the disk. It uses the default SAVE_PATH to save the global archive
+    /// configuration
+    pub fn save(&self) -> Result<(), FileError> {
+        self.save_to(Self::SAVE_PATH)
+    }
+
+    /// Saves the archive to the disk using a custom path T to save the global configuration
+    pub fn save_to<T: AsRef<Path>>(&self, to: T) -> Result<(), FileError> {
+        let file = self.folder.as_ref().join(to);
+
+        debug!("Config file location: '{}'", file.display());
+
+        write!(
+            File::create(&file).context(FileErrorType::Save(file.display().to_string()))?,
+            "{}",
+            toml::to_string_pretty(&self.archive).expect("Archive cannot fail serialization")
+        )
+        .context(FileErrorType::Save(file.display().to_string()))?;
+
+        info!("Config file saved on '{}'", file.display());
+        Ok(())
+    }
 }
 
 /// Represents a configuration file in toml format. A valid toml config file is composed
