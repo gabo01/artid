@@ -40,7 +40,7 @@ impl<P: AsRef<Path> + Debug> ArtidArchive<P> {
     /// Represents the relative path to the configuration file from a given root directory
     const SAVE_PATH: &'static str = ".artid/artid.toml";
 
-    /// Creates a new empty archive in the folder P. The created archive, useful for 
+    /// Creates a new empty archive in the folder P. The created archive, useful for
     /// intialization purpouses, is stored only in memory and must be saved to disk separately
     pub fn new(folder: P) -> Self {
         Self {
@@ -319,6 +319,95 @@ impl<'a> FileSystemFolder<'a> {
 
 #[cfg(test)]
 mod tests {
+    mod archive {
+        use crate::prelude::ArtidArchive;
+        use chrono::Utc;
+        use std::fs;
+        use tempfile;
+
+        #[test]
+        fn test_archive_load_from_valid() {
+            let dir = tmpdir!();
+            create_file!(
+                tmppath!(dir, "artid.toml"),
+                include_str!("../../../tests/files/single_folder.toml")
+            );
+            assert!(ArtidArchive::load_from(dir, "artid.toml").is_ok());
+        }
+
+        #[test]
+        fn test_archive_load_with_snapshot() {
+            let dir = tmpdir!();
+            create_file!(
+                tmppath!(dir, "artid.toml"),
+                include_str!("../../../tests/files/single_folder_snapshot.toml"),
+                rfc3339!(Utc::now())
+            );
+            assert!(ArtidArchive::load_from(dir, "artid.toml").is_ok());
+        }
+
+        #[test]
+        fn test_archive_load() {
+            let tmp = tmpdir!();
+            fs::create_dir(tmppath!(tmp, ".artid")).expect("Unable to create folder");
+            create_file!(
+                tmppath!(tmp, ".artid/artid.toml"),
+                include_str!("../../../tests/files/single_folder_origin_creation.toml"),
+                tmppath!(tmp, "origin").display().to_string()
+            );
+            assert!(ArtidArchive::load(tmp.path()).is_ok());
+        }
+
+        #[test]
+        fn test_archive_file_save_exists() {
+            let dir = tmpdir!();
+            assert!(create_file!(tmppath!(dir, "artid.toml")).exists());
+
+            let archive = ArtidArchive::new(dir.path());
+            assert!(archive.save_to("artid.toml").is_ok());
+        }
+
+        #[test]
+        fn test_archive_file_save_unexistant() {
+            let dir = tmpdir!();
+
+            let archive = ArtidArchive::new(dir.path());
+            assert!(archive.save_to("artid.toml").is_ok());
+        }
+
+        #[test]
+        fn test_archive_save_to_format() {
+            let tmp = tmpdir!();
+            create_file!(
+                tmppath!(tmp, "artid.toml"),
+                include_str!("../../../tests/files/single_folder_origin_creation.toml"),
+                tmppath!(tmp, "origin").display().to_string()
+            );
+
+            let archive =
+                ArtidArchive::load_from(tmp.path(), "artid.toml").expect("Unable to load file");
+            archive
+                .save_to("artid2.toml")
+                .expect("Unable to save the file");
+
+            assert_eq!(
+                toml::to_string_pretty(&archive.archive).expect("Cannot fail serialization"),
+                read_file!(tmppath!(tmp, "artid2.toml")),
+            );
+        }
+
+        #[test]
+        fn test_archive_save() {
+            let tmp = tmpdir!();
+            fs::create_dir(tmppath!(tmp, ".artid")).expect("Unable to create folder");
+
+            let archive = ArtidArchive::new(tmp.path());
+            archive.save().expect("Unable to save");
+
+            assert!(tmppath!(tmp, ".artid/artid.toml").exists());
+        }
+    }
+
     mod config {
         use crate::prelude::ConfigFile;
         use chrono::Utc;
