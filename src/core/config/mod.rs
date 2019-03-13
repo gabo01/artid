@@ -330,64 +330,57 @@ mod tests {
         fn test_config_file_load_valid() {
             let dir = tmpdir!();
             create_file!(
-                tmppath!(dir, "config.json"),
-                "[
-                {{
-                    \"path\": \"asd\", 
-                    \"origin\": \"$HOME\", 
-                    \"modified\": null
-                }}
-            ]"
+                tmppath!(dir, "artid.toml"),
+                "
+                [[folder]]
+                path = \"asd\"
+                origin = \"$HOME\"
+                "
             );
-            assert!(ConfigFile::load_from(dir, "config.json").is_ok());
+            assert!(ConfigFile::load_from(dir, "artid.toml").is_ok());
         }
 
         #[test]
         fn test_config_file_load_valid_with_modified() {
             let dir = tmpdir!();
             create_file!(
-                tmppath!(dir, "config.json"),
-                "[
-                {{
-                    \"path\": \"asd\", 
-                    \"origin\": \"$HOME\", 
-                    \"modified\": [\"{}\"]
-                }}
-            ]",
+                tmppath!(dir, "artid.toml"),
+                "
+                [[folder]]
+                path = \"asd\"
+                origin = \"$HOME\"
+                modified = [\"{}\"]
+                ",
                 rfc3339!(Utc::now())
             );
-            assert!(ConfigFile::load_from(dir, "config.json").is_ok());
+            assert!(ConfigFile::load_from(dir, "artid.toml").is_ok());
         }
 
         #[test]
         fn test_config_file_load_invalid() {
             let dir = tmpdir!();
             create_file!(
-                tmppath!(dir, "config.json"),
-                "[
-                {{
-                    \"path\": \"asd, 
-                    \"origin\": \"$HOME\", 
-                    \"modified\": null
-                }}
-            ]"
+                tmppath!(dir, "artid.toml"),
+                "
+                [[folder]]
+                pathh = \"asd\"
+                origin = \"$HOME\"
+                "
             );
-            assert!(ConfigFile::load_from(dir, "config.json").is_err());
+            assert!(ConfigFile::load_from(dir, "artid.toml").is_err());
         }
 
         #[test]
         fn test_config_load() {
             let tmp = tmpdir!();
-            fs::create_dir(tmppath!(tmp, ".backup")).expect("Unable to create folder");
+            fs::create_dir(tmppath!(tmp, ".artid")).expect("Unable to create folder");
             create_file!(
-                tmppath!(tmp, ".backup/config.json"),
-                "[
-                {{
-                    \"path\": \"backup\",
-                    \"origin\": \"{}\",
-                    \"modified\": null
-                }}
-            ]",
+                tmppath!(tmp, ".artid/artid.toml"),
+                "
+                [[folder]]
+                path = \"backup\"
+                origin = \"{}\"
+                ",
                 tmppath!(tmp, "origin").display().to_string()
             );
             assert!(ConfigFile::load(tmp.path()).is_ok());
@@ -397,30 +390,28 @@ mod tests {
         fn test_config_load_from() {
             let tmp = tempfile::tempdir().unwrap();
 
-            let mut file = File::create(tmp.path().join("config.json")).unwrap();
+            let mut file = File::create(tmp.path().join("artid.toml")).unwrap();
             write!(
                 file,
-                "[
-                {{
-                    \"path\": \"backup\",
-                    \"origin\": \"{}\",
-                    \"modified\": null
-                }}
-            ]",
+                "
+                [[folder]]
+                path = \"backup\"
+                origin = \"{}\"
+                ",
                 tmp.path().join("origin").display().to_string()
             )
             .unwrap();
 
-            let _config = ConfigFile::load_from(tmp.path(), "config.json").unwrap();
+            let _config = ConfigFile::load_from(tmp.path(), "artid.toml").unwrap();
         }
 
         #[test]
         fn test_config_file_save_exists() {
             let dir = tmpdir!();
-            assert!(create_file!(tmppath!(dir, "config.json")).exists());
+            assert!(create_file!(tmppath!(dir, "artid.toml")).exists());
 
             let config = ConfigFile::new(dir.path());
-            assert!(config.save_to("config.json").is_ok());
+            assert!(config.save_to("artid.toml").is_ok());
         }
 
         #[test]
@@ -428,45 +419,46 @@ mod tests {
             let dir = tmpdir!();
 
             let config = ConfigFile::new(dir.path());
-            assert!(config.save_to("config.json").is_ok());
+            assert!(config.save_to("artid.toml").is_ok());
         }
 
         #[test]
         fn test_config_save_to_format() {
             let tmp = tmpdir!();
             create_file!(
-                tmppath!(tmp, "config.json"),
-                "[
-                {{
-                    \"path\": \"backup\",
-                    \"origin\": \"{}\",
-                    \"modified\": null
-                }}
-            ]",
+                tmppath!(tmp, "artid.toml"),
+                "[[folder]]
+                path = \"backup\"
+                origin = \"{}\"",
                 tmppath!(tmp, "origin").display().to_string()
             );
 
             let config =
-                ConfigFile::load_from(tmp.path(), "config.json").expect("Unable to load file");
+                ConfigFile::load_from(tmp.path(), "artid.toml").expect("Unable to load file");
             config
-                .save_to("config2.json")
+                .save_to("artid2.toml")
                 .expect("Unable to save the file");
 
+            println!(
+                "{:#?}",
+                toml::to_string_pretty(config.folders()).expect("Cannot fail serialization")
+            );
+
             assert_eq!(
-                json::to_string_pretty(config.folders()).expect("Cannot fail serialization"),
-                read_file!(tmppath!(tmp, "config2.json")),
+                toml::to_string_pretty(&config.folders).expect("Cannot fail serialization"),
+                read_file!(tmppath!(tmp, "artid2.toml")),
             );
         }
 
         #[test]
         fn test_config_save() {
             let tmp = tmpdir!();
-            fs::create_dir(tmppath!(tmp, ".backup")).expect("Unable to create folder");
+            fs::create_dir(tmppath!(tmp, ".artid")).expect("Unable to create folder");
 
             let config = ConfigFile::new(tmp.path());
             config.save().expect("Unable to save");
 
-            assert!(tmppath!(tmp, ".backup/config.json").exists());
+            assert!(tmppath!(tmp, ".artid/artid.toml").exists());
         }
     }
 

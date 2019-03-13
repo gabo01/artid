@@ -229,3 +229,13 @@ impl<'a, 'b> FolderHistory<'a, 'b> {
             .map(|snapshot| snapshot.timestamp)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    mod archive {
+        use crate::config::archive::Archive;
+
+        #[test]
+        fn test_archive_load_valid() {}
+    }
+}
