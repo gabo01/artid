@@ -20,7 +20,8 @@ use super::core;
 use super::core::filesystem::{FileSystem, Local, Route};
 use super::core::model::{CopyAction, CopyModel, MultipleCopyModel};
 use super::{Model, Operation, Operator};
-use crate::prelude::{ConfigFile, FileSystemFolder};
+use crate::config::archive::Link;
+use crate::prelude::{ArtidArchive, ConfigFile, FileSystemFolder};
 
 #[allow(missing_docs)]
 pub type Action = CopyAction<Local, Local>;
@@ -117,6 +118,33 @@ impl Default for Options {
     }
 }
 
+#[derive(Clone, Debug)]
+pub struct ArchiveOptions {
+    overwrite: bool,
+    snapshot: Option<DateTime<Utc>>,
+    folders: Option<Vec<String>>,
+}
+
+impl ArchiveOptions {
+    pub fn new(overwrite: bool) -> Self {
+        Self {
+            overwrite,
+            snapshot: None,
+            folders: None,
+        }
+    }
+
+    pub fn with_snapshot(mut self, snapshot: DateTime<Utc>) -> Self {
+        self.snapshot = Some(snapshot);
+        self
+    }
+
+    pub fn with_folders(mut self, folders: Vec<String>) -> Self {
+        self.folders = Some(folders);
+        self
+    }
+}
+
 /// Represents the restore operation. It's purpouse is to be the operation called for
 /// <Type as Operator<Operation>>::modelate(...)
 pub struct Restore;
@@ -152,6 +180,43 @@ impl Restore {
 }
 
 impl Operation for Restore {}
+
+impl<'mo, P: AsRef<Path> + Debug> Operator<'mo, Restore> for ArtidArchive<P> {
+    type Model = MultipleCopyModel<'mo, 'mo, Local, Local>;
+    type Error = BuildError;
+    type Options = ArchiveOptions;
+
+    fn modelate(&'mo mut self, options: Self::Options) -> Result<Self::Model, Self::Error> {
+        let root = &self.folder;
+        let snapshot = match options.snapshot {
+            Some(timestamp) => self.archive.history.snapshot_with(timestamp),
+            None => self.archive.history.get_last_snapshot(),
+        };
+
+        if let Some(snapshot) = snapshot {
+            Ok(MultipleCopyModel::new(
+                self.archive
+                    .config
+                    .folders
+                    .iter()
+                    .filter(|folder| snapshot.folders.iter().any(|name| folder.name == *name))
+                    .filter(|folder| match options.folders {
+                        Some(ref folders) => folders.iter().any(|name| folder.name == *name),
+                        None => true,
+                    })
+                    .map(|folder| {
+                        let link = folder.resolve(&root);
+                        let actions = create_actions(link, snapshot.timestamp, options.overwrite)?;
+                        Ok(CopyModel::new(actions, || {}))
+                    })
+                    .collect::<Result<_, Self::Error>>()?,
+                || {},
+            ))
+        } else {
+            Err(BuildErrorKind::PointNotExists)?
+        }
+    }
+}
 
 impl<'mo, P: AsRef<Path> + Debug> Operator<'mo, Restore> for ConfigFile<P> {
     type Model = MultipleCopyModel<'mo, 'mo, Local, Local>;
@@ -207,6 +272,15 @@ fn actions(folder: &FileSystemFolder, options: Options) -> Result<Actions, Build
         info!("Restore not needed for {}", folder.link.relative.display());
         Ok(vec![])
     }
+}
+
+fn create_actions(
+    link: Link,
+    stamp: DateTime<Utc>,
+    overwrite: bool,
+) -> Result<Actions, BuildError> {
+    let relative = link.relative.join(rfc3339!(stamp));
+    Ok(Restore::from_point(&link.origin, &relative, overwrite).context(BuildErrorKind::FsError)?)
 }
 
 #[cfg(test)]
