@@ -111,6 +111,17 @@ impl History {
     pub fn find<'a, 'b>(&'a self, folder: &'b Folder) -> FolderHistory<'a, 'b> {
         FolderHistory::new(self, &folder.name)
     }
+
+    pub fn get_last_snapshot(&self) -> Option<Snapshot> {
+        self.snapshots.last().map(ToOwned::to_owned)
+    }
+
+    pub fn snapshot_with(&self, stamp: DateTime<Utc>) -> Option<Snapshot> {
+        self.snapshots
+            .iter()
+            .find(|snapshot| snapshot.timestamp == stamp)
+            .map(ToOwned::to_owned)
+    }
 }
 
 #[derive(Debug)]
@@ -146,7 +157,7 @@ impl<'de> Deserialize<'de> for Snapshots {
     }
 }
 
-#[derive(Debug, serde_derive::Serialize, serde_derive::Deserialize)]
+#[derive(Clone, Debug, serde_derive::Serialize, serde_derive::Deserialize)]
 pub struct Snapshot {
     timestamp: DateTime<Utc>,
     /// List of folders modified
