@@ -1,3 +1,5 @@
+//! Contains all the elements required for the new archive implementation
+
 use chrono::{offset::Utc, DateTime};
 use env_path::EnvPath;
 use serde::de::{Deserialize, Deserializer};
@@ -58,8 +60,10 @@ pub(crate) struct Config {
     pub folders: Folders,
 }
 
+/// Hasher algorithm to use for the archive operations
 #[derive(Copy, Clone, Debug, serde_derive::Serialize, serde_derive::Deserialize)]
 pub enum Hasher {
+    #[allow(missing_docs)]
     #[serde(rename = "sha-3")]
     Sha3,
 }
@@ -157,6 +161,7 @@ impl<'de> Deserialize<'de> for Snapshots {
     }
 }
 
+/// Represents a snapshot taken and inserted to the archive
 #[derive(Clone, Debug, serde_derive::Serialize, serde_derive::Deserialize)]
 pub struct Snapshot {
     timestamp: DateTime<Utc>,
@@ -165,11 +170,19 @@ pub struct Snapshot {
 }
 
 impl Snapshot {
+    #[allow(missing_docs)]
     pub fn new(timestamp: DateTime<Utc>, folders: Vec<String>) -> Self {
         Self { timestamp, folders }
     }
 }
 
+/// Represents the structure of a folder inside the archive configuration file
+///
+/// This structure consists in a link between an origin (absolute path) and a
+/// path relative to a specified root.
+///
+/// The id is an unique identifier used for the folder to allow changes to either
+/// the elemets of the link.
 #[derive(Debug, serde_derive::Serialize, serde_derive::Deserialize)]
 pub struct Folder {
     /// Link path. If thinked as a link, this is where the symbolic link is
