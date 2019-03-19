@@ -25,17 +25,6 @@ impl Archive {
             .folders
             .push(Folder::new(path, origin, self.config.hasher))
     }
-
-    pub fn add_snapshot(&mut self, timestamp: DateTime<Utc>) {
-        self.history.add_snapshot(
-            timestamp,
-            self.config
-                .folders
-                .iter()
-                .map(|folder| folder.name.to_owned())
-                .collect(),
-        )
-    }
 }
 
 impl Default for Archive {
