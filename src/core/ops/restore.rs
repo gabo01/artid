@@ -118,6 +118,7 @@ impl Default for Options {
     }
 }
 
+/// Options to modify behaviour of the restore operation in the archive
 #[derive(Clone, Debug)]
 pub struct ArchiveOptions {
     overwrite: bool,
@@ -126,6 +127,9 @@ pub struct ArchiveOptions {
 }
 
 impl ArchiveOptions {
+    /// Create a new set of options specifying to overwrite or not the files in the destination.
+    ///
+    /// By default, it selects to restore the last snapshot and all the folders.
     pub fn new(overwrite: bool) -> Self {
         Self {
             overwrite,
@@ -134,11 +138,15 @@ impl ArchiveOptions {
         }
     }
 
+    /// Allows to specify a previous snapshot to restore. In case that the snapshot does
+    /// no exist, the restore will return an error.
     pub fn with_snapshot(mut self, snapshot: DateTime<Utc>) -> Self {
         self.snapshot = Some(snapshot);
         self
     }
 
+    /// Select the folders to restore, the folders must be referenced by their respective
+    /// id's.
     pub fn with_folders(mut self, folders: Vec<String>) -> Self {
         self.folders = Some(folders);
         self
