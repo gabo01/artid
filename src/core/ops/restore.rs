@@ -300,6 +300,7 @@ mod tests {
     use tempfile::TempDir;
 
     use super::super::test_helpers::{FileKind, FileTree};
+    use super::{ArchiveOptions, ArtidArchive};
     use super::{Model, Operator, Options, Restore};
     use crate::prelude::{FileSystemFolder, FolderConfig};
 
@@ -332,6 +333,25 @@ mod tests {
     }
 
     #[test]
+    fn test_archive_restore_single() {
+        let mut origin = FileTree::create();
+        let (root, stamp) = (tmpdir!(), Utc::now());
+        let backup = backup!(root, stamp, true);
+
+        let options = ArchiveOptions::new(false);
+        let mut archive = ArtidArchive::new(root.path());
+        archive.add_folder("backup", origin.path().display().to_string());
+        archive
+            .archive
+            .history
+            .add_snapshot(stamp, vec![archive.archive.config.folders[0].name.clone()]);
+        run!(archive, options, Restore);
+
+        origin.copy_tree(&backup);
+        origin.assert();
+    }
+
+    #[test]
     #[ignore]
     fn test_folder_restore_with_symlinks() {
         let mut origin = FileTree::create();
@@ -350,6 +370,33 @@ mod tests {
         config.add_modified(stamp_new); // in order to detect the last backup
         let mut folder = config.apply_root(root.path());
         run!(folder, options, Restore);
+
+        origin.copy_tree(&backup);
+        origin.assert();
+    }
+
+    #[test]
+    #[ignore]
+    fn test_archive_restore_with_symlinks() {
+        let mut origin = FileTree::create();
+        let (root, stamp) = (tmpdir!(), Utc::now());
+        let backup = backup!(root, stamp, true);
+
+        thread::sleep(time::Duration::from_millis(2000));
+        let stamp_new = Utc::now();
+        let mut backup_second = backup!(root, stamp_new, false);
+        backup_second.add_root();
+        backup_second.add_symlink("a.txt", backup.path().join("a.txt"));
+        backup_second.add_symlink("b.txt", backup.path().join("b.txt"));
+
+        let options = ArchiveOptions::new(false);
+        let mut archive = ArtidArchive::new(root.path());
+        archive.add_folder("backup", origin.path().display().to_string());
+        archive.archive.history.add_snapshot(
+            stamp_new,
+            vec![archive.archive.config.folders[0].name.clone()],
+        );
+        run!(archive, options, Restore);
 
         origin.copy_tree(&backup);
         origin.assert();
