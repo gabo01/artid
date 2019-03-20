@@ -21,9 +21,9 @@ use std::path::{Path, PathBuf};
 pub mod archive;
 mod errors;
 
+use self::archive::Archive;
 pub use self::errors::FileError;
 use self::errors::FileErrorType;
-use archive::Archive;
 
 /// Represents the whole archive located in a folder. As such, interaction with the archive
 /// is mostly done through this type
