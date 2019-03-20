@@ -4,9 +4,9 @@ use std::path::{Path, PathBuf};
 use tempfile::TempDir;
 
 macro_rules! run {
-    ($folder:ident, $options:ident , $op:ident) => {{
-        let model = <FileSystemFolder as Operator<$op>>::modelate(&mut $folder, $options)
-            .expect("Unable to build the model");
+    ($folder:ident, $options:expr , $op:ident) => {{
+        let model =
+            Operator::<$op>::modelate(&mut $folder, $options).expect("Unable to build the model");
 
         model.run().expect("Unable to run the model");
     }};

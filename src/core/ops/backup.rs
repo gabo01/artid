@@ -20,7 +20,8 @@ use super::core;
 use super::core::filesystem::{FileSystem, Local, Route};
 use super::core::model::{CopyAction, CopyModel, MultipleCopyModel};
 use super::{Model, Operation, Operator};
-use crate::prelude::{ConfigFile, FileSystemFolder};
+use crate::config::archive::{FolderHistory, Link};
+use crate::prelude::{ArtidArchive, ConfigFile, FileSystemFolder};
 
 #[allow(missing_docs)]
 pub type Action = CopyAction<Local, Local>;
@@ -43,6 +44,23 @@ pub struct Options;
 impl Default for Options {
     fn default() -> Self {
         Self {}
+    }
+}
+
+/// Modifiers for the archive backup operation.
+///
+/// The default implementation for the options is equal to specifying all folders for the
+/// snapshot
+#[derive(Clone, Debug, Default)]
+pub struct ArchiveOptions {
+    folders: Option<Vec<String>>,
+}
+
+impl ArchiveOptions {
+    /// Create the options selecting a set of folders for the snapshot
+    pub fn with_folders(folders: Vec<String>) -> Self {
+        let folders = Some(folders);
+        Self { folders }
     }
 }
 
@@ -109,8 +127,48 @@ impl Backup {
 
 impl Operation for Backup {}
 
+impl<'mo, P: AsRef<Path> + Debug> Operator<'mo, Backup> for ArtidArchive<P> {
+    type Model = MultipleCopyModel<'mo, 'mo, Local, Local>;
+    type Error = io::Error;
+    type Options = ArchiveOptions;
+
+    fn modelate(&'mo mut self, options: Self::Options) -> Result<Self::Model, Self::Error> {
+        let stamp = Utc::now();
+        let (root, history) = (&self.folder, &self.archive.history);
+        let (folders, models): (Vec<String>, Vec<_>) = self
+            .archive
+            .config
+            .folders
+            .iter()
+            .filter(|folder| match options.folders {
+                Some(ref folders) => folders.iter().any(|name| folder.name == *name),
+                None => true,
+            })
+            .map(|folder| {
+                let link = folder.resolve(&root);
+                let actions = create_actions(link, history.find(folder), stamp)?;
+                Ok((folder.name.clone(), CopyModel::new(actions, || {})))
+            })
+            .try_fold(
+                (vec![], vec![]),
+                |(mut folders, mut models), result: Result<_, io::Error>| match result {
+                    Ok((folder, model)) => {
+                        folders.push(folder);
+                        models.push(model);
+                        Ok((folders, models))
+                    }
+                    Err(err) => Err(err),
+                },
+            )?;
+
+        Ok(MultipleCopyModel::new(models, move || {
+            self.archive.history.add_snapshot(stamp, folders)
+        }))
+    }
+}
+
 impl<'mo, P: AsRef<Path> + Debug> Operator<'mo, Backup> for ConfigFile<P> {
-    type Model = MultipleCopyModel<'mo, Local, Local>;
+    type Model = MultipleCopyModel<'mo, 'mo, Local, Local>;
     type Error = io::Error;
     type Options = Options;
 
@@ -133,6 +191,7 @@ impl<'mo, P: AsRef<Path> + Debug> Operator<'mo, Backup> for ConfigFile<P> {
                     ))
                 })
                 .collect::<Result<_, io::Error>>()?,
+            || {},
         ))
     }
 }
@@ -167,6 +226,21 @@ fn actions(
     }
 }
 
+fn create_actions(
+    link: Link,
+    history: FolderHistory<'_, '_>,
+    stamp: DateTime<Utc>,
+) -> Result<Actions, io::Error> {
+    if let Some(modified) = history.find_last_sync() {
+        let old = link.relative.join(rfc3339!(modified));
+        let new = link.relative.join(rfc3339!(stamp));
+        Backup::with_previous(&link.origin, &old, &new)
+    } else {
+        let relative = link.relative.join(rfc3339!(stamp));
+        Backup::from_scratch(&link.origin, &relative)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use chrono::Utc;
@@ -176,6 +250,7 @@ mod tests {
     use tempfile::TempDir;
 
     use super::super::test_helpers::{FileKind, FileTree};
+    use super::{ArchiveOptions, ArtidArchive};
     use super::{Backup, Model, Operator, Options};
     use crate::prelude::{FileSystemFolder, FolderConfig};
 
@@ -213,6 +288,31 @@ mod tests {
     }
 
     #[test]
+    fn test_archive_backup_single() {
+        let origin = FileTree::generate();
+        let root = FileTree::create();
+
+        let options = ArchiveOptions::default();
+        let mut archive = ArtidArchive::new(root.path());
+        archive.add_folder("backup", origin.path().display().to_string());
+        run!(archive, options, Backup);
+
+        let mut backup = filetree!(
+            root,
+            "backup",
+            archive
+                .archive
+                .history
+                .find(&archive.archive.config.folders[0])
+                .find_last_sync()
+                .expect("The backup was not registered")
+        );
+
+        backup.copy_tree(&origin);
+        backup.assert();
+    }
+
+    #[test]
     #[ignore]
     fn test_folder_backup_double() {
         let origin = FileTree::generate();
@@ -231,6 +331,51 @@ mod tests {
         run!(folder, options, Backup);
 
         let mut backup = filetree!(root, "backup", folder.config.find_sync(1).unwrap());
+        backup.copy_tree(&origin);
+        backup.transform("a.txt", FileKind::Symlink);
+        backup.transform("b.txt", FileKind::Symlink);
+        backup.assert();
+    }
+
+    #[test]
+    #[ignore]
+    fn test_archive_backup_double() {
+        let origin = FileTree::generate();
+        let root = FileTree::create();
+
+        let options = ArchiveOptions::default();
+        let mut archive = ArtidArchive::new(root.path());
+        archive.add_folder("backup", origin.path().display().to_string());
+        run!(archive, options.clone(), Backup);
+
+        let mut backup = filetree!(
+            root,
+            "backup",
+            archive
+                .archive
+                .history
+                .find(&archive.archive.config.folders[0])
+                .find_last_sync()
+                .expect("The backup was not registered")
+        );
+
+        backup.copy_tree(&origin);
+        backup.assert();
+
+        thread::sleep(time::Duration::from_millis(2000));
+        run!(archive, options.clone(), Backup);
+
+        let mut backup = filetree!(
+            root,
+            "backup",
+            archive
+                .archive
+                .history
+                .find(&archive.archive.config.folders[0])
+                .find_last_sync()
+                .expect("The backup was not registered")
+        );
+
         backup.copy_tree(&origin);
         backup.transform("a.txt", FileKind::Symlink);
         backup.transform("b.txt", FileKind::Symlink);
@@ -265,6 +410,52 @@ mod tests {
 
     #[test]
     #[ignore]
+    fn test_archive_backup_double_addition() {
+        let mut origin = FileTree::generate();
+        let root = FileTree::create();
+
+        let options = ArchiveOptions::default();
+        let mut archive = ArtidArchive::new(root.path());
+        archive.add_folder("backup", origin.path().display().to_string());
+        run!(archive, options.clone(), Backup);
+
+        let mut backup = filetree!(
+            root,
+            "backup",
+            archive
+                .archive
+                .history
+                .find(&archive.archive.config.folders[0])
+                .find_last_sync()
+                .expect("The backup was not registered")
+        );
+
+        backup.copy_tree(&origin);
+        backup.assert();
+
+        thread::sleep(time::Duration::from_millis(2000));
+        origin.add_file("c.txt");
+        run!(archive, options.clone(), Backup);
+
+        let mut backup = filetree!(
+            root,
+            "backup",
+            archive
+                .archive
+                .history
+                .find(&archive.archive.config.folders[0])
+                .find_last_sync()
+                .expect("The backup was not registered")
+        );
+
+        backup.copy_tree(&origin);
+        backup.transform("a.txt", FileKind::Symlink);
+        backup.transform("b.txt", FileKind::Symlink);
+        backup.assert();
+    }
+
+    #[test]
+    #[ignore]
     fn test_folder_backup_double_modification() {
         let mut origin = FileTree::generate();
         let root = FileTree::create();
@@ -290,6 +481,51 @@ mod tests {
 
     #[test]
     #[ignore]
+    fn test_archive_backup_double_modification() {
+        let mut origin = FileTree::generate();
+        let root = FileTree::create();
+
+        let options = ArchiveOptions::default();
+        let mut archive = ArtidArchive::new(root.path());
+        archive.add_folder("backup", origin.path().display().to_string());
+        run!(archive, options.clone(), Backup);
+
+        let mut backup = filetree!(
+            root,
+            "backup",
+            archive
+                .archive
+                .history
+                .find(&archive.archive.config.folders[0])
+                .find_last_sync()
+                .expect("The backup was not registered")
+        );
+
+        backup.copy_tree(&origin);
+        backup.assert();
+
+        thread::sleep(time::Duration::from_millis(2000));
+        origin.modify("a.txt", "aaaa");
+        run!(archive, options.clone(), Backup);
+
+        let mut backup = filetree!(
+            root,
+            "backup",
+            archive
+                .archive
+                .history
+                .find(&archive.archive.config.folders[0])
+                .find_last_sync()
+                .expect("The backup was not registered")
+        );
+
+        backup.copy_tree(&origin);
+        backup.transform("b.txt", FileKind::Symlink);
+        backup.assert();
+    }
+
+    #[test]
+    #[ignore]
     fn test_folder_backup_double_remotion() {
         let mut origin = FileTree::generate();
         let root = FileTree::create();
@@ -308,6 +544,51 @@ mod tests {
         run!(folder, options, Backup);
 
         let mut backup = filetree!(root, "backup", folder.config.find_sync(1).unwrap());
+        backup.copy_tree(&origin);
+        backup.transform("b.txt", FileKind::Symlink);
+        backup.assert();
+    }
+
+    #[test]
+    #[ignore]
+    fn test_archive_backup_double_remotion() {
+        let mut origin = FileTree::generate();
+        let root = FileTree::create();
+
+        let options = ArchiveOptions::default();
+        let mut archive = ArtidArchive::new(root.path());
+        archive.add_folder("backup", origin.path().display().to_string());
+        run!(archive, options.clone(), Backup);
+
+        let mut backup = filetree!(
+            root,
+            "backup",
+            archive
+                .archive
+                .history
+                .find(&archive.archive.config.folders[0])
+                .find_last_sync()
+                .expect("The backup was not registered")
+        );
+
+        backup.copy_tree(&origin);
+        backup.assert();
+
+        thread::sleep(time::Duration::from_millis(2000));
+        origin.remove("a.txt");
+        run!(archive, options.clone(), Backup);
+
+        let mut backup = filetree!(
+            root,
+            "backup",
+            archive
+                .archive
+                .history
+                .find(&archive.archive.config.folders[0])
+                .find_last_sync()
+                .expect("The backup was not registered")
+        );
+
         backup.copy_tree(&origin);
         backup.transform("b.txt", FileKind::Symlink);
         backup.assert();

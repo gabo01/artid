@@ -136,26 +136,30 @@ where
 }
 
 /// A set of individual models that are operated together
-pub struct MultipleCopyModel<'a, S, D>
+pub struct MultipleCopyModel<'a, 'b, S, D>
 where
     S: FileSystem,
     D: FileSystem,
 {
     models: Vec<CopyModel<'a, S, D>>,
+    cleaner: Debuggable<FnBox + 'b>,
 }
 
-impl<'a, S, D> MultipleCopyModel<'a, S, D>
+impl<'a, 'b, S, D> MultipleCopyModel<'a, 'b, S, D>
 where
     S: FileSystem,
     D: FileSystem,
 {
     #[allow(missing_docs)]
-    pub fn new(models: Vec<CopyModel<'a, S, D>>) -> Self {
-        Self { models }
+    pub fn new<C: FnOnce() + 'b>(models: Vec<CopyModel<'a, S, D>>, cleaner: C) -> Self {
+        Self {
+            models,
+            cleaner: closure!(cleaner),
+        }
     }
 }
 
-impl<'a, S, D> Model for MultipleCopyModel<'a, S, D>
+impl<'a, 'b, S, D> Model for MultipleCopyModel<'a, 'b, S, D>
 where
     S: FileSystem + PartialEq<D>,
     D: FileSystem,
@@ -168,10 +172,11 @@ where
             model.run()?;
         }
 
+        self.cleaner.value.call_box();
         Ok(())
     }
 
-    fn log<L: for<'b> Fn(&'b Self::Action)>(&self, logger: &L) {
+    fn log<L: for<'c> Fn(&'c Self::Action)>(&self, logger: &L) {
         for model in &self.models {
             model.log(logger);
         }
@@ -179,7 +184,7 @@ where
 
     fn log_run<L>(self, logger: &L) -> Result<(), Self::Error>
     where
-        L: for<'b> Fn(&'b Self::Action),
+        L: for<'c> Fn(&'c Self::Action),
     {
         for model in self.models {
             model.log_run(logger)?;

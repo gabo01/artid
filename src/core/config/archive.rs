@@ -153,9 +153,9 @@ impl<'de> Deserialize<'de> for Snapshots {
 /// Represents a snapshot taken and inserted to the archive
 #[derive(Clone, Debug, serde_derive::Serialize, serde_derive::Deserialize)]
 pub struct Snapshot {
-    timestamp: DateTime<Utc>,
+    pub(crate) timestamp: DateTime<Utc>,
     /// List of folders modified
-    folders: Vec<String>,
+    pub(crate) folders: Vec<String>,
 }
 
 impl Snapshot {
