@@ -21,7 +21,7 @@ use std::path::{Path, PathBuf};
 pub mod archive;
 mod errors;
 
-use self::archive::Archive;
+use self::archive::{Archive, History};
 pub use self::errors::FileError;
 use self::errors::FileErrorType;
 
@@ -64,6 +64,11 @@ impl<P: AsRef<Path> + Debug> ArtidArchive<P> {
     /// Find the id of a folder based on it's relative path
     pub fn get_folder_id(&self, path: &str) -> Option<String> {
         self.archive.get_folder_id(path)
+    }
+
+    /// Returns the set of snapshots stored in the archive
+    pub fn history(&self) -> &History {
+        &self.archive.history
     }
 
     /// Loads the archive present inside the folder P. This function looks for the archive

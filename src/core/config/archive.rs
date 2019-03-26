@@ -103,30 +103,38 @@ impl<'de> Deserialize<'de> for Folders {
     }
 }
 
+/// Represents the snapshot history of an archive
 #[derive(Debug, serde_derive::Serialize, serde_derive::Deserialize)]
-pub(crate) struct History {
+pub struct History {
     #[serde(rename = "snapshot")]
     snapshots: Snapshots,
 }
 
 impl History {
-    pub fn add_snapshot(&mut self, timestamp: DateTime<Utc>, folders: Vec<String>) {
+    pub(crate) fn add_snapshot(&mut self, timestamp: DateTime<Utc>, folders: Vec<String>) {
         self.snapshots.push(Snapshot::new(timestamp, folders));
     }
 
-    pub fn find<'a, 'b>(&'a self, folder: &'b Folder) -> FolderHistory<'a, 'b> {
+    pub(crate) fn find<'a, 'b>(&'a self, folder: &'b Folder) -> FolderHistory<'a, 'b> {
         FolderHistory::new(self, &folder.name)
     }
 
+    /// Find the most recent snapshot in the history
     pub fn get_last_snapshot(&self) -> Option<Snapshot> {
         self.snapshots.last().map(ToOwned::to_owned)
     }
 
+    /// Find the snapshot that corresponds to the timestamp given
     pub fn snapshot_with(&self, stamp: DateTime<Utc>) -> Option<Snapshot> {
         self.snapshots
             .iter()
             .find(|snapshot| snapshot.timestamp == stamp)
             .map(ToOwned::to_owned)
+    }
+
+    /// Iterate over the snapshots registered
+    pub fn iter(&self) -> std::slice::Iter<Snapshot> {
+        self.snapshots.iter()
     }
 }
 
