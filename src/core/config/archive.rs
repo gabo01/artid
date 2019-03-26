@@ -25,6 +25,10 @@ impl Archive {
             .folders
             .push(Folder::new(path, origin, self.config.hasher))
     }
+
+    pub fn get_folder_id(&self, path: &str) -> Option<String> {
+        self.config.get_folder_id(path)
+    }
 }
 
 impl Default for Archive {
@@ -47,6 +51,15 @@ pub(crate) struct Config {
     hasher: Hasher,
     #[serde(rename = "folder")]
     pub folders: Folders,
+}
+
+impl Config {
+    fn get_folder_id(&self, path: &str) -> Option<String> {
+        self.folders
+            .iter()
+            .find(|folder| folder.path == path)
+            .map(|folder| folder.path.to_string())
+    }
 }
 
 /// Hasher algorithm to use for the archive operations

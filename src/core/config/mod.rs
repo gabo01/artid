@@ -61,6 +61,11 @@ impl<P: AsRef<Path> + Debug> ArtidArchive<P> {
         self.archive.add_folder(path, origin)
     }
 
+    /// Find the id of a folder based on it's relative path
+    pub fn get_folder_id(&self, path: &str) -> Option<String> {
+        self.archive.get_folder_id(path)
+    }
+
     /// Loads the archive present inside the folder P. This function looks for the archive
     /// configuration inside the default SAVE_PATH
     pub fn load(folder: P) -> Result<Self, FileError> {
