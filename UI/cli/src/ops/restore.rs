@@ -6,7 +6,7 @@ use std::path::Path;
 
 use crate::{AppError, AppResult, ErrorType};
 use artid::ops::core::{filesystem::Route, model::CopyAction};
-use artid::ops::restore::{self, Options};
+use artid::ops::restore::{self, ArchiveOptions};
 use artid::prelude::*;
 use logger::pathlight;
 
@@ -19,40 +19,41 @@ pub fn restore(
 ) -> AppResult<()> {
     info!("Starting restore of the contents in {}", pathlight(path));
 
-    let options = match point.to_owned() {
-        Some(value) => Options::with_point(overwrite, value),
-        None => Options::new(overwrite),
-    };
+    let mut archive = ArtidArchive::load(path)?;
+    let mut options = ArchiveOptions::new(overwrite);
 
-    let mut config = ConfigFile::load(path)?;
+    if let Some(ref value) = folder {
+        let id = archive.get_folder_id(value).ok_or_else(|| {
+            AppError::from(ErrorType::BadArgument(
+                value.to_string(),
+                "--folder".to_string(),
+            ))
+        })?;
 
-    match folder {
-        Some(ref value) => {
-            let mut folder = get_folder(&mut config, value)?;
-            let model = restore::restore(&mut folder, options).context(ErrorType::Operative)?;
-            operate(run, model)?;
-        }
+        options = options.with_folders(vec![id.clone()]);
 
-        None => {
-            let model = restore::restore(&mut config, options).context(ErrorType::Operative)?;
-            operate(run, model)?;
+        if let Some(value) = point.to_owned() {
+            options = options.with_snapshot(
+                archive
+                    .history()
+                    .iter()
+                    .filter(|snapshot| snapshot.contains(&id))
+                    .nth(value)
+                    .ok_or_else(|| {
+                        AppError::from(ErrorType::BadArgument(
+                            value.to_string(),
+                            "--point".to_string(),
+                        ))
+                    })?
+                    .timestamp(),
+            )
         }
     }
 
-    config.save()?;
+    let model = restore::restore(&mut archive, options).context(ErrorType::Operative)?;
+    operate(run, model)?;
+    archive.save()?;
     Ok(())
-}
-
-fn get_folder<'a, P>(config: &'a mut ConfigFile<P>, value: &str) -> AppResult<FileSystemFolder<'a>>
-where
-    P: AsRef<Path> + ::std::fmt::Debug,
-{
-    config.get_folder(value).ok_or_else(|| {
-        AppError::from(ErrorType::BadArgument(
-            value.to_string(),
-            "--folder".to_string(),
-        ))
-    })
 }
 
 fn operate<M>(run: bool, model: M) -> AppResult<()>
