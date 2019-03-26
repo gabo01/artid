@@ -176,6 +176,16 @@ impl Snapshot {
     pub fn new(timestamp: DateTime<Utc>, folders: Vec<String>) -> Self {
         Self { timestamp, folders }
     }
+
+    /// Checks if the snapshot contains the selected folder
+    pub fn contains(&self, id: &str) -> bool {
+        self.folders.iter().any(|folder| folder == id)
+    }
+
+    /// Returns the timestamp associated to the snapshot
+    pub fn timestamp(&self) -> DateTime<Utc> {
+        self.timestamp
+    }
 }
 
 /// Represents the structure of a folder inside the archive configuration file

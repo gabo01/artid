@@ -207,7 +207,7 @@ impl<'mo, P: AsRef<Path> + Debug> Operator<'mo, Restore> for ArtidArchive<P> {
                     .config
                     .folders
                     .iter()
-                    .filter(|folder| snapshot.folders.iter().any(|name| folder.name == *name))
+                    .filter(|folder| snapshot.contains(&folder.name))
                     .filter(|folder| match options.folders {
                         Some(ref folders) => folders.iter().any(|name| folder.name == *name),
                         None => true,
