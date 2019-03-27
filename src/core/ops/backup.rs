@@ -2,13 +2,7 @@
 //!
 //! The easiest way to use this module is through the global helper 'backup'. The backup
 //! function will return the associated backup model for the given operator, meaning that
-//! the actual model returned may vary based on the operator. The current operators are:
-//!
-//! - ConfigFile<P>: will return a model to execute a new backup for every registered folder
-//!   and fail if any of the singular models fails to build.
-//! - FileSystemFolder: will return a model to execute a backup on the singular folder. In
-//!   case of wanting to perform a mass backup is better to use the global backup directly as
-//!   it will apply the same stamp to all the folders.
+//! the actual model returned may vary based on the operator.
 
 use chrono::{DateTime, Utc};
 use failure::Fail;
@@ -21,7 +15,7 @@ use super::core::filesystem::{FileSystem, Local, Route};
 use super::core::model::{CopyAction, CopyModel, MultipleCopyModel};
 use super::{Model, Operation, Operator};
 use crate::config::archive::{FolderHistory, Link};
-use crate::prelude::{ArtidArchive, ConfigFile, FileSystemFolder};
+use crate::prelude::ArtidArchive;
 
 #[allow(missing_docs)]
 pub type Action = CopyAction<Local, Local>;
@@ -35,16 +29,6 @@ pub fn backup<'a, O: Operator<'a, Backup>>(
     options: O::Options,
 ) -> Result<O::Model, O::Error> {
     operator.modelate(options)
-}
-
-/// Modifiers for the backup operation
-#[derive(Copy, Clone, Debug)]
-pub struct Options;
-
-impl Default for Options {
-    fn default() -> Self {
-        Self {}
-    }
 }
 
 /// Modifiers for the archive backup operation.
@@ -167,65 +151,6 @@ impl<'mo, P: AsRef<Path> + Debug> Operator<'mo, Backup> for ArtidArchive<P> {
     }
 }
 
-impl<'mo, P: AsRef<Path> + Debug> Operator<'mo, Backup> for ConfigFile<P> {
-    type Model = MultipleCopyModel<'mo, 'mo, Local, Local>;
-    type Error = io::Error;
-    type Options = Options;
-
-    fn modelate(&'mo mut self, options: Self::Options) -> Result<Self::Model, Self::Error> {
-        let stamp = Utc::now();
-        let dir = &self.dir;
-
-        Ok(MultipleCopyModel::new(
-            self.folders
-                .contents
-                .iter_mut()
-                .map(|e| {
-                    let folder = e.apply_root(&dir);
-
-                    Ok(CopyModel::new(
-                        actions(&folder, options, stamp)?,
-                        move || {
-                            folder.config.add_modified(stamp);
-                        },
-                    ))
-                })
-                .collect::<Result<_, io::Error>>()?,
-            || {},
-        ))
-    }
-}
-
-impl<'mo, 'a: 'mo> Operator<'mo, Backup> for FileSystemFolder<'a> {
-    type Model = CopyModel<'mo, Local, Local>;
-    type Error = io::Error;
-    type Options = Options;
-
-    fn modelate(&'mo mut self, options: Options) -> Result<Self::Model, Self::Error> {
-        let stamp = Utc::now();
-        let actions = actions(&self, options, stamp)?;
-
-        Ok(CopyModel::new(actions, move || {
-            self.config.add_modified(stamp);
-        }))
-    }
-}
-
-fn actions(
-    folder: &FileSystemFolder<'_>,
-    _options: Options,
-    stamp: DateTime<Utc>,
-) -> Result<Actions, io::Error> {
-    if let Some(modified) = folder.config.find_last_sync() {
-        let old = folder.link.relative.join(rfc3339!(modified));
-        let new = folder.link.relative.join(rfc3339!(stamp));
-        Backup::with_previous(&folder.link.origin, &old, &new)
-    } else {
-        let relative = folder.link.relative.join(rfc3339!(stamp));
-        Backup::from_scratch(&folder.link.origin, &relative)
-    }
-}
-
 fn create_actions(
     link: Link,
     history: FolderHistory<'_, '_>,
@@ -251,8 +176,7 @@ mod tests {
 
     use super::super::test_helpers::{FileKind, FileTree};
     use super::{ArchiveOptions, ArtidArchive};
-    use super::{Backup, Model, Operator, Options};
-    use crate::prelude::{FileSystemFolder, FolderConfig};
+    use super::{Backup, Model, Operator};
 
     macro_rules! filetree {
         ($var:ident, $join:expr, $push:expr) => {{
@@ -263,28 +187,6 @@ mod tests {
             let tree: FileTree<_> = path.into();
             tree
         }};
-    }
-
-    #[test]
-    fn test_folder_backup_single() {
-        let origin = FileTree::generate();
-        let root = FileTree::create();
-
-        let options = Options::default();
-        let mut config = FolderConfig::new("backup", origin.path());
-        let mut folder = config.apply_root(root.path());
-        run!(folder, options, Backup);
-
-        let mut backup = filetree!(
-            root,
-            "backup",
-            folder
-                .config
-                .find_sync(0)
-                .expect("The backup was not registered")
-        );
-        backup.copy_tree(&origin);
-        backup.assert();
     }
 
     #[test]
@@ -309,31 +211,6 @@ mod tests {
         );
 
         backup.copy_tree(&origin);
-        backup.assert();
-    }
-
-    #[test]
-    #[ignore]
-    fn test_folder_backup_double() {
-        let origin = FileTree::generate();
-        let root = FileTree::create();
-
-        let options = Options::default();
-        let mut config = FolderConfig::new("backup", origin.path());
-        let mut folder = config.apply_root(root.path());
-        run!(folder, options, Backup);
-
-        let mut backup = filetree!(root, "backup", folder.config.find_sync(0).unwrap());
-        backup.copy_tree(&origin);
-        backup.assert();
-
-        thread::sleep(time::Duration::from_millis(2000));
-        run!(folder, options, Backup);
-
-        let mut backup = filetree!(root, "backup", folder.config.find_sync(1).unwrap());
-        backup.copy_tree(&origin);
-        backup.transform("a.txt", FileKind::Symlink);
-        backup.transform("b.txt", FileKind::Symlink);
         backup.assert();
     }
 
@@ -376,32 +253,6 @@ mod tests {
                 .expect("The backup was not registered")
         );
 
-        backup.copy_tree(&origin);
-        backup.transform("a.txt", FileKind::Symlink);
-        backup.transform("b.txt", FileKind::Symlink);
-        backup.assert();
-    }
-
-    #[test]
-    #[ignore]
-    fn test_folder_backup_double_addition() {
-        let mut origin = FileTree::generate();
-        let root = FileTree::create();
-
-        let options = Options::default();
-        let mut config = FolderConfig::new("backup", origin.path());
-        let mut folder = config.apply_root(root.path());
-        run!(folder, options, Backup);
-
-        let mut backup = filetree!(root, "backup", folder.config.find_sync(0).unwrap());
-        backup.copy_tree(&origin);
-        backup.assert();
-
-        thread::sleep(time::Duration::from_millis(2000));
-        origin.add_file("c.txt");
-        run!(folder, options, Backup);
-
-        let mut backup = filetree!(root, "backup", folder.config.find_sync(1).unwrap());
         backup.copy_tree(&origin);
         backup.transform("a.txt", FileKind::Symlink);
         backup.transform("b.txt", FileKind::Symlink);
@@ -456,31 +307,6 @@ mod tests {
 
     #[test]
     #[ignore]
-    fn test_folder_backup_double_modification() {
-        let mut origin = FileTree::generate();
-        let root = FileTree::create();
-
-        let options = Options::default();
-        let mut config = FolderConfig::new("backup", origin.path());
-        let mut folder = config.apply_root(root.path());
-        run!(folder, options, Backup);
-
-        let mut backup = filetree!(root, "backup", folder.config.find_sync(0).unwrap());
-        backup.copy_tree(&origin);
-        backup.assert();
-
-        thread::sleep(time::Duration::from_millis(2000));
-        origin.modify("a.txt", "aaaa");
-        run!(folder, options, Backup);
-
-        let mut backup = filetree!(root, "backup", folder.config.find_sync(1).unwrap());
-        backup.copy_tree(&origin);
-        backup.transform("b.txt", FileKind::Symlink);
-        backup.assert();
-    }
-
-    #[test]
-    #[ignore]
     fn test_archive_backup_double_modification() {
         let mut origin = FileTree::generate();
         let root = FileTree::create();
@@ -519,31 +345,6 @@ mod tests {
                 .expect("The backup was not registered")
         );
 
-        backup.copy_tree(&origin);
-        backup.transform("b.txt", FileKind::Symlink);
-        backup.assert();
-    }
-
-    #[test]
-    #[ignore]
-    fn test_folder_backup_double_remotion() {
-        let mut origin = FileTree::generate();
-        let root = FileTree::create();
-
-        let options = Options::default();
-        let mut config = FolderConfig::new("backup", origin.path());
-        let mut folder = config.apply_root(root.path());
-        run!(folder, options, Backup);
-
-        let mut backup = filetree!(root, "backup", folder.config.find_sync(0).unwrap());
-        backup.copy_tree(&origin);
-        backup.assert();
-
-        thread::sleep(time::Duration::from_millis(2000));
-        origin.remove("a.txt");
-        run!(folder, options, Backup);
-
-        let mut backup = filetree!(root, "backup", folder.config.find_sync(1).unwrap());
         backup.copy_tree(&origin);
         backup.transform("b.txt", FileKind::Symlink);
         backup.assert();
