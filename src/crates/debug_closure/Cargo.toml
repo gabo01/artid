@@ -1,0 +1,5 @@
+[package]
+name = "debug_closure"
+version = "0.1.0"
+authors = ["Gabriel Dos Ramos Albo <dosramosgabriel@gmail.com>"]
+edition = "2018"

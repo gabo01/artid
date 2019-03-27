@@ -2,7 +2,7 @@
 ///
 /// details about this helper can be found on the rust book chapter 20: building a
 /// multi-threaded web server
-pub(crate) trait FnBox {
+pub trait FnBox {
     fn call_box(self: Box<Self>);
 }
 

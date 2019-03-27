@@ -47,21 +47,9 @@ macro_rules! rfc3339 {
     }};
 }
 
-macro_rules! closure {
-    ($($body:tt)+) => {
-        Debuggable {
-            text: stringify!($($body)+),
-            value: Box::new($($body)+),
-        }
-    };
-}
-
 #[cfg(test)]
 #[macro_use]
 mod tools;
-
-mod debug_closure;
-mod fn_box;
 
 pub mod config;
 pub mod ops;

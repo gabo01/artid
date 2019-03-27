@@ -3,6 +3,8 @@
 //! The main element of this module is the CopyModel that is composed by a
 //! set of CopyActions and a callback to be executed after successfully running a model.
 
+use debug_closure::{closure, Debuggable};
+use fn_box::FnBox;
 use std::fmt::Debug;
 use std::fs;
 use std::iter::FromIterator;
@@ -14,7 +16,6 @@ use std::path::PathBuf;
 
 use super::super::Model;
 use super::filesystem::{FileKind, FileSystem, Local, Metadata, Route};
-use crate::{debug_closure::Debuggable, fn_box::FnBox};
 
 #[allow(missing_docs)]
 pub type Action<S, D> = CopyAction<S, D>;
@@ -114,7 +115,7 @@ where
             apply(action)?;
         }
 
-        self.cleaner.value.call_box();
+        self.cleaner.into_box().call_box();
         Ok(())
     }
 
@@ -172,7 +173,7 @@ where
             model.run()?;
         }
 
-        self.cleaner.value.call_box();
+        self.cleaner.into_box().call_box();
         Ok(())
     }
 

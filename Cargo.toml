@@ -20,6 +20,8 @@ doc = true
 
 [dependencies]
 env_path = {path = "src/crates/env_path", features = ["serde"]}
+fn_box = {path = "src/crates/fn_box"}
+debug_closure = {path = "src/crates/debug_closure"}
 
 chrono = {version = "0.4.5", features = ["serde"]}
 failure = "0.1.2"
