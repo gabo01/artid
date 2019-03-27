@@ -5,7 +5,7 @@ use std::io;
 use std::path::Path;
 
 use crate::{AppError, AppResult, ErrorType};
-use artid::ops::backup::{self, Options};
+use artid::ops::backup::{self, ArchiveOptions};
 use artid::ops::core::{filesystem::Route, model::CopyAction};
 use artid::prelude::*;
 use logger::pathlight;
@@ -13,35 +13,24 @@ use logger::pathlight;
 pub fn backup(run: bool, path: &Path, folder: &Option<String>) -> AppResult<()> {
     info!("Starting backup on {}", pathlight(path));
 
-    let options = Options::default();
-    let mut config = ConfigFile::load(path)?;
-
-    match folder {
+    let mut archive = ArtidArchive::load(path)?;
+    let options = match folder {
         Some(ref value) => {
-            let mut folder = get_folder(&mut config, value)?;
-            let model = backup::backup(&mut folder, options).context(ErrorType::Operative)?;
-            operate(run, model)?;
+            ArchiveOptions::with_folders(vec![archive.get_folder_id(value).ok_or_else(|| {
+                AppError::from(ErrorType::BadArgument(
+                    value.to_string(),
+                    "--folder".to_string(),
+                ))
+            })?])
         }
-        None => {
-            let model = backup::backup(&mut config, options).context(ErrorType::Operative)?;
-            operate(run, model)?;
-        }
+
+        None => ArchiveOptions::default(),
     };
 
-    config.save()?;
+    let model = backup::backup(&mut archive, options).context(ErrorType::Operative)?;
+    operate(run, model)?;
+    archive.save()?;
     Ok(())
-}
-
-fn get_folder<'a, P>(config: &'a mut ConfigFile<P>, value: &str) -> AppResult<FileSystemFolder<'a>>
-where
-    P: AsRef<Path> + ::std::fmt::Debug,
-{
-    config.get_folder(value).ok_or_else(|| {
-        AppError::from(ErrorType::BadArgument(
-            value.to_string(),
-            "--folder".to_string(),
-        ))
-    })
 }
 
 fn operate<M>(run: bool, model: M) -> AppResult<()>

@@ -2,12 +2,7 @@
 //!
 //! The easiest way to use this module is through the global helper 'restore'. The restore
 //! function will return the associated restore model for the given operator, meaning that
-//! the actual model returned may vary based on the operator. The current operators are:
-//!
-//! - ConfigFile<P>: will return a model to execute a new restore for every registered folder
-//!   and fail if any of the singular models fails to build.
-//! - FileSystemFolder: will return a model to execute a restore on the singular folder.
-//!   calling this model for every folder is equivalent to performing a mass restore
+//! the actual model returned may vary based on the operator.
 
 use chrono::{DateTime, Utc};
 use failure::{Backtrace, Context, Fail, ResultExt};
@@ -20,7 +15,8 @@ use super::core;
 use super::core::filesystem::{FileSystem, Local, Route};
 use super::core::model::{CopyAction, CopyModel, MultipleCopyModel};
 use super::{Model, Operation, Operator};
-use crate::prelude::{ConfigFile, FileSystemFolder};
+use crate::config::archive::Link;
+use crate::prelude::ArtidArchive;
 
 #[allow(missing_docs)]
 pub type Action = CopyAction<Local, Local>;
@@ -83,37 +79,38 @@ impl From<Context<BuildErrorKind>> for BuildError {
     }
 }
 
-/// Modifier options for the restore operation
-#[derive(Copy, Clone, Debug)]
-pub struct Options {
+/// Options to modify behaviour of the restore operation in the archive
+#[derive(Clone, Debug)]
+pub struct ArchiveOptions {
     overwrite: bool,
-    point: Option<usize>,
+    snapshot: Option<DateTime<Utc>>,
+    folders: Option<Vec<String>>,
 }
 
-impl Options {
-    #[allow(missing_docs)]
+impl ArchiveOptions {
+    /// Create a new set of options specifying to overwrite or not the files in the destination.
+    ///
+    /// By default, it selects to restore the last snapshot and all the folders.
     pub fn new(overwrite: bool) -> Self {
         Self {
             overwrite,
-            point: None,
+            snapshot: None,
+            folders: None,
         }
     }
 
-    #[allow(missing_docs)]
-    pub fn with_point(overwrite: bool, point: usize) -> Self {
-        Self {
-            overwrite,
-            point: Some(point),
-        }
+    /// Allows to specify a previous snapshot to restore. In case that the snapshot does
+    /// no exist, the restore will return an error.
+    pub fn with_snapshot(mut self, snapshot: DateTime<Utc>) -> Self {
+        self.snapshot = Some(snapshot);
+        self
     }
-}
 
-impl Default for Options {
-    fn default() -> Self {
-        Self {
-            overwrite: false,
-            point: None,
-        }
+    /// Select the folders to restore, the folders must be referenced by their respective
+    /// id's.
+    pub fn with_folders(mut self, folders: Vec<String>) -> Self {
+        self.folders = Some(folders);
+        self
     }
 }
 
@@ -153,58 +150,50 @@ impl Restore {
 
 impl Operation for Restore {}
 
-impl<'mo, P: AsRef<Path> + Debug> Operator<'mo, Restore> for ConfigFile<P> {
-    type Model = MultipleCopyModel<'mo, Local, Local>;
+impl<'mo, P: AsRef<Path> + Debug> Operator<'mo, Restore> for ArtidArchive<P> {
+    type Model = MultipleCopyModel<'mo, 'mo, Local, Local>;
     type Error = BuildError;
-    type Options = Options;
+    type Options = ArchiveOptions;
 
     fn modelate(&'mo mut self, options: Self::Options) -> Result<Self::Model, Self::Error> {
-        let dir = &self.dir;
-
-        Ok(MultipleCopyModel::new(
-            self.folders
-                .iter_mut()
-                .map(|e| {
-                    let folder = e.apply_root(&dir);
-                    Ok(CopyModel::new(actions(&folder, options)?, || {}))
-                })
-                .collect::<Result<_, BuildError>>()?,
-        ))
-    }
-}
-
-impl<'mo> Operator<'mo, Restore> for FileSystemFolder<'mo> {
-    type Model = CopyModel<'mo, Local, Local>;
-    type Error = BuildError;
-    type Options = Options;
-
-    fn modelate(&'mo mut self, options: Self::Options) -> Result<Self::Model, Self::Error> {
-        Ok(CopyModel::new(actions(&self, options)?, || {}))
-    }
-}
-
-fn actions(folder: &FileSystemFolder, options: Options) -> Result<Actions, BuildError> {
-    if folder.config.has_sync() {
-        let modified = match options.point {
-            Some(point) => folder.config.find_sync(point),
-            None => folder.config.find_last_sync(),
+        let root = &self.folder;
+        let snapshot = match options.snapshot {
+            Some(timestamp) => self.archive.history.snapshot_with(timestamp),
+            None => self.archive.history.get_last_snapshot(),
         };
 
-        if let Some(modified) = modified {
-            debug!("Starting restore of: {}", folder.link.relative.display());
-            let relative = folder.link.relative.join(rfc3339!(modified));
-
-            Ok(
-                Restore::from_point(&folder.link.origin, &relative, options.overwrite)
-                    .context(BuildErrorKind::FsError)?,
-            )
+        if let Some(snapshot) = snapshot {
+            Ok(MultipleCopyModel::new(
+                self.archive
+                    .config
+                    .folders
+                    .iter()
+                    .filter(|folder| snapshot.contains(&folder.name))
+                    .filter(|folder| match options.folders {
+                        Some(ref folders) => folders.iter().any(|name| folder.name == *name),
+                        None => true,
+                    })
+                    .map(|folder| {
+                        let link = folder.resolve(&root);
+                        let actions = create_actions(link, snapshot.timestamp, options.overwrite)?;
+                        Ok(CopyModel::new(actions, || {}))
+                    })
+                    .collect::<Result<_, Self::Error>>()?,
+                || {},
+            ))
         } else {
             Err(BuildErrorKind::PointNotExists)?
         }
-    } else {
-        info!("Restore not needed for {}", folder.link.relative.display());
-        Ok(vec![])
     }
+}
+
+fn create_actions(
+    link: Link,
+    stamp: DateTime<Utc>,
+    overwrite: bool,
+) -> Result<Actions, BuildError> {
+    let relative = link.relative.join(rfc3339!(stamp));
+    Ok(Restore::from_point(&link.origin, &relative, overwrite).context(BuildErrorKind::FsError)?)
 }
 
 #[cfg(test)]
@@ -216,8 +205,8 @@ mod tests {
     use tempfile::TempDir;
 
     use super::super::test_helpers::{FileKind, FileTree};
-    use super::{Model, Operator, Options, Restore};
-    use crate::prelude::{FileSystemFolder, FolderConfig};
+    use super::{ArchiveOptions, ArtidArchive};
+    use super::{Model, Operator, Restore};
 
     macro_rules! backup {
         ($root:ident, $stamp:ident, $generate:expr) => {{
@@ -232,16 +221,19 @@ mod tests {
     }
 
     #[test]
-    fn test_folder_restore_single() {
+    fn test_archive_restore_single() {
         let mut origin = FileTree::create();
         let (root, stamp) = (tmpdir!(), Utc::now());
         let backup = backup!(root, stamp, true);
 
-        let options = Options::default();
-        let mut config = FolderConfig::new("backup", origin.path());
-        config.add_modified(stamp); // in order to detect the backup
-        let mut folder = config.apply_root(root.path());
-        run!(folder, options, Restore);
+        let options = ArchiveOptions::new(false);
+        let mut archive = ArtidArchive::new(root.path());
+        archive.add_folder("backup", origin.path().display().to_string());
+        archive
+            .archive
+            .history
+            .add_snapshot(stamp, vec![archive.archive.config.folders[0].name.clone()]);
+        run!(archive, options, Restore);
 
         origin.copy_tree(&backup);
         origin.assert();
@@ -249,7 +241,7 @@ mod tests {
 
     #[test]
     #[ignore]
-    fn test_folder_restore_with_symlinks() {
+    fn test_archive_restore_with_symlinks() {
         let mut origin = FileTree::create();
         let (root, stamp) = (tmpdir!(), Utc::now());
         let backup = backup!(root, stamp, true);
@@ -261,11 +253,14 @@ mod tests {
         backup_second.add_symlink("a.txt", backup.path().join("a.txt"));
         backup_second.add_symlink("b.txt", backup.path().join("b.txt"));
 
-        let options = Options::default();
-        let mut config = FolderConfig::new("backup", origin.path());
-        config.add_modified(stamp_new); // in order to detect the last backup
-        let mut folder = config.apply_root(root.path());
-        run!(folder, options, Restore);
+        let options = ArchiveOptions::new(false);
+        let mut archive = ArtidArchive::new(root.path());
+        archive.add_folder("backup", origin.path().display().to_string());
+        archive.archive.history.add_snapshot(
+            stamp_new,
+            vec![archive.archive.config.folders[0].name.clone()],
+        );
+        run!(archive, options, Restore);
 
         origin.copy_tree(&backup);
         origin.assert();

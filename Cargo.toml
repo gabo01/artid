@@ -27,7 +27,9 @@ failure_derive = "0.1.2"
 log = "0.4.3"
 serde = "1.0.71"
 serde_derive = "1.0.71"
+sha3 = "0.8.1"
 json = {package = "serde_json", version = "1.0.24"}
+toml = "0.4.10"
 
 [dev-dependencies]
 tempfile = "3.0.3"

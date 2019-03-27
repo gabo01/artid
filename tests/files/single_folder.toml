@@ -1,0 +1,10 @@
+[system]
+hasher = "sha-3"
+
+[[system.folder]]
+path = "asd"
+origin = "$HOME"
+id = "asd"
+
+[history]
+snapshot = []
