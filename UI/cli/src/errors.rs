@@ -5,7 +5,7 @@
 use failure::{Backtrace, Context, Fail};
 use std::fmt::{self, Display};
 
-use artid::prelude::FileError;
+use artid::config::Error;
 
 #[derive(Debug)]
 pub struct AppError {
@@ -52,8 +52,8 @@ impl From<Context<ErrorType>> for AppError {
     }
 }
 
-impl From<FileError> for AppError {
-    fn from(error: FileError) -> Self {
+impl From<Error> for AppError {
+    fn from(error: Error) -> Self {
         Self {
             inner: error.context(ErrorType::Config),
         }
