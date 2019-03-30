@@ -5,8 +5,6 @@
 //!  - A core ops::core that holds the building blocks for most of the operations
 //!  - The specific operations ops::{name of the op}
 
-use failure::Fail;
-
 #[cfg(test)]
 #[macro_use]
 mod test_helpers;
@@ -14,6 +12,8 @@ mod test_helpers;
 pub mod backup;
 pub mod core;
 pub mod restore;
+
+pub use self::core::{Error, ErrorKind};
 
 /// Model is a trait for big operations that need to be planned before being executed.
 /// Examples of this are operations involving big changes on the filesystem.
@@ -27,7 +27,7 @@ pub trait Model {
     type Action;
 
     /// The error that can be returned during a model execution
-    type Error: Fail;
+    type Error: std::error::Error;
 
     /// Performs a standard execution of the model.
     fn run(self) -> Result<(), Self::Error>;
@@ -54,7 +54,7 @@ pub trait Operator<'mo, O: Operation> {
     type Model: Model + 'mo;
 
     /// The error that can happeng during a model building
-    type Error: Fail;
+    type Error: std::error::Error;
 
     /// Modifiers options for the model built
     type Options;

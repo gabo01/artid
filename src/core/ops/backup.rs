@@ -5,14 +5,12 @@
 //! the actual model returned may vary based on the operator.
 
 use chrono::{DateTime, Utc};
-use failure::Fail;
 use std::fmt::Debug;
-use std::io;
 use std::path::Path;
 
-use super::core;
 use super::core::filesystem::{FileSystem, Local, Route};
 use super::core::model::{CopyAction, CopyModel, MultipleCopyModel};
+use super::core::{self, Error};
 use super::{Model, Operation, Operator};
 use crate::config::archive::{FolderHistory, Link};
 use crate::prelude::ArtidArchive;
@@ -53,7 +51,7 @@ impl ArchiveOptions {
 pub struct Backup;
 
 impl Backup {
-    fn with_previous(base: &Path, old: &Path, new: &Path) -> Result<Actions, io::Error> {
+    fn with_previous(base: &Path, old: &Path, new: &Path) -> Result<Actions, Error> {
         use self::core::tree::{DirTree, Direction, FileType, Presence};
 
         let base = Local::new(base);
@@ -84,7 +82,7 @@ impl Backup {
             .collect())
     }
 
-    fn from_scratch(base: &Path, new: &Path) -> Result<Actions, io::Error> {
+    fn from_scratch(base: &Path, new: &Path) -> Result<Actions, Error> {
         use self::core::tree::{DirTree, FileType};
 
         let base = Local::new(base);
@@ -113,7 +111,7 @@ impl Operation for Backup {}
 
 impl<'mo, P: AsRef<Path> + Debug> Operator<'mo, Backup> for ArtidArchive<P> {
     type Model = MultipleCopyModel<'mo, 'mo, Local, Local>;
-    type Error = io::Error;
+    type Error = Error;
     type Options = ArchiveOptions;
 
     fn modelate(&'mo mut self, options: Self::Options) -> Result<Self::Model, Self::Error> {
@@ -135,7 +133,7 @@ impl<'mo, P: AsRef<Path> + Debug> Operator<'mo, Backup> for ArtidArchive<P> {
             })
             .try_fold(
                 (vec![], vec![]),
-                |(mut folders, mut models), result: Result<_, io::Error>| match result {
+                |(mut folders, mut models), result: Result<_, Error>| match result {
                     Ok((folder, model)) => {
                         folders.push(folder);
                         models.push(model);
@@ -155,7 +153,7 @@ fn create_actions(
     link: Link,
     history: FolderHistory<'_, '_>,
     stamp: DateTime<Utc>,
-) -> Result<Actions, io::Error> {
+) -> Result<Actions, Error> {
     if let Some(modified) = history.find_last_sync() {
         let old = link.relative.join(rfc3339!(modified));
         let new = link.relative.join(rfc3339!(stamp));
