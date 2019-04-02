@@ -11,7 +11,6 @@
 use chrono::offset::Utc;
 use chrono::DateTime;
 use env_path::EnvPath;
-use failure::ResultExt;
 use log::{debug, info, log, trace};
 use std::fmt::Debug;
 use std::fs::{self, File};
@@ -22,8 +21,7 @@ pub mod archive;
 mod errors;
 
 use self::archive::{Archive, History};
-pub use self::errors::FileError;
-use self::errors::FileErrorType;
+pub use self::errors::{Error, ErrorKind};
 
 /// Represents the whole archive located in a folder. As such, interaction with the archive
 /// is mostly done through this type
@@ -73,20 +71,18 @@ impl<P: AsRef<Path> + Debug> ArtidArchive<P> {
 
     /// Loads the archive present inside the folder P. This function looks for the archive
     /// configuration inside the default SAVE_PATH
-    pub fn load(folder: P) -> Result<Self, FileError> {
+    pub fn load(folder: P) -> Result<Self, Error> {
         Self::load_from(folder, Self::SAVE_PATH)
     }
 
     /// Loads the archive present inside the folder P with a custom path for the archive
     /// configuration
-    pub fn load_from<T: AsRef<Path>>(folder: P, path: T) -> Result<Self, FileError> {
+    pub fn load_from<T: AsRef<Path>>(folder: P, path: T) -> Result<Self, Error> {
         let file = folder.as_ref().join(path);
         debug!("Config file location: '{}'", file.display());
 
-        let contents =
-            fs::read_to_string(&file).context(FileErrorType::Load(file.display().to_string()))?;
-        let archive =
-            toml::from_str(&contents).context(FileErrorType::Parse(file.display().to_string()))?;
+        let contents = fs::read_to_string(&file)?;
+        let archive = toml::from_str(&contents)?;
         trace!("{:#?}", archive);
 
         Ok(Self { folder, archive })
@@ -94,22 +90,21 @@ impl<P: AsRef<Path> + Debug> ArtidArchive<P> {
 
     /// Saves the archive to the disk. It uses the default SAVE_PATH to save the global archive
     /// configuration
-    pub fn save(&self) -> Result<(), FileError> {
+    pub fn save(&self) -> Result<(), Error> {
         self.save_to(Self::SAVE_PATH)
     }
 
     /// Saves the archive to the disk using a custom path T to save the global configuration
-    pub fn save_to<T: AsRef<Path>>(&self, to: T) -> Result<(), FileError> {
+    pub fn save_to<T: AsRef<Path>>(&self, to: T) -> Result<(), Error> {
         let file = self.folder.as_ref().join(to);
 
         debug!("Config file location: '{}'", file.display());
 
         write!(
-            File::create(&file).context(FileErrorType::Save(file.display().to_string()))?,
+            File::create(&file)?,
             "{}",
             toml::to_string_pretty(&self.archive).expect("Archive cannot fail serialization")
-        )
-        .context(FileErrorType::Save(file.display().to_string()))?;
+        )?;
 
         info!("Config file saved on '{}'", file.display());
         Ok(())

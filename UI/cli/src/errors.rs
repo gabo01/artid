@@ -1,61 +1,101 @@
-/// This file contains the implementation of the top-level application error.
-///
-/// This error is responsible for showing the the general applciation error cause to the
-/// user and to contain a backtrace that the user can request to be displayed.
-use failure::{Backtrace, Context, Fail};
+//! This file contains the implementation of the top-level application error.
+//!
+//! This error is responsible for showing the the general applciation error cause to the
+//! user.
+use std::error;
 use std::fmt::{self, Display};
 
-use artid::prelude::FileError;
-
 #[derive(Debug)]
-pub struct AppError {
-    inner: Context<ErrorType>,
+pub struct Error {
+    kind: ErrorKind,
+    cause: Option<Box<dyn error::Error + Send + Sync + 'static>>,
 }
 
-impl Fail for AppError {
-    fn cause(&self) -> Option<&Fail> {
-        self.inner.cause()
+impl Error {
+    pub fn new(kind: ErrorKind) -> Self {
+        Self { kind, cause: None }
     }
 
-    fn backtrace(&self) -> Option<&Backtrace> {
-        self.inner.backtrace()
+    pub fn with_cause<E>(kind: ErrorKind, cause: E) -> Self
+    where
+        E: Into<Box<dyn error::Error + Send + Sync + 'static>>,
+    {
+        Self {
+            kind,
+            cause: Some(cause.into()),
+        }
     }
 }
 
-impl Display for AppError {
+impl Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        Display::fmt(&self.inner, f)
-    }
-}
-
-#[derive(Clone, Debug, failure_derive::Fail, Eq, PartialEq)]
-pub enum ErrorType {
-    #[fail(display = "Unable to perform the requested operation")]
-    Operative,
-    #[fail(display = "Unable to operate on the configuration file")]
-    Config,
-    #[fail(display = "Bad argument {} given to {}", _0, _1)]
-    BadArgument(String, String),
-}
-
-impl From<ErrorType> for AppError {
-    fn from(kind: ErrorType) -> Self {
-        Self {
-            inner: Context::new(kind),
+        match self.cause {
+            Some(ref error) => {
+                let code = find_code(&**error);
+                match code {
+                    Some(code) => write!(f, "{}. Error code [{}]", self.kind.message(), code),
+                    None => write!(f, "{}", self.kind.message()),
+                }
+            }
+            _ => write!(f, "{}", self.kind.message()),
         }
     }
 }
 
-impl From<Context<ErrorType>> for AppError {
-    fn from(inner: Context<ErrorType>) -> Self {
-        Self { inner }
+impl error::Error for Error {
+    fn source(&self) -> Option<&(dyn error::Error + 'static)> {
+        match self.cause {
+            Some(ref cause) => Some(&**cause),
+            None => None,
+        }
     }
 }
 
-impl From<FileError> for AppError {
-    fn from(error: FileError) -> Self {
-        Self {
-            inner: error.context(ErrorType::Config),
+impl From<ErrorKind> for Error {
+    fn from(kind: ErrorKind) -> Self {
+        Error::new(kind)
+    }
+}
+
+impl From<artid::config::Error> for Error {
+    fn from(error: artid::config::Error) -> Self {
+        Error::with_cause(ErrorKind::InvalidConfig, error)
+    }
+}
+
+impl From<artid::ops::Error> for Error {
+    fn from(error: artid::ops::Error) -> Self {
+        Error::with_cause(ErrorKind::DiskAccess, error)
+    }
+}
+
+#[derive(Clone, Debug)]
+pub enum ErrorKind {
+    InvalidInput { arg: String, value: String },
+    InvalidConfig,
+    DiskAccess,
+}
+
+impl ErrorKind {
+    pub fn message(&self) -> String {
+        match self {
+            ErrorKind::InvalidInput { ref arg, ref value } => {
+                format!("Invalid value {} given to the argument {}", value, arg)
+            }
+            ErrorKind::InvalidConfig => format!("Unable to parse the configuration file"),
+            ErrorKind::DiskAccess => format!("Unable to access to the filesystem"),
         }
     }
+}
+
+fn find_code<'a>(error: &'a (dyn error::Error + Send + Sync + 'static)) -> Option<&'a str> {
+    if let Some(err) = error.downcast_ref::<artid::config::Error>() {
+        return Some(err.kind().code());
+    }
+
+    if let Some(err) = error.downcast_ref::<artid::ops::Error>() {
+        return Some(err.kind().code());
+    }
+
+    None
 }

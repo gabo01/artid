@@ -8,3 +8,7 @@
 pub mod filesystem;
 pub mod model;
 pub mod tree;
+
+mod errors;
+
+pub use self::errors::{Error, ErrorKind};

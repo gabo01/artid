@@ -16,6 +16,7 @@ use std::path::PathBuf;
 
 use super::super::Model;
 use super::filesystem::{FileKind, FileSystem, Local, Metadata, Route};
+use super::Error;
 
 #[allow(missing_docs)]
 pub type Action<S, D> = CopyAction<S, D>;
@@ -108,7 +109,7 @@ where
     D: FileSystem,
 {
     type Action = CopyAction<S, D>;
-    type Error = ::std::io::Error;
+    type Error = Error;
 
     fn run(self) -> Result<(), Self::Error> {
         for action in &self.actions {

@@ -5,15 +5,14 @@
 //! the actual model returned may vary based on the operator.
 
 use chrono::{DateTime, Utc};
-use failure::{Backtrace, Context, Fail, ResultExt};
 use log::{debug, info, log};
 use std::fmt::{self, Debug, Display};
 use std::io;
 use std::path::Path;
 
-use super::core;
 use super::core::filesystem::{FileSystem, Local, Route};
 use super::core::model::{CopyAction, CopyModel, MultipleCopyModel};
+use super::core::{self, Error, ErrorKind};
 use super::{Model, Operation, Operator};
 use crate::config::archive::Link;
 use crate::prelude::ArtidArchive;
@@ -30,53 +29,6 @@ pub fn restore<'a, O: Operator<'a, Restore>>(
     options: O::Options,
 ) -> Result<O::Model, O::Error> {
     operator.modelate(options)
-}
-
-/// Underlying kind of error responsible for failing the building of the restore model
-#[derive(Debug, Fail)]
-pub enum BuildErrorKind {
-    #[allow(missing_docs)]
-    #[fail(display = "The folder does not have the requested restore point")]
-    PointNotExists,
-    #[allow(missing_docs)]
-    #[fail(display = "Error while building the model from disk, see the cause for details")]
-    FsError,
-}
-
-/// Error that can be returned when building a restore model
-#[derive(Debug)]
-pub struct BuildError {
-    inner: Context<BuildErrorKind>,
-}
-
-impl Display for BuildError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        Display::fmt(&self.inner, f)
-    }
-}
-
-impl Fail for BuildError {
-    fn cause(&self) -> Option<&Fail> {
-        self.inner.cause()
-    }
-
-    fn backtrace(&self) -> Option<&Backtrace> {
-        self.inner.backtrace()
-    }
-}
-
-impl From<BuildErrorKind> for BuildError {
-    fn from(kind: BuildErrorKind) -> Self {
-        Self {
-            inner: Context::new(kind),
-        }
-    }
-}
-
-impl From<Context<BuildErrorKind>> for BuildError {
-    fn from(inner: Context<BuildErrorKind>) -> Self {
-        Self { inner }
-    }
 }
 
 /// Options to modify behaviour of the restore operation in the archive
@@ -119,7 +71,7 @@ impl ArchiveOptions {
 pub struct Restore;
 
 impl Restore {
-    fn from_point(restore: &Path, backup: &Path, overwrite: bool) -> Result<Actions, io::Error> {
+    fn from_point(restore: &Path, backup: &Path, overwrite: bool) -> Result<Actions, Error> {
         use self::core::tree::{DirTree, FileType, Presence};
 
         let restore = Local::new(restore);
@@ -152,7 +104,7 @@ impl Operation for Restore {}
 
 impl<'mo, P: AsRef<Path> + Debug> Operator<'mo, Restore> for ArtidArchive<P> {
     type Model = MultipleCopyModel<'mo, 'mo, Local, Local>;
-    type Error = BuildError;
+    type Error = Error;
     type Options = ArchiveOptions;
 
     fn modelate(&'mo mut self, options: Self::Options) -> Result<Self::Model, Self::Error> {
@@ -182,18 +134,14 @@ impl<'mo, P: AsRef<Path> + Debug> Operator<'mo, Restore> for ArtidArchive<P> {
                 || {},
             ))
         } else {
-            Err(BuildErrorKind::PointNotExists)?
+            Err(Error::new(ErrorKind::PointNotExists))
         }
     }
 }
 
-fn create_actions(
-    link: Link,
-    stamp: DateTime<Utc>,
-    overwrite: bool,
-) -> Result<Actions, BuildError> {
+fn create_actions(link: Link, stamp: DateTime<Utc>, overwrite: bool) -> Result<Actions, Error> {
     let relative = link.relative.join(rfc3339!(stamp));
-    Ok(Restore::from_point(&link.origin, &relative, overwrite).context(BuildErrorKind::FsError)?)
+    Ok(Restore::from_point(&link.origin, &relative, overwrite)?)
 }
 
 #[cfg(test)]

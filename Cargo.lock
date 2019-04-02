@@ -22,8 +22,6 @@ dependencies = [
  "artid-logger 0.1.0",
  "chrono 0.4.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "clap 2.32.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "failure 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "failure_derive 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "libc 0.2.43 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.3 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
@@ -35,8 +33,6 @@ dependencies = [
  "chrono 0.4.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "debug_closure 0.1.0",
  "env_path 0.1.0",
- "failure 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "failure_derive 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "fn_box 0.1.0",
  "log 0.4.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.71 (registry+https://github.com/rust-lang/crates.io-index)",

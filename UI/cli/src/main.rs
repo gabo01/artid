@@ -10,19 +10,18 @@
 //! core.
 
 use clap::{crate_authors, crate_description, crate_version, load_yaml, App};
-use failure::Fail;
 use libc::EXIT_FAILURE;
 use log::{error, log};
+use std::error::Error;
 use std::process::exit;
 
 mod errors;
 mod ops;
 mod parser;
 
-use crate::errors::{AppError, ErrorType};
 use crate::parser::Instance;
 
-pub type AppResult<T> = Result<T, AppError>;
+pub type AppResult<T> = Result<T, crate::errors::Error>;
 
 fn main() {
     if logger::init("info").is_err() {
@@ -47,7 +46,13 @@ fn main() {
 
     if let Err(err) = instance.run() {
         if instance.backtrace() {
-            err.causes().for_each(|cause| error!("{}", cause));
+            error!("{}", err);
+
+            let mut source = err.source();
+            while let Some(cause) = source {
+                error!("{}", cause);
+                source = cause.source();
+            }
         } else {
             error!("{}", err);
         }

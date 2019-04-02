@@ -47,6 +47,8 @@ macro_rules! rfc3339 {
     }};
 }
 
+#[macro_use]
+mod errors;
 #[cfg(test)]
 #[macro_use]
 mod tools;
@@ -56,6 +58,6 @@ pub mod ops;
 
 #[allow(missing_docs)]
 pub mod prelude {
-    pub use crate::config::{archive, ArtidArchive, FileError};
+    pub use crate::config::{archive, ArtidArchive};
     pub use crate::ops::{Model, Operation, Operator};
 }
