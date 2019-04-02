@@ -1,14 +1,14 @@
-use chrono::Utc;
-use failure::ResultExt;
-use log::{info, log};
-use std::io;
-use std::path::Path;
-
-use crate::{AppError, AppResult, ErrorType};
 use artid::ops::core::{filesystem::Route, model::CopyAction};
 use artid::ops::restore::{self, ArchiveOptions};
 use artid::prelude::*;
+use chrono::Utc;
+use log::{info, log};
 use logger::pathlight;
+use std::io;
+use std::path::Path;
+
+use crate::errors::{Error, ErrorKind};
+use crate::AppResult;
 
 pub fn restore(
     run: bool,
@@ -23,11 +23,12 @@ pub fn restore(
     let mut options = ArchiveOptions::new(overwrite);
 
     if let Some(ref value) = folder {
-        let id = archive.get_folder_id(value).ok_or_else(|| {
-            AppError::from(ErrorType::BadArgument(
-                value.to_string(),
-                "--folder".to_string(),
-            ))
+        let id = archive.get_folder_id(value).ok_or_else::<Error, _>(|| {
+            ErrorKind::InvalidInput {
+                arg: "--folder".to_string(),
+                value: value.to_string(),
+            }
+            .into()
         })?;
 
         options = options.with_folders(vec![id.clone()]);
@@ -39,18 +40,19 @@ pub fn restore(
                     .iter()
                     .filter(|snapshot| snapshot.contains(&id))
                     .nth(value)
-                    .ok_or_else(|| {
-                        AppError::from(ErrorType::BadArgument(
-                            value.to_string(),
-                            "--point".to_string(),
-                        ))
+                    .ok_or_else::<Error, _>(|| {
+                        ErrorKind::InvalidInput {
+                            arg: "--point".to_string(),
+                            value: value.to_string(),
+                        }
+                        .into()
                     })?
                     .timestamp(),
             )
         }
     }
 
-    let model = restore::restore(&mut archive, options).context(ErrorType::Operative)?;
+    let model = restore::restore(&mut archive, options)?;
     operate(run, model)?;
     archive.save()?;
     Ok(())
@@ -58,10 +60,10 @@ pub fn restore(
 
 fn operate<M>(run: bool, model: M) -> AppResult<()>
 where
-    M: Model<Action = restore::Action, Error = io::Error>,
+    M: Model<Action = restore::Action, Error = artid::ops::Error>,
 {
     if run {
-        model.run().context(ErrorType::Operative)?;
+        model.run()?;
         info!("Restore performed successfully");
     } else {
         model.log(&|action| {

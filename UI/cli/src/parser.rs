@@ -1,17 +1,16 @@
-/// This file contains the command line parser wrapper.
-///
-/// The wrappers job is to call the command line parser and create a model of the operations
-/// that the user wishes to perform.
+//! This file contains the command line parser wrapper.
+//!
+//! The wrappers job is to call the command line parser and create a model of the operations
+//! that the user wishes to perform.
+use artid::prelude::*;
 use chrono::{SecondsFormat, Utc};
 use clap::ArgMatches;
-use failure::ResultExt;
+use logger::{highlight, pathlight};
 use std::path::{Path, PathBuf};
 
 use super::ops;
-use crate::errors::{AppError, ErrorType};
+use crate::errors::{Error, ErrorKind};
 use crate::AppResult;
-use artid::prelude::*;
-use logger::{highlight, pathlight};
 
 macro_rules! curr_dir {
     () => {
@@ -115,10 +114,15 @@ impl Operation {
             },
 
             point: match matches.value_of("from") {
-                Some(val) => Some(
-                    val.parse::<usize>()
-                        .context(ErrorType::BadArgument("from".to_string(), val.to_string()))?,
-                ),
+                Some(val) => match val.parse::<usize>() {
+                    Ok(value) => Some(value),
+                    Err(_) => {
+                        return Err(Error::new(ErrorKind::InvalidInput {
+                            arg: "from".to_string(),
+                            value: val.to_string(),
+                        }));
+                    }
+                },
                 None => None,
             },
         })
