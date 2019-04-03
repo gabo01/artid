@@ -5,33 +5,62 @@ use chrono::Utc;
 use log::{info, log};
 use logger::pathlight;
 use std::io;
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use clap::{ArgMatches};
 
 use crate::errors::{Error, ErrorKind};
 use crate::AppResult;
 
-pub fn backup(run: bool, path: &Path, folder: &Option<String>) -> AppResult<()> {
-    info!("Starting backup on {}", pathlight(path));
+#[derive(Debug)]
+pub struct Backup {
+    run: bool,
+    path: PathBuf,
+    folder: Option<String>,
+}
 
-    let mut archive = ArtidArchive::load(path)?;
-    let options = match folder {
-        Some(ref value) => ArchiveOptions::with_folders(vec![archive
-            .get_folder_id(value)
-            .ok_or_else::<Error, _>(|| {
-                ErrorKind::InvalidInput {
-                    arg: "--folder".to_string(),
-                    value: value.to_string(),
+impl Backup {
+    pub fn build(matches: &ArgMatches<'_>) -> Self {
+        Self {
+            run: !matches.is_present("dry-run"),
+            path: {
+                let mut path = curr_dir!();
+                if let Some(val) = matches.value_of("path") {
+                    path.push(val);
                 }
-                .into()
-            })?]),
 
-        None => ArchiveOptions::default(),
-    };
+                path
+            },
 
-    let model = backup::backup(&mut archive, options)?;
-    operate(run, model)?;
-    archive.save()?;
-    Ok(())
+            folder: match matches.value_of("folder") {
+                Some(val) => Some(val.into()),
+                None => None,
+            },
+        }
+    }
+
+    pub fn run(&self) -> AppResult<()> {
+        info!("Starting backup on {}", pathlight(&self.path));
+
+        let mut archive = ArtidArchive::load(&self.path)?;
+        let options = match self.folder {
+            Some(ref value) => ArchiveOptions::with_folders(vec![archive
+                .get_folder_id(value)
+                .ok_or_else::<Error, _>(|| {
+                    ErrorKind::InvalidInput {
+                        arg: "--folder".to_string(),
+                        value: value.to_string(),
+                    }
+                    .into()
+                })?]),
+
+            None => ArchiveOptions::default(),
+        };
+
+        let model = backup::backup(&mut archive, options)?;
+        operate(self.run, model)?;
+        archive.save()?;
+        Ok(())
+    }
 }
 
 fn operate<M>(run: bool, model: M) -> AppResult<()>

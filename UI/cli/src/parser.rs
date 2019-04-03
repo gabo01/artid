@@ -4,30 +4,35 @@
 //! that the user wishes to perform.
 use artid::prelude::*;
 use chrono::{SecondsFormat, Utc};
-use clap::ArgMatches;
 use logger::{highlight, pathlight};
 use std::path::{Path, PathBuf};
+use clap::{ArgMatches, crate_authors, crate_description, crate_version, load_yaml, App};
 
 use super::ops;
 use crate::errors::{Error, ErrorKind};
 use crate::AppResult;
 
-macro_rules! curr_dir {
-    () => {
-        ::std::env::current_dir().expect("Unable to retrieve current work directory")
-    };
+pub fn parse() -> AppResult<AppInfo> {
+    let yaml = load_yaml!("cli.yml");
+    let matches = App::from_yaml(yaml)
+        .author(crate_authors!())
+        .version(crate_version!())
+        .about(crate_description!())
+        .get_matches();
+
+    AppInfo::new(&matches)
 }
 
 #[derive(Debug)]
-pub struct Instance {
+pub struct AppInfo {
     trace: bool,
     operation: Operation,
 }
 
-impl Instance {
-    pub fn new(matches: &ArgMatches<'_>) -> AppResult<Instance> {
+impl AppInfo {
+    fn new(matches: &ArgMatches<'_>) -> AppResult<Self> {
         let trace = matches.is_present("backtrace");
-        let operation = Operation::new(&matches)?;
+        let operation = Operation::build(&matches)?;
 
         Ok(Self { trace, operation })
     }
@@ -43,31 +48,20 @@ impl Instance {
 
 #[derive(Debug)]
 enum Operation {
-    Backup {
-        run: bool,
-        path: PathBuf,
-        folder: Option<String>,
-    },
-
-    Restore {
-        run: bool,
-        overwrite: bool,
-        path: PathBuf,
-        folder: Option<String>,
-        point: Option<usize>,
-    },
+    Backup(ops::Backup),
+    Restore(ops::Restore),
 }
 
 impl Operation {
-    fn new(matches: &ArgMatches<'_>) -> AppResult<Operation> {
+    fn build(matches: &ArgMatches<'_>) -> AppResult<Operation> {
         Ok(match matches.subcommand_name() {
             Some(command) => {
                 // If a subcommand exists, it's matches must also exist
                 let matches = matches.subcommand_matches(command).unwrap();
 
                 match command {
-                    "backup" => Self::build_backup(matches),
-                    "restore" => Self::build_restore(matches)?,
+                    "backup" => Operation::Backup(ops::Backup::build(matches)),
+                    "restore" => Operation::Restore(ops::Restore::build(matches)?),
                     _ => unreachable!(),
                 }
             }
@@ -76,79 +70,10 @@ impl Operation {
         })
     }
 
-    fn build_backup(matches: &ArgMatches<'_>) -> Self {
-        Operation::Backup {
-            run: !matches.is_present("dry-run"),
-            path: {
-                let mut path = curr_dir!();
-                if let Some(val) = matches.value_of("path") {
-                    path.push(val);
-                }
-
-                path
-            },
-
-            folder: match matches.value_of("folder") {
-                Some(val) => Some(val.into()),
-                None => None,
-            },
-        }
-    }
-
-    fn build_restore(matches: &ArgMatches<'_>) -> AppResult<Self> {
-        Ok(Operation::Restore {
-            run: !matches.is_present("dry-run"),
-            overwrite: matches.is_present("overwrite"),
-            path: {
-                let mut path = curr_dir!();
-                if let Some(val) = matches.value_of("path") {
-                    path.push(val);
-                }
-
-                path
-            },
-
-            folder: match matches.value_of("folder") {
-                Some(val) => Some(val.into()),
-                None => None,
-            },
-
-            point: match matches.value_of("from") {
-                Some(val) => match val.parse::<usize>() {
-                    Ok(value) => Some(value),
-                    Err(_) => {
-                        return Err(Error::new(ErrorKind::InvalidInput {
-                            arg: "from".to_string(),
-                            value: val.to_string(),
-                        }));
-                    }
-                },
-                None => None,
-            },
-        })
-    }
-
     fn run(&self) -> AppResult<()> {
         match *self {
-            Operation::Backup {
-                run,
-                ref path,
-                ref folder,
-            } => {
-                ops::backup(run, path, folder)?;
-            }
-
-            Operation::Restore {
-                run,
-                overwrite,
-                ref path,
-                ref folder,
-                ref point,
-            } => {
-                ops::restore(run, overwrite, path, folder, point)?;
-            }
+            Operation::Backup(ref op) => op.run(),
+            Operation::Restore(ref op) => op.run(),
         }
-
-        Ok(())
     }
 }
