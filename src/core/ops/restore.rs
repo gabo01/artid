@@ -157,8 +157,12 @@ mod tests {
     use super::{Model, Operator, Restore};
 
     macro_rules! backup {
-        ($root:ident, $stamp:ident, $generate:expr) => {{
-            let format = format!("backup/{}", rfc3339!($stamp));
+        ($root:ident, $stamp:ident, $generate:expr) => {
+            backup!($root, $stamp, $generate, "backup")
+        };
+
+        ($root:ident, $stamp:ident, $generate:expr, $name:expr) => {{
+            let format = format!("{}/{}", $name, rfc3339!($stamp));
             let path = tmppath!($root, format);
             if $generate {
                 FileTree::generate_from(path)
@@ -212,5 +216,44 @@ mod tests {
 
         origin.copy_tree(&backup);
         origin.assert();
+    }
+
+    #[test]
+    #[ignore]
+    fn test_archive_restore_multiple_folders_with_previous() {
+        let mut backup_origin = FileTree::create();
+        let mut side_origin = FileTree::create();
+        let (root, stamp) = (tmpdir!(), Utc::now());
+        let backup = backup!(root, stamp, true);
+        let side = backup!(root, stamp, true, "side");
+
+        thread::sleep(time::Duration::from_millis(2000));
+        let stamp_new = Utc::now();
+        let mut backup_second = backup!(root, stamp_new, false);
+        backup_second.add_root();
+        backup_second.add_symlink("a.txt", backup.path().join("a.txt"));
+        backup_second.add_symlink("b.txt", backup.path().join("b.txt"));
+
+        let options = ArchiveOptions::new(false);
+        let mut archive = ArtidArchive::new(root.path());
+        archive.add_folder("backup", backup_origin.path().display().to_string());
+        archive.add_folder("side", side_origin.path().display().to_string());
+        archive.archive.history.add_snapshot(
+            stamp,
+            vec![
+                archive.archive.config.folders[0].name.clone(),
+                archive.archive.config.folders[1].name.clone(),
+            ],
+        );
+        archive.archive.history.add_snapshot(
+            stamp_new,
+            vec![archive.archive.config.folders[0].name.clone()],
+        );
+        run!(archive, options, Restore);
+
+        backup_origin.copy_tree(&backup);
+        backup_origin.assert();
+        side_origin.copy_tree(&side);
+        side_origin.assert();
     }
 }
