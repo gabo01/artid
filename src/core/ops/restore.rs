@@ -109,26 +109,43 @@ impl<'mo, P: AsRef<Path> + Debug> Operator<'mo, Restore> for ArtidArchive<P> {
 
     fn modelate(&'mo mut self, options: Self::Options) -> Result<Self::Model, Self::Error> {
         let root = &self.folder;
-        let snapshot = match options.snapshot {
-            Some(timestamp) => self.archive.history.snapshot_with(timestamp),
-            None => self.archive.history.get_last_snapshot(),
+        let image = match options.snapshot {
+            Some(timestamp) => self
+                .archive
+                .history
+                .snapshot_with(timestamp)
+                .map(|snapshot| self.archive.history.pin(snapshot)),
+            None => self
+                .archive
+                .history
+                .get_last_snapshot()
+                .map(|snapshot| self.archive.history.pin(snapshot)),
         };
 
-        if let Some(snapshot) = snapshot {
+        if let Some(image) = image {
             Ok(MultipleCopyModel::new(
                 self.archive
                     .config
                     .folders
                     .iter()
-                    .filter(|folder| snapshot.contains(&folder.name))
                     .filter(|folder| match options.folders {
                         Some(ref folders) => folders.iter().any(|name| folder.name == *name),
                         None => true,
                     })
-                    .map(|folder| {
+                    .filter_map(|folder| {
                         let link = folder.resolve(&root);
-                        let actions = create_actions(link, snapshot.timestamp, options.overwrite)?;
-                        Ok(CopyModel::new(actions, || {}))
+                        let timestamp = match image.last_timestamp(&folder) {
+                            Some(timestamp) => timestamp,
+                            None => return None,
+                        };
+
+                        let actions = Restore::from_point(
+                            &link.origin,
+                            &link.relative.join(rfc3339!(timestamp)),
+                            options.overwrite,
+                        );
+
+                        Some(actions.map(|actions| CopyModel::new(actions, || {})))
                     })
                     .collect::<Result<_, Self::Error>>()?,
                 || {},
@@ -137,11 +154,6 @@ impl<'mo, P: AsRef<Path> + Debug> Operator<'mo, Restore> for ArtidArchive<P> {
             Err(Error::new(ErrorKind::PointNotExists))
         }
     }
-}
-
-fn create_actions(link: Link, stamp: DateTime<Utc>, overwrite: bool) -> Result<Actions, Error> {
-    let relative = link.relative.join(rfc3339!(stamp));
-    Ok(Restore::from_point(&link.origin, &relative, overwrite)?)
 }
 
 #[cfg(test)]

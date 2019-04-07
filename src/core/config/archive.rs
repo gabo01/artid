@@ -119,6 +119,10 @@ impl History {
         FolderHistory::new(self, &folder.name)
     }
 
+    pub(crate) fn pin<'a>(&'a self, snapshot: Snapshot) -> HistoryImage<'a> {
+        HistoryImage::new(self, snapshot)
+    }
+
     /// Find the most recent snapshot in the history
     pub fn get_last_snapshot(&self) -> Option<Snapshot> {
         self.snapshots.last().map(ToOwned::to_owned)
@@ -271,5 +275,35 @@ impl<'a, 'b> FolderHistory<'a, 'b> {
             .rev()
             .find(|snapshot| snapshot.folders.iter().any(|folder| folder == self.folder))
             .map(|snapshot| snapshot.timestamp)
+    }
+}
+
+pub(crate) struct HistoryImage<'a> {
+    history: &'a History,
+    snapshot: Snapshot,
+}
+
+impl<'a> HistoryImage<'a> {
+    pub fn new(history: &'a History, snapshot: Snapshot) -> Self {
+        Self { history, snapshot }
+    }
+
+    pub fn last_timestamp(&self, folder: &Folder) -> Option<DateTime<Utc>> {
+        if self.snapshot.contains(&folder.name) {
+            Some(self.snapshot.timestamp())
+        } else {
+            self.history
+                .snapshots
+                .iter()
+                .rev()
+                .skip_while(|snapshot| snapshot.timestamp != self.snapshot.timestamp())
+                .find_map(|snapshot| {
+                    if snapshot.contains(&folder.name) {
+                        Some(snapshot.timestamp)
+                    } else {
+                        None
+                    }
+                })
+        }
     }
 }
