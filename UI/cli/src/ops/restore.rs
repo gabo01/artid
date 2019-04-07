@@ -2,11 +2,11 @@ use artid::ops::core::{filesystem::Route, model::CopyAction};
 use artid::ops::restore::{self, ArchiveOptions};
 use artid::prelude::*;
 use chrono::Utc;
+use clap::ArgMatches;
 use log::{info, log};
 use logger::pathlight;
 use std::io;
 use std::path::{Path, PathBuf};
-use clap::{ArgMatches};
 
 use crate::errors::{Error, ErrorKind};
 use crate::AppResult;
@@ -35,7 +35,10 @@ impl Restore {
     }
 
     pub fn run(&self) -> AppResult<()> {
-        info!("Starting restore of the contents in {}", pathlight(&self.path));
+        info!(
+            "Starting restore of the contents in {}",
+            pathlight(&self.path)
+        );
 
         let mut archive = ArtidArchive::load(&self.path)?;
         let mut options = ArchiveOptions::new(self.overwrite);

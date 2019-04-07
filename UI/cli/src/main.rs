@@ -33,20 +33,22 @@ fn main() {
     }
 
     match parser::parse() {
-        Ok(app) => if let Err(error) = app.run() {
-            if app.backtrace() {
-                error!("{}", error);
-                let mut source = error.source();
-                while let Some(cause) = source {
-                    error!("{}", cause);
-                    source = cause.source();
+        Ok(app) => {
+            if let Err(error) = app.run() {
+                if app.backtrace() {
+                    error!("{}", error);
+                    let mut source = error.source();
+                    while let Some(cause) = source {
+                        error!("{}", cause);
+                        source = cause.source();
+                    }
+                } else {
+                    error!("{}", error);
                 }
-            } else {
-                error!("{}", error);
-            }
 
-            exit(EXIT_FAILURE);
-        },
+                exit(EXIT_FAILURE);
+            }
+        }
 
         Err(err) => {
             error!("{}", err);

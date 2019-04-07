@@ -2,11 +2,11 @@ use artid::ops::backup::{self, ArchiveOptions};
 use artid::ops::core::{filesystem::Route, model::CopyAction};
 use artid::prelude::*;
 use chrono::Utc;
+use clap::ArgMatches;
 use log::{info, log};
 use logger::pathlight;
 use std::io;
 use std::path::{Path, PathBuf};
-use clap::{ArgMatches};
 
 use crate::errors::{Error, ErrorKind};
 use crate::AppResult;
@@ -42,19 +42,20 @@ impl Backup {
         info!("Starting backup on {}", pathlight(&self.path));
 
         let mut archive = ArtidArchive::load(&self.path)?;
-        let options = match self.folder {
-            Some(ref value) => ArchiveOptions::with_folders(vec![archive
-                .get_folder_id(value)
-                .ok_or_else::<Error, _>(|| {
-                    ErrorKind::InvalidInput {
-                        arg: "--folder".to_string(),
-                        value: value.to_string(),
-                    }
-                    .into()
-                })?]),
+        let options =
+            match self.folder {
+                Some(ref value) => ArchiveOptions::with_folders(vec![archive
+                    .get_folder_id(value)
+                    .ok_or_else::<Error, _>(|| {
+                        ErrorKind::InvalidInput {
+                            arg: "--folder".to_string(),
+                            value: value.to_string(),
+                        }
+                        .into()
+                    })?]),
 
-            None => ArchiveOptions::default(),
-        };
+                None => ArchiveOptions::default(),
+            };
 
         let model = backup::backup(&mut archive, options)?;
         operate(self.run, model)?;

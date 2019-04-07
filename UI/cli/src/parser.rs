@@ -4,9 +4,9 @@
 //! that the user wishes to perform.
 use artid::prelude::*;
 use chrono::{SecondsFormat, Utc};
+use clap::{crate_authors, crate_description, crate_version, load_yaml, App, ArgMatches};
 use logger::{highlight, pathlight};
 use std::path::{Path, PathBuf};
-use clap::{ArgMatches, crate_authors, crate_description, crate_version, load_yaml, App};
 
 use super::ops;
 use crate::errors::{Error, ErrorKind};
