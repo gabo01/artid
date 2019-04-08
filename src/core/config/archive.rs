@@ -119,7 +119,7 @@ impl History {
         FolderHistory::new(self, &folder.name)
     }
 
-    pub(crate) fn pin<'a>(&'a self, snapshot: Snapshot) -> HistoryImage<'a> {
+    pub(crate) fn pin(&self, snapshot: Snapshot) -> HistoryImage<'_> {
         HistoryImage::new(self, snapshot)
     }
 
