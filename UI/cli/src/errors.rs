@@ -82,8 +82,8 @@ impl ErrorKind {
             ErrorKind::InvalidInput { ref arg, ref value } => {
                 format!("Invalid value {} given to the argument {}", value, arg)
             }
-            ErrorKind::InvalidConfig => format!("Unable to parse the configuration file"),
-            ErrorKind::DiskAccess => format!("Unable to access to the filesystem"),
+            ErrorKind::InvalidConfig => "Unable to parse the configuration file".to_string(),
+            ErrorKind::DiskAccess => "Unable to access to the filesystem".to_string(),
         }
     }
 }
