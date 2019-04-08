@@ -109,26 +109,43 @@ impl<'mo, P: AsRef<Path> + Debug> Operator<'mo, Restore> for ArtidArchive<P> {
 
     fn modelate(&'mo mut self, options: Self::Options) -> Result<Self::Model, Self::Error> {
         let root = &self.folder;
-        let snapshot = match options.snapshot {
-            Some(timestamp) => self.archive.history.snapshot_with(timestamp),
-            None => self.archive.history.get_last_snapshot(),
+        let image = match options.snapshot {
+            Some(timestamp) => self
+                .archive
+                .history
+                .snapshot_with(timestamp)
+                .map(|snapshot| self.archive.history.pin(snapshot)),
+            None => self
+                .archive
+                .history
+                .get_last_snapshot()
+                .map(|snapshot| self.archive.history.pin(snapshot)),
         };
 
-        if let Some(snapshot) = snapshot {
+        if let Some(image) = image {
             Ok(MultipleCopyModel::new(
                 self.archive
                     .config
                     .folders
                     .iter()
-                    .filter(|folder| snapshot.contains(&folder.name))
                     .filter(|folder| match options.folders {
                         Some(ref folders) => folders.iter().any(|name| folder.name == *name),
                         None => true,
                     })
-                    .map(|folder| {
+                    .filter_map(|folder| {
                         let link = folder.resolve(&root);
-                        let actions = create_actions(link, snapshot.timestamp, options.overwrite)?;
-                        Ok(CopyModel::new(actions, || {}))
+                        let timestamp = match image.last_timestamp(&folder) {
+                            Some(timestamp) => timestamp,
+                            None => return None,
+                        };
+
+                        let actions = Restore::from_point(
+                            &link.origin,
+                            &link.relative.join(rfc3339!(timestamp)),
+                            options.overwrite,
+                        );
+
+                        Some(actions.map(|actions| CopyModel::new(actions, || {})))
                     })
                     .collect::<Result<_, Self::Error>>()?,
                 || {},
@@ -137,11 +154,6 @@ impl<'mo, P: AsRef<Path> + Debug> Operator<'mo, Restore> for ArtidArchive<P> {
             Err(Error::new(ErrorKind::PointNotExists))
         }
     }
-}
-
-fn create_actions(link: Link, stamp: DateTime<Utc>, overwrite: bool) -> Result<Actions, Error> {
-    let relative = link.relative.join(rfc3339!(stamp));
-    Ok(Restore::from_point(&link.origin, &relative, overwrite)?)
 }
 
 #[cfg(test)]
@@ -157,8 +169,12 @@ mod tests {
     use super::{Model, Operator, Restore};
 
     macro_rules! backup {
-        ($root:ident, $stamp:ident, $generate:expr) => {{
-            let format = format!("backup/{}", rfc3339!($stamp));
+        ($root:ident, $stamp:ident, $generate:expr) => {
+            backup!($root, $stamp, $generate, "backup")
+        };
+
+        ($root:ident, $stamp:ident, $generate:expr, $name:expr) => {{
+            let format = format!("{}/{}", $name, rfc3339!($stamp));
             let path = tmppath!($root, format);
             if $generate {
                 FileTree::generate_from(path)
@@ -212,5 +228,44 @@ mod tests {
 
         origin.copy_tree(&backup);
         origin.assert();
+    }
+
+    #[test]
+    #[ignore]
+    fn test_archive_restore_multiple_folders_with_previous() {
+        let mut backup_origin = FileTree::create();
+        let mut side_origin = FileTree::create();
+        let (root, stamp) = (tmpdir!(), Utc::now());
+        let backup = backup!(root, stamp, true);
+        let side = backup!(root, stamp, true, "side");
+
+        thread::sleep(time::Duration::from_millis(2000));
+        let stamp_new = Utc::now();
+        let mut backup_second = backup!(root, stamp_new, false);
+        backup_second.add_root();
+        backup_second.add_symlink("a.txt", backup.path().join("a.txt"));
+        backup_second.add_symlink("b.txt", backup.path().join("b.txt"));
+
+        let options = ArchiveOptions::new(false);
+        let mut archive = ArtidArchive::new(root.path());
+        archive.add_folder("backup", backup_origin.path().display().to_string());
+        archive.add_folder("side", side_origin.path().display().to_string());
+        archive.archive.history.add_snapshot(
+            stamp,
+            vec![
+                archive.archive.config.folders[0].name.clone(),
+                archive.archive.config.folders[1].name.clone(),
+            ],
+        );
+        archive.archive.history.add_snapshot(
+            stamp_new,
+            vec![archive.archive.config.folders[0].name.clone()],
+        );
+        run!(archive, options, Restore);
+
+        backup_origin.copy_tree(&backup);
+        backup_origin.assert();
+        side_origin.copy_tree(&side);
+        side_origin.assert();
     }
 }
