@@ -8,7 +8,7 @@ use std::fmt::Debug;
 use std::ops::{Deref, DerefMut};
 use std::path::{Path, PathBuf};
 
-#[derive(Debug, serde_derive::Serialize, serde_derive::Deserialize)]
+#[derive(Debug, Default, serde_derive::Serialize, serde_derive::Deserialize)]
 pub(crate) struct Archive {
     #[serde(rename = "system")]
     pub config: Config,
@@ -31,21 +31,7 @@ impl Archive {
     }
 }
 
-impl Default for Archive {
-    fn default() -> Self {
-        Self {
-            config: Config {
-                hasher: Hasher::Sha3,
-                folders: Folders { inner: vec![] },
-            },
-            history: History {
-                snapshots: Snapshots { inner: vec![] },
-            },
-        }
-    }
-}
-
-#[derive(Debug, serde_derive::Serialize, serde_derive::Deserialize)]
+#[derive(Debug, Default, serde_derive::Serialize, serde_derive::Deserialize)]
 pub(crate) struct Config {
     /// determines the type of hash algorithm to use
     hasher: Hasher,
@@ -70,7 +56,13 @@ pub enum Hasher {
     Sha3,
 }
 
-#[derive(Debug)]
+impl Default for Hasher {
+    fn default() -> Self {
+        Hasher::Sha3
+    }
+}
+
+#[derive(Debug, Default)]
 pub(crate) struct Folders {
     inner: Vec<Folder>,
 }
@@ -104,7 +96,7 @@ impl<'de> Deserialize<'de> for Folders {
 }
 
 /// Represents the snapshot history of an archive
-#[derive(Debug, serde_derive::Serialize, serde_derive::Deserialize)]
+#[derive(Debug, Default, serde_derive::Serialize, serde_derive::Deserialize)]
 pub struct History {
     #[serde(rename = "snapshot")]
     snapshots: Snapshots,
@@ -142,7 +134,7 @@ impl History {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub(crate) struct Snapshots {
     inner: Vec<Snapshot>,
 }
