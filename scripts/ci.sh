@@ -1,6 +1,6 @@
 #! /bin/bash
 
-cargo build --verbose
+cargo build --all --verbose
 build=$?
 
 cargo test --all --verbose
