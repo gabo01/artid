@@ -18,15 +18,18 @@ pub struct Local {
     path: PathBuf,
 }
 
+impl Local {
+    #[allow(missing_docs)]
+    pub fn new<P: Into<PathBuf>>(path: P) -> Self {
+        Self { path: path.into() }
+    }
+}
+
 impl FileSystem for Local {
     type File = fs::File;
     type Metadata = fs::Metadata;
     type Directory = fs::DirEntry;
     type DirectoryIterator = fs::ReadDir;
-
-    fn new<P: Into<PathBuf>>(path: P) -> Self {
-        Self { path: path.into() }
-    }
 
     fn exists(&self) -> bool {
         self.path.exists()

@@ -33,9 +33,6 @@ pub trait FileSystem: Route {
     type DirectoryIterator: DirectoryIterator<Self::Directory>;
 
     #[allow(missing_docs)]
-    fn new<P: Into<PathBuf>>(path: P) -> Self;
-
-    #[allow(missing_docs)]
     fn exists(&self) -> bool;
 
     #[allow(missing_docs)]
