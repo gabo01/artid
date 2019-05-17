@@ -10,8 +10,10 @@ use std::io;
 use std::path::{Display, Path, PathBuf};
 use std::time::SystemTime;
 
+mod archive;
 mod local;
 
+pub use self::archive::Archive;
 pub use self::local::Local;
 
 /// Abstraction over a filesystem. Allows to use different representations of a file
