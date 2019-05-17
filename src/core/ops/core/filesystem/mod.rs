@@ -101,6 +101,14 @@ pub trait File: io::Read + io::Write {
     fn metadata(&self) -> io::Result<Self::Metadata>;
 }
 
+impl File for fs::File {
+    type Metadata = fs::Metadata;
+
+    fn metadata(&self) -> io::Result<Self::Metadata> {
+        self.metadata()
+    }
+}
+
 /// Representation of the metadata inside a path for a particular filesystem
 pub trait Metadata {
     #[allow(missing_docs)]
@@ -111,6 +119,18 @@ pub trait Metadata {
 
     #[allow(missing_docs)]
     fn modified(&self) -> io::Result<SystemTime>;
+}
+
+impl Metadata for fs::Metadata {
+    type FileKind = fs::FileType;
+
+    fn file_type(&self) -> Self::FileKind {
+        self.file_type()
+    }
+
+    fn modified(&self) -> io::Result<SystemTime> {
+        self.modified()
+    }
 }
 
 /// Representation of the filekind object for a particular filesystem
@@ -125,8 +145,24 @@ pub trait FileKind {
     fn is_dir(&self) -> bool;
 }
 
+impl FileKind for fs::FileType {
+    fn is_file(&self) -> bool {
+        self.is_file()
+    }
+
+    fn is_symlink(&self) -> bool {
+        self.is_symlink()
+    }
+
+    fn is_dir(&self) -> bool {
+        self.is_dir()
+    }
+}
+
 #[allow(missing_docs)]
 pub trait DirectoryIterator<D: Directory>: Iterator<Item = io::Result<D>> {}
+
+impl DirectoryIterator<fs::DirEntry> for fs::ReadDir {}
 
 /// Representation of a directory in the filesystem
 pub trait Directory {
@@ -135,4 +171,14 @@ pub trait Directory {
 
     #[allow(missing_docs)]
     fn file_name(&self) -> OsString;
+}
+
+impl Directory for fs::DirEntry {
+    fn path(&self) -> PathBuf {
+        self.path()
+    }
+
+    fn file_name(&self) -> OsString {
+        self.file_name()
+    }
 }
