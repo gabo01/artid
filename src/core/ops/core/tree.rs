@@ -20,7 +20,7 @@ macro_rules! read {
     ($path:expr) => {
         $path
             .read_dir()?
-            .filter_map(|e| e.ok())
+            .filter_map(std::result::Result::ok)
             .map(|e| (e.path(), e.file_name()))
     };
 }
